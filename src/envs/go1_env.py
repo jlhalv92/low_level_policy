@@ -1,0 +1,1176 @@
+import random
+import time
+
+from sympy.physics.units import velocity
+from sympy.strategies.branch import condition
+
+from src.envs.mujoco import MuJoCo, ObservationType, mujoco
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+from src.envs.reward.reward import RudinOwnVarReward as reward_f
+from src.utils.height_map  import *
+import cv2
+import dm_control.utils.transformations as tr
+import json# Function to read the JSON file
+
+from src.envs.curriculum.curriculum import RewardThresholdCurriculum
+
+def calculate_square_vertices(x, y, s, theta):
+    # Half diagonal distance from the center to a vertex
+    half_diagonal = (s * np.sqrt(2)) / 2
+
+    # List to store the coordinates of the four vertices
+    vertices = [[x,y]]
+
+    # Iterate over the 4 angles (45° + k * 90°)
+    for k in range(4):
+        angle =  theta + np.pi/4 + k * (np.pi / 2)
+        vertex_x = x + half_diagonal * np.cos(angle)
+        vertex_y = y + half_diagonal * np.sin(angle)
+        vertices.append((round(vertex_x, 3), round(vertex_y, 3)))
+
+    return np.array(vertices)
+
+class StepProbabilitySampling:
+    def __init__(self, env, probability=0.005):
+        self.env = env
+        self.probability = probability
+
+    def setup(self):
+        return False
+
+    def step(self):
+        return self.env.np_rng.uniform() < self.probability
+
+class DefaultDomainPerturbation:
+    def __init__(self, env,
+                 push_velocity_x_min=-1.0, push_velocity_x_max=1.0,
+                 push_velocity_y_min=-1.0, push_velocity_y_max=1.0,
+                 push_velocity_z_min=-1.0, push_velocity_z_max=1.0,
+                 set_chance=0.5, additive_multiplier=1.5):
+        self.env = env
+        self.push_velocity_x_min = push_velocity_x_min
+        self.push_velocity_x_max = push_velocity_x_max
+        self.push_velocity_y_min = push_velocity_y_min
+        self.push_velocity_y_max = push_velocity_y_max
+        self.push_velocity_z_min = push_velocity_z_min
+        self.push_velocity_z_max = push_velocity_z_max
+        self.set_chance = set_chance
+        self.additive_multiplier = additive_multiplier
+        self.sampled_push_velocity_x = 0.0
+        self.sampled_push_velocity_y = 0.0
+        self.sampled_push_velocity_z = 0.0
+
+    def sample(self):
+        self.sampled_push_velocity_x = self.env.np_rng.uniform(self.push_velocity_x_min, self.push_velocity_x_max)
+        self.sampled_push_velocity_y = self.env.np_rng.uniform(self.push_velocity_y_min, self.push_velocity_y_max)
+        self.sampled_push_velocity_z = self.env.np_rng.uniform(self.push_velocity_z_min, self.push_velocity_z_max)
+
+        if self.env.np_rng.uniform() < self.set_chance:
+
+            self.env._data.qvel[0:3] = np.array([self.sampled_push_velocity_x, self.sampled_push_velocity_y, self.sampled_push_velocity_z])
+
+        else:
+
+            self.env._data.qvel[0:3] += np.array([self.sampled_push_velocity_x,
+                                                  self.sampled_push_velocity_y,
+                                                  self.sampled_push_velocity_z]) * self.additive_multiplier
+
+def read_control_values(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
+
+from collections import deque
+
+def create_rotated_ring_grid(robot_pose,theta, inner_radius=0.4, outer_radius=2., num_points_radius=15, num_points_angle=20):
+    # Create the radius values between inner and outer radii
+    r_values = np.linspace(inner_radius, outer_radius, num_points_radius)
+
+    # Create the angle values from 0 to 2π
+    theta_values = np.linspace(0, 2 * np.pi, num_points_angle, endpoint=False)
+
+    # Create a grid of polar coordinates (r, θ)
+    r_grid, theta_grid = np.meshgrid(r_values, theta_values)
+
+    # Convert polar coordinates to Cartesian coordinates (x, y)
+    x_grid = r_grid * np.cos(theta_grid)
+    y_grid = r_grid * np.sin(theta_grid)
+
+    # Flatten the grid points into a list of (x, y) tuples
+    points = np.vstack([x_grid.ravel(), y_grid.ravel()])
+
+    # Rotation matrix for angle theta
+    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                                [np.sin(theta), np.cos(theta)]])
+
+    # Rotate each point
+    rotated_points = np.dot(rotation_matrix, points)
+
+    # Translate back to the center (x_c, y_c)
+    rotated_points[0, :] += robot_pose[0]
+    rotated_points[1, :] += robot_pose[1]
+
+    return rotated_points
+
+
+def create_rotated_grid(robot_pose ,theta):
+
+    x = np.arange(-1.2,1.2,0.1)
+    y = np.arange(-1.,1,0.1)
+
+    xv, yv = np.meshgrid(x, y)
+
+    # Flatten the grid points into a list of (x, y) tuples
+    points = np.vstack([xv.ravel(), yv.ravel()])
+
+    # Rotation matrix for angle theta
+    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                                [np.sin(theta), np.cos(theta)]])
+
+    # Rotate each point around the center (x_c, y_c)
+    rotated_points = np.dot(rotation_matrix, points)
+
+    # Translate back to the center (x_c, y_c)
+    rotated_points[0, :] += robot_pose[0]
+    rotated_points[1, :] += robot_pose[1]
+
+    return rotated_points
+
+class OccupancyGrid:
+    def __init__(self, width_meters, height_meters, resolution=0.01):
+        """
+        Initialize the occupancy grid.
+        :param width_meters: Width of the grid in meters.
+        :param height_meters: Height of the grid in meters.
+        :param resolution: Grid resolution in meters per cell (default is 0.01 meters).
+        """
+        self.resolution = resolution  # meters per grid cell
+        self.width_cells = int(width_meters / resolution)  # total columns
+        self.height_cells = int(height_meters / resolution)  # total rows
+        self.grid = np.zeros((self.height_cells, self.width_cells), dtype=np.uint8)  # 0 means free, 1 means occupied
+
+        # The center of the grid corresponds to the origin (0, 0) in world coordinates
+        self.origin_x = self.width_cells // 2
+        self.origin_y = self.height_cells // 2
+
+    def reset(self):
+        self.grid = np.zeros((self.height_cells, self.width_cells), dtype=np.uint8)  # 0 means free, 1 means occupied
+
+
+
+    def world_to_grid(self, x, y):
+        """
+        Convert world coordinates to grid coordinates.
+        :param x: X coordinate in meters.
+        :param y: Y coordinate in meters.
+        :return: (grid_x, grid_y) in grid coordinates.
+        """
+        origin = np.array([self.origin_x, self.origin_y])
+        point = np.array([x, -y])
+        point_in_grid = origin + (point / self.resolution).astype(int)
+        return point_in_grid[0], point_in_grid[1]
+
+    def add_circle(self, x, y, radius):
+        """
+        Add a circular obstacle to the grid.
+        :param x: X coordinate of the circle center in meters.
+        :param y: Y coordinate of the circle center in meters.
+        :param radius: Radius of the circle in meters.
+        """
+        grid_center = self.world_to_grid(x, y)
+        grid_radius = int(radius / self.resolution)
+        cv2.circle(self.grid, grid_center, grid_radius, 1, -1)  # Draw filled circle (1 indicates occupied)
+
+    def add_rectangle(self, x, y, width, height):
+        """
+        Add a rectangular obstacle to the grid.
+        :param x: X coordinate of the center of the rectangle in meters.
+        :param y: Y coordinate of the center of the rectangle in meters.
+        :param width: Width of the rectangle in meters.
+        :param height: Height of the rectangle in meters.
+        """
+        half_width = width / 2
+        half_height = height / 2
+        top_left = self.world_to_grid(x - half_width, y + half_height)
+        bottom_right = self.world_to_grid(x + half_width, y - half_height)
+        cv2.rectangle(self.grid, top_left, bottom_right, 1, -1)  # Draw filled rectangle
+
+    def add_square(self, x, y, side_length):
+        """
+        Add a square obstacle to the grid.
+        :param x: X coordinate of the center of the square in meters.
+        :param y: Y coordinate of the center of the square in meters.
+        :param side_length: Side length of the square in meters.
+        """
+        self.add_rectangle(x, y, side_length, side_length)
+
+    def add_triangle(self, x, y, size):
+        """
+        Add a triangular obstacle to the grid.
+        :param x: X coordinate of the center of the triangle in meters.
+        :param y: Y coordinate of the center of the triangle in meters.
+        :param size: Side length of the triangle in meters.
+        """
+        half_size = size / 2
+        points = np.array([
+            self.world_to_grid(x, y + half_size),  # Top point
+            self.world_to_grid(x - half_size, y - half_size),  # Bottom left
+            self.world_to_grid(x + half_size, y - half_size)  # Bottom right
+        ], np.int32)
+        cv2.fillPoly(self.grid, [points], 1)  # Draw filled triangle
+
+    def get_grid_values(self, sampling_grid):
+        weights = []
+        #
+        for i in range(sampling_grid.shape[1]):
+            x_g, y_g = self.world_to_grid(sampling_grid[0, i], sampling_grid[1, i])
+            if x_g >= self.width_cells or y_g >= self.height_cells:
+                weights.append(0)
+            weights.append(self.grid[y_g, x_g])
+        return weights
+
+    def display_grid(self):
+        """
+        Display the occupancy grid for visualization.
+        """
+        extent = [-self.width_cells // 2 * self.resolution, self.width_cells // 2 * self.resolution,
+                  -self.height_cells // 2 * self.resolution, self.height_cells // 2 * self.resolution]
+        plt.imshow(self.grid,origin="upper", extent=extent)
+
+        plt.title("Occupancy Grid Map (0,0 at the center)")
+        plt.xlabel("X (meters)")
+        plt.ylabel("Y (meters)")
+        plt.show()
+
+
+
+task_map = dict(nominal=0,
+                navigation=1,
+                obstacles_navigation=2)
+
+TARGET_IDS= ["target{}".format(i) for i in range(1 ,5)]
+TARGET_IDS= ["target"]
+
+
+
+def create_evenly_distributed_grid():
+    # Provided points
+    measured_points_x = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2]
+    measured_points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
+    points = np.zeros((132, 3))
+    # Generate z-coordinates
+    X, Y = np.meshgrid(measured_points_x, measured_points_y)
+    points[:, 0] = X.flatten()
+    points[:, 1] = Y.flatten()
+
+    return points
+
+
+class Go1(MuJoCo):
+    """
+    Mujoco GO1
+
+    """
+
+    def __init__(self, horizon, gamma, n_substep=1, target_pose=None, task_name="nominal_parkour",timestep=0.002,  cfg=None):
+        """
+        Constructor.
+
+        """
+        self.curriculum = False
+        self.resample = True
+        self.joystick = False
+        self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
+        self.level = 0
+        self.antagonist = True
+        self.obstacle_velocity = 0
+        self.occupancy_grid = OccupancyGrid(15,15,0.01)
+
+        self.default_dof_pos = np.array([
+            -0.1, -0.8, 1.5,
+            0.1, 0.8, -1.5,
+            0.1, -1.0, 1.5,
+            -0.1, 1.0, -1.5,
+        ])
+
+        self.total_timesteps = 0
+
+
+        self.target_vx = 0
+        self.target_vy = 0
+        self.target_yaw = 0
+        self.cfg = cfg
+
+        task = task_map[task_name]
+        self.task = task
+        self.horizon = horizon
+
+
+        self.train = False
+        self.success = False
+        self.terminates = False
+
+        kp =cfg['kp']
+        kd =cfg['kd']
+        timestep = timestep
+
+        if task==0:
+            xml_path = "src/envs/unitree_go1/walk_go1.xml"
+
+        if task==1:
+            xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
+
+        if task==2:
+            xml_path = "src/envs/unitree_go1/obstacles_navigation_go1.xml"
+
+
+        self.joint_limits = np.array([[-0.802851, 0.802851], [-1.0472, 4.18879], [-2.69653, -0.916298]] * 4)
+
+        action_spec = ["FR_hip", "FR_thigh", "FR_calf", "FL_hip", "FL_thigh", "FL_calf", "RR_hip", "RR_thigh",
+                       "RR_calf", "RL_hip", "RL_thigh", "RL_calf"]
+
+        self.torques_limits = np.array(4 * [23.7, 23.7, 35.55])
+        self.target_pose = target_pose
+        self._reset_state = None
+        self._ts = 0
+        self.air_time_max = 0.5
+
+        propioception = [
+                         ("FR_hip_pos", "FR_hip_joint", ObservationType.JOINT_POS),
+                         ("FR_thigh_pos", "FR_thigh_joint", ObservationType.JOINT_POS),
+                         ("FR_calf_pos", "FR_calf_joint", ObservationType.JOINT_POS),
+                         ("FL_hip_pos", "FL_hip_joint", ObservationType.JOINT_POS),
+                         ("FL_thigh_pos", "FL_thigh_joint", ObservationType.JOINT_POS),
+                         ("FL_calf_pos", "FL_calf_joint", ObservationType.JOINT_POS),
+                         ("RR_hip_pos", "RR_hip_joint", ObservationType.JOINT_POS),
+                         ("RR_thigh_pos", "RR_thigh_joint", ObservationType.JOINT_POS),
+                         ("RR_calf_pos", "RR_calf_joint", ObservationType.JOINT_POS),
+                         ("RL_hip_pos", "RL_hip_joint", ObservationType.JOINT_POS),
+                         ("RL_thigh_pos", "RL_thigh_joint", ObservationType.JOINT_POS),
+                         ("RL_calf_pos", "RL_calf_joint", ObservationType.JOINT_POS),
+
+                         ("FR_hip_vel", "FR_hip_joint", ObservationType.JOINT_VEL),
+                         ("FR_thigh_vel", "FR_thigh_joint", ObservationType.JOINT_VEL),
+                         ("FR_calf_vel", "FR_calf_joint", ObservationType.JOINT_VEL),
+                         ("FL_hip_vel", "FL_hip_joint", ObservationType.JOINT_VEL),
+                         ("FL_thigh_vel", "FL_thigh_joint", ObservationType.JOINT_VEL),
+                         ("FL_calf_vel", "FL_calf_joint", ObservationType.JOINT_VEL),
+                         ("RR_hip_vel", "RR_hip_joint", ObservationType.JOINT_VEL),
+                         ("RR_thigh_vel", "RR_thigh_joint", ObservationType.JOINT_VEL),
+                         ("RR_calf_vel", "RR_calf_joint", ObservationType.JOINT_VEL),
+                         ("RL_hip_vel", "RL_hip_joint", ObservationType.JOINT_VEL),
+                         ("RL_thigh_vel", "RL_thigh_joint", ObservationType.JOINT_VEL),
+                         ("RL_calf_vel", "RL_calf_joint", ObservationType.JOINT_VEL)]
+
+
+        last_actions = [("last_actions", "torques", ObservationType.ACTIONS)]
+        gravity_projection = [("gravity_projection", "orientation", ObservationType.IMU)]
+        angular_velocity = [("angular_velocity", "a_velocity", ObservationType.VELOCITY)]
+        linear_velocity = [("linear_velocity", "l_velocity", ObservationType.L_VELOCITY)]
+        contact = [("feet_contact", "feet_sensor", ObservationType.FEET_SENSOR)]
+        airtime = [("feet_airtime", "feet_sensor", ObservationType.FEET_SENSOR)]
+        commands = [("commands", "command", ObservationType.COMMANDS)]
+        height = [("height", "height_sensor", ObservationType.HEIGHT)]
+
+
+        if self.task==0:
+            observation_spec = (propioception +
+                                last_actions +
+                                gravity_projection +
+                                angular_velocity +
+                                linear_velocity +
+                                contact +
+                                airtime +
+                                height +
+                                commands)
+        elif self.task==1:
+            target_pos = [("target_pose", "target", ObservationType.SITE_POS)]
+            robot_pos = [("robot_pose", "trunk", ObservationType.BODY_POS)]
+            robot_orientation = [("orientation", "orientation_sensor", ObservationType.ORIENTATION)]
+            distance_to_target = [("distance_target", "target", ObservationType.DISTANCE)]
+            
+            observation_spec = (propioception +
+                                last_actions +
+                                gravity_projection +
+                                angular_velocity +
+                                linear_velocity +
+                                contact +
+                                airtime +
+                                height +
+                                commands +
+                                target_pos +
+                                robot_pos +
+                                robot_orientation +
+                                distance_to_target)
+        
+        elif self.task==2:
+            target_pos = [("target_pose", "target", ObservationType.POS)]
+            obstacle_pos = [("obstacle_pose", "obstacle_1", ObservationType.POS_OBSTACLE)]
+            robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
+            robot_orientation = [("orientation", "orientation_sensor", ObservationType.ORIENTATION)]
+            # distance_to_target = [("distance_target", "target", ObservationType.DISTANCE)]
+            # occupancy_grid = [("occupancy_grid", "occupancy_grid", ObservationType.OCCUPANCY)]
+            current_velocity = [("current_velocity", "a_velocity", ObservationType.HEADING)]
+            observation_spec = (propioception +
+                                last_actions +
+                                gravity_projection +
+                                angular_velocity +
+                                linear_velocity +
+                                contact +
+                                airtime +
+                                height +
+                                commands +
+                                robot_pos +  # (2,)
+                                current_velocity + # (3,)
+                                robot_orientation + # (1,)
+                                target_pos + # (2,)
+                                obstacle_pos ) # (10,)
+
+        collision_groups = [("floor", ["floor"]),
+                            ("feet", ["FR_foot", "FL_foot", "RR_foot", "RL_foot"]),
+                            ("FL_foot", ["FL_foot"]), ("FR_foot", ["FR_foot"]),
+                            ("RL_foot", ["RL_foot"]), ("RR_foot", ["RR_foot"]),
+                            ("FR_calf1", ["FR_calf1"]),
+                            ("FL_calf1", ["FL_calf1"]),
+                            ("RR_calf1", ["RR_calf1"]),
+                            ("RL_calf1", ["RL_calf1"]),
+                            ("legs", ["FR_calf1", "FL_calf1", "RR_calf1", "RL_calf1",
+                                      "FR_foot", "FL_foot", "RR_foot", "RL_foot"]),
+                            ("trunk", ["trunk_1", "trunk_2", "trunk_3",
+                                       "trunk_4", "trunk_5", "trunk_6",
+                                       "trunk_7", "trunk_8"]),
+                            ("trunk_t", ["trunk_1", "trunk_2", "trunk_3"]),
+                            ("trunk_1", ["trunk_1"]),
+                            ("trunk_2", ["trunk_2"]),
+                            ("trunk_3", ["trunk_3"]),
+                            ("trunk_4", ["trunk_4"]),
+                            ("trunk_5", ["trunk_5"]),
+                            ("trunk_6", ["trunk_6"]),
+                            ("trunk_7", ["trunk_7"]),
+                            ("trunk_8", ["trunk_8"])]
+        if self.task==2:
+            collision_walls = ("walls",["left_wall", "right_wall","front_wall", "back_wall"])
+            collision_obstacle =  ("obstacles",["obstacle_1"])
+            collision_groups.extend([collision_walls, collision_obstacle])
+        if self.task == 0:
+            max_a = self.qpos_offset
+            min_a = - self.qpos_offset
+
+        else:
+            max_a = np.array([1.,1.,1.])
+            min_a = np.array([-1.,-1,-1])
+
+
+        super().__init__(xml_path, action_spec, observation_spec, gamma, horizon, collision_groups=collision_groups,
+                          n_intermediate_steps=4, timestep=timestep,
+                         max_a=max_a, min_a=min_a)
+
+
+        self.last_action =  np.array(12 * [0])
+        self.torques = list()
+        x,y = self._data.qpos[:2]
+        self.p_gains = np.array(12 * [kp]) #60
+        self.d_gains = np.array(12 * [kd]) #6
+        self.foot_names = ["FR_foot", "FL_foot", "RR_foot", "RL_foot"]
+        self._max_torques = np.array([23.7, 23.7, 35.55])
+        self._min_torques = np.array([-23.7, -23.7, -35.55])
+
+        self.hip_indices = [0, 3, 6, 9]
+
+        self.sitting_dof_pos = np.array([0.0 / 180 * np.pi, 70.0/180*np.pi, -150.0 / 180 * np.pi] * 4)
+        # self.target_yaw =0
+
+        self.yaw = None
+        self.last_contacts = np.zeros(4)
+        self.feet_air_time =  np.zeros(4)
+        self.np_rng = np.random.default_rng(seed=0)
+        self.sampling = StepProbabilitySampling(self)
+        self.sampling_command = StepProbabilitySampling(self)
+        self.reward_function = reward_f(self)
+        self.perturbation = DefaultDomainPerturbation(self)
+        self.reward_function.init()
+
+
+    def handle_domain_randomization(self, function="setup"):
+        if function == "setup":
+            self.should_randomize_domain_perturbation = self.sampling.setup()
+        elif function == "step":
+            self.should_randomize_domain_perturbation = self.sampling.step()
+
+        if self.should_randomize_domain_perturbation:
+
+            self.perturbation.sample()
+
+    def _get_ground_forces(self):
+        """
+        Returns the ground forces (np.array).
+
+        """
+
+        grf = [self._get_collision_force("floor", "foot_FL")[:3],
+               self._get_collision_force("floor", "foot_FR")[:3],
+               self._get_collision_force("floor", "foot_RL")[:3],
+               self._get_collision_force("floor", "foot_RR")[:3]]
+
+        return grf[0], grf[1], grf[2], grf[3]
+
+    def update_orientation_attributes(self):
+        self.orientation_quat = R.from_quat([self._data.qpos[4], self._data.qpos[5], self._data.qpos[6], self._data.qpos[3]])
+        self.orientation_euler = self.orientation_quat.as_euler("xyz")
+        self.orientation_quat_inv = self.orientation_quat.inv()
+
+
+    def _modify_observation(self, obs):
+        # target yaw
+        diff_pose = self._data.qpos[7:19].copy() - self.default_dof_pos.copy()
+        obs[:12] = diff_pose
+        linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+        # linear_velocity = self._data.qvel[:3]
+        angular_velocity = self.orientation_quat_inv.apply(self._data.qvel[3:6])
+        projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
+
+        obs[24:36]= self.last_action #last action
+        obs[36:39] = projected_gravity # gravity
+        obs[39:42] = angular_velocity
+        obs[42:45] = linear_velocity
+        obs[45:49] = np.array([self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        obs[49:53] = np.array([self.reward_function.time_since_last_touchdown_fr,
+                               self.reward_function.time_since_last_touchdown_fl,
+                               self.reward_function.time_since_last_touchdown_rr,
+                               self.reward_function.time_since_last_touchdown_rl])
+        obs[53] = self._data.qpos[2]
+
+        if self.task == 0:
+            obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+
+        if self.task == 1:
+
+           self.target_vx, self.target_vy, self.target_yaw = obs[54:57]
+
+        if self.task == 2:
+            linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+            vx = linear_velocity[0]
+            vy = linear_velocity[1]
+            wz = self._data.qvel[5]
+            # obs[-3:] = np.array([vx,vy,wz])*np.array([2,2,0.25])
+            robot_pos = self._data.qpos[:2]
+            # (2,)
+            current_velocity = np.array([vx, vy, wz])*np.array([2,2,0.25])  # (3,)
+            robot_orientation  = self.orientation_euler[2] # (1,)
+            target_pos = self._data.geom("target").xpos[:2]  # (2,)
+
+            x,y = self._data.geom("obstacle_1").xpos[:2]
+            s=1
+            theta = 0
+            obstacle_pos =calculate_square_vertices(x, y, s, theta)# (10,)
+
+            obs[57:59] = robot_pos
+            obs[59:62] = current_velocity
+            obs[62] = robot_orientation
+            obs[63:65] = target_pos - robot_pos
+            obs[65:] = (obstacle_pos -robot_pos).flatten()
+
+
+
+
+        #     # pass
+        #     # obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+        #     # print(obs[54:57])
+        #     # obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+        #     x, y = self._data.qpos[:2]
+        #     yaw = self.orientation_euler[2]
+        #
+        #     self.reset_map()
+        #     sampling_points =create_rotated_ring_grid((x,y), yaw,inner_radius=0.2,
+        #                                               outer_radius=1.5,
+        #                                               num_points_radius=15,
+        #                                               num_points_angle=20)
+        #     # #
+        #     # # lidar = create_rotated_ring_grid(x, y, 0.4, 1.5, 10, 30, yaw)
+        #     # #
+        #     occupancy = self.occupancy_grid.get_grid_values(sampling_points)
+        #     # cmap = plt.get_cmap('tab10')  # 'tab10' can handle up to 10 unique labels
+        #     # # #
+        #     # # # #
+        #     # if self._ts %50==0:
+        #     #     plt.scatter(sampling_points[0,:],sampling_points[1,:],c=occupancy, cmap=cmap)
+        #     #     self.occupancy_grid.display_grid()
+        #     obs[-300:] = occupancy
+
+
+           # current_pos = self._data.body("trunk").xpos[:2]
+           # target_pos = self._model.site("target").pos[:2]
+           # current_d = np.linalg.norm(target_pos - current_pos)
+           # obs[-1] = 1-current_d/(self.d_base + 1e-6)
+
+        # Norm and clip
+        # obs[:12]  /= 4.6 #joint pos
+        # obs[12:24]/= 35.0 #joint vel
+        # obs[24:36] /= 10.0 # last action
+        # obs[36:39] = projected_gravity  # gravity
+        # obs[39:42] = np.clip(angular_velocity / 50.0, -1.0, 1.0)
+        # obs[42:45] = np.clip(linear_velocity / 10.0, -1.0, 1.0)
+        # obs[45:49] = (obs[45:49] / 0.5) - 1.0
+        # obs[49:53] = np.clip((obs[49:53] / (5.0 / 2)) - 1.0, -1.0, 1.0)
+        # obs[53] = np.clip((self._data.qpos[2]/0.325), -1.0, 1.0)
+        #
+        # obs[54:57] = np.array([self.target_vx, self.target_vy, self.target_yaw])
+
+
+        # Norm and clip
+        obs[:12]  *= 1 #joint pos
+        obs[12:24] *= 0.05 #joint vel
+        obs[24:36] *= 1 # last action
+        obs[36:39] = projected_gravity  # gravity
+        obs[39:42] *= 0.25
+        obs[42:45] *= 2
+        obs[45:49] = (obs[45:49] / 0.5) - 1.0
+        obs[49:53] = np.clip((obs[49:53] / (5.0 / 2)) - 1.0, -1.0, 1.0)
+        obs[53] = np.clip((self._data.qpos[2] -0.5), -1.0, 1.0)*5 #height
+        obs[54:57] *= np.array([2,2,0.25])
+
+
+        return obs
+
+
+
+    def _compute_action(self,cur_obs, action):
+        """
+        Compute a transformation of the action at every intermediate step.
+        Useful to add control signals simulated directly in python.
+
+        Args:
+            action (np.ndarray): numpy array with the actions
+                provided at every step.
+
+        Returns:
+            The action to be set in the actual mujoco simulation.
+
+        """
+
+        torques = self.controller(action)
+        torques_f = np.clip(torques,-self.torques_limits, self.torques_limits)
+        self.torques.append(torques_f.copy())
+        return torques
+
+    def _preprocess_action(self, action):
+        """
+        Compute a transformation of the action provided to the
+        environment.
+
+        Args:
+            action (np.ndarray): numpy array with the actions
+                provided to the environment.
+
+        Returns:
+            The action to be used for the current step
+        """
+
+        action = np.clip(action, -100,100)
+        action *=0.25
+        action[[0,3,6,9]] *= 0.5
+
+
+        action_full =self.default_dof_pos.copy() + action
+
+
+
+
+        return action_full
+
+    def check_collision(self, groups1, groups2):
+        if isinstance(groups1, list):
+            ids1 = [self.collision_groups[group] for group in groups1]
+            ids1 = set().union(*ids1)
+        else:
+            ids1 = self.collision_groups[groups1]
+
+        if isinstance(groups2, list):
+            ids2 = [self.collision_groups[group] for group in groups2]
+            ids2 = set().union(*ids2)
+        else:
+            ids2 = self.collision_groups[groups2]
+
+        for coni in range(0, self._data.ncon):
+            con = self._data.contact[coni]
+
+            collision = con.geom1 in ids1 and con.geom2 in ids2
+            collision_trans = con.geom1 in ids2 and con.geom2 in ids1
+
+            if collision or collision_trans:
+                return True
+
+        return False
+
+    def _step_init(self, obs, action):
+        #
+    #     # self._data.qvel[-5] = 1
+    #     if self._ts <2:
+    #          self._data.joint("obstacle_1").qvel = 1
+        if self.curriculum:
+
+            pos_obstacle =  self._data.joint("obstacle_1").qpos
+
+            robot_y = self._data.qpos[1]
+            if robot_y > pos_obstacle:
+                self._data.ctrl[-1] = self.obstacle_velocity
+
+            if robot_y < pos_obstacle:
+                self._data.ctrl[-1] = -self.obstacle_velocity
+
+
+            if pos_obstacle >=2 :
+                self._data.ctrl[-1] = -1
+
+            if pos_obstacle <=-2:
+                self._data.ctrl[-1]= 1
+
+        else:
+
+            self._data.ctrl[-1] = self.obstacle_velocity
+
+
+
+
+    def check_any_collision(self, groups):
+        if isinstance(groups, list):
+            ids = [self.collision_groups[group] for group in groups]
+            ids = set().union(*ids)
+        else:
+            ids = self.collision_groups[groups]
+
+        for con_i in range(0, self._data.ncon):
+            con = self._data.contact[con_i]
+            if con.geom1 in ids or con.geom2 in ids:
+                return True
+
+        return False
+
+    def check_any_collision_for_all(self, groups):
+        ids = [self.collision_groups[group] for group in groups]
+        ids = set().union(*ids)
+
+        any_collision = {idx: False for idx in ids}
+
+        for con_i in range(0, self._data.ncon):
+            con = self._data.contact[con_i]
+            if con.geom1 in ids:
+                any_collision[con.geom1] = True
+                ids.remove(con.geom1)
+            if con.geom2 in ids:
+                any_collision[con.geom2] = True
+                ids.remove(con.geom2)
+
+        return any_collision
+
+
+    def resample_targets(self):
+
+        # commands, bins = self.curriculum.sample(1)
+        # self.bin_id = bins
+
+        self.target_vx = np.random.uniform(-1.5,1.5)
+        self.target_vy = np.random.uniform(-1,1)
+        self.target_yaw = np.random.uniform(-1.5,1.5)
+
+        self.target_vx = np.random.normal(self.target_vx, 0.1,1)[0]
+        self.target_vy = np.random.normal(self.target_vy, 0.1,1)[0]
+        self.target_yaw = np.random.normal(self.target_yaw, 0.1,1)[0]
+
+        if self.target_vx <= 0.5:
+            self.target_vx = 0
+        if self.target_vy <= 0.5:
+            self.target_vy = 0
+        if self.target_yaw <=0:
+            self.target_yaw = 0
+
+        # if not self.train:
+        #     print("commands: ", self.target_vx, " ", self.target_vy, " ", self.target_yaw)
+
+    # def resample_target_pos(self):
+    #
+    #     robot_pose = self._data.body("trunk").xpos[:2]
+    #     target_theta =  np.random.uniform(-np.pi, np.pi)
+    #     target_radius = np.random.uniform(3,5)
+    #
+    #     x = robot_pose[0] + target_radius*np.cos(target_theta)
+    #     y = robot_pose[1] +  target_radius*np.sin(target_theta)
+    #
+    #     self._model.site("target").pos = [x,y,0.35]
+    #     current_pos = self._data.body("trunk").xpos[:2]
+    #     target_pos = self._model.site("target").pos[:2]
+    #     self.d_base = np.linalg.norm(target_pos - current_pos)
+
+    def calculate_velocity_distance_reward(self, current_velocity, current_pos, target_pos):
+        vect = target_pos - current_pos
+        norm = np.linalg.norm(vect)
+        vect_norm = vect / (norm + 1e-5)
+        projected_vel = np.dot(vect_norm,current_velocity)
+
+        r = np.min([projected_vel, 1]) / 1
+        return r
+
+    def reward_task_1(self, moving_coef=1, angle_coef=0.5):
+        current_global_linear_velocity = self._data.qvel[:3]
+        current_local_linear_velocity = self.orientation_quat_inv.apply(current_global_linear_velocity)
+        current_velocity = current_local_linear_velocity[:2]
+        current_pos = self._data.body("trunk").xpos[:2]
+        target_pos = self._data.geom("target").xpos[:2]
+
+
+        vect_direction = target_pos - current_pos
+        norm = np.linalg.norm(vect_direction)
+        target_vec_norm = vect_direction / (norm + 1e-5)
+        target_yaw = np.arctan2(target_vec_norm[1], target_vec_norm[0])
+
+        yaw = self.orientation_euler[2]
+
+        reward_moving = self.calculate_velocity_distance_reward(current_velocity, current_pos, target_pos)
+
+        reward = moving_coef*reward_moving  + angle_coef* np.exp(-np.abs(target_yaw - yaw))
+        return reward
+    def proximity_penalty(self):
+
+        distance_to_obstacle = np.linalg.norm(np.array(self._model.site("obstacle_1").pos[:2]) - self._data.body("trunk").xpos[:2])
+        obstacle_collision_radius = 1
+        obstacle_save_radius = 0.8
+        robot_collision_bubble_radius = 0.4
+
+        if distance_to_obstacle > obstacle_collision_radius + obstacle_save_radius + robot_collision_bubble_radius:
+            penalty = 0
+        elif obstacle_collision_radius + robot_collision_bubble_radius + obstacle_save_radius > distance_to_obstacle > obstacle_collision_radius + robot_collision_bubble_radius:
+
+            penalty = -np.exp(2*(obstacle_collision_radius+robot_collision_bubble_radius - distance_to_obstacle))
+
+        else:
+            penalty = -1
+        return penalty
+
+    def collision_penalty(self):
+        legs_collision_walls = self._check_collision("legs", "walls")
+        legs_collision_obstacles = self._check_collision("legs", "obstacles")
+        trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
+        trunk_collision_walls = self._check_collision("trunk", "walls")
+
+
+        penalty =  -5 *(legs_collision_walls + trunk_collision_walls)  -10 *(legs_collision_obstacles + trunk_collision_obstacles)
+
+        return penalty
+
+    def reward_velocity(self, current_velocity,target_pos, current_pos):
+
+        vect = target_pos - current_pos
+        norm = np.linalg.norm(vect)
+        vect_norm = vect / (norm + 1e-5)
+        projected_vel = np.clip(np.dot(vect_norm, current_velocity),0,1)
+
+        r = np.min([projected_vel, 1])
+        return r
+
+    def get_reward(self, action):
+
+        if self.task==0:
+            return self.reward_function.reward(action)
+
+        elif self.task==1:
+            return self.reward_task_1()
+
+        elif self.task==2:
+            current_pos = self._data.body("trunk").xpos[:2]
+            target_pos = self._data.geom("target").xpos[:2]
+            # norm_distance = np.linalg.norm(target_pos - current_pos)
+            vect_direction = target_pos - current_pos
+            norm_distance = np.linalg.norm(vect_direction)
+            target_vec_norm = vect_direction / (norm_distance + 1e-5)
+
+            target_yaw = np.arctan2(target_vec_norm[1], target_vec_norm[0])
+            yaw = self.orientation_euler[2]
+            reward_angle = np.exp(-np.abs(target_yaw - yaw))
+
+            local_vel = self.orientation_quat_inv.apply(self._data.qvel[:3])[:2]
+            velocity_norm = np.linalg.norm(local_vel)
+            reward_velocity = self.reward_velocity(local_vel, target_pos, current_pos)
+
+            # global_vel = self._data.qvel[:1]/(np.linalg.norm(self._data.qvel[:1]) + 1e-5)
+
+            # velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+
+
+            stall_penalty = -1 if norm_distance > 0.5 and  velocity_norm < 0.1 else 0
+            # condition = 1 if global_vel > 0 and norm_distance >= 0.5 else 0
+            # condition2 = 2 if (norm_distance < 0.5) else 0
+            # reward = (3*(condition + condition2))/(1+norm_distance)
+            penalty = self.collision_penalty() + stall_penalty
+            reward_target = 5*(1/(1+norm_distance)) if norm_distance < 0.5 else 0
+            reward = 0.5*reward_angle + reward_velocity + reward_target
+
+            return reward + penalty
+            # current_pos = self._data.body("trunk").xpos[:2]
+            # target_pos = self._data.geom("target").xpos[:2]
+            # norm_distance = np.linalg.norm(target_pos - current_pos)
+            # yaw = self.orientation_euler[2]
+            #
+            # sampling_points = create_rotated_ring_grid((current_pos[0], current_pos[1]), yaw, inner_radius=0.2,
+            #                                            outer_radius=1.5,
+            #                                            num_points_radius=15,
+            #                                            num_points_angle=20)
+            #
+            #
+            #
+            # occupancy = np.array(self.occupancy_grid.get_grid_values(sampling_points)) > 0
+            # contact_points = sampling_points[:,occupancy]
+            # velocity = self._data.qvel[:3]
+            # velocity_xy = velocity[:2]
+            # norm_velocity = np.linalg.norm(velocity_xy)
+            # unit_velocity = velocity_xy
+            #
+            # distance_vector = target_pos - current_pos
+            # unit_distance = distance_vector/(norm_distance + 1e-6)
+            #
+            # orientation_reward = unit_velocity@unit_distance
+            # proximity_penalty = 0
+            #
+            # if contact_points.shape[1] > 0:
+            #     distances = np.linalg.norm(contact_points.T - current_pos,axis=1)
+            #
+            #     index = np.argmin(distances)
+            #     vec = current_pos - contact_points[:,index]
+            #     norm = np.linalg.norm(vec)
+            #     if norm<1:
+            #         unit_vec = vec / norm
+            #         proximity_penalty = (1/(1+norm)**2)*velocity_xy@unit_vec/norm_velocity
+            #
+            # reward_target = 5*(1-norm_distance) if norm_distance <=0.5 else 0
+            #
+            # distance_reward = 1/(1 + norm_distance**2)
+            #
+            #
+            # vx = self._data.qvel[0]
+            # vy = self._data.qvel[1]
+            # wz =  self._data.qvel[5]
+            # velocity_vector = np.array([vx, vy, wz])
+            # velocity_penalty = -np.linalg.norm(velocity_vector) if np.linalg.norm(velocity_vector) >0.1 and norm_distance<=0.5 else 0
+            # return self.reward_task_1() + proximity_penalty + self.collision_penalty() + reward_target + velocity_penalty
+
+
+
+
+    def reward(self, state, action, next_state, absorbing):
+
+        # print(self._data.qvel[:3])
+        #state[:12] /= 4.6 #joint pos
+        # state[12:24] /= 35. #joint vel
+        # print("last action: ",state[24:36])
+        # print(" action: ", action)
+        # print(state[36:39]) # gravity
+        # state[39:42]
+        # state[42:45]
+        # state[45:48]
+        #
+
+        reward = self.get_reward(action)
+
+        self.reward_function.step(action)
+
+
+
+        return reward
+
+    def update_variables(self, action, cur_obs):
+        self.last_action = action
+
+
+
+    def _step_finalize(self):
+        self._ts += 1
+        self.update_orientation_attributes()
+        domain_ramdomization = True
+
+        if self.task==0:
+            if domain_ramdomization :
+                self.handle_domain_randomization(function="step")
+
+            if self.sampling_command.step() and self.resample:
+                self.resample_targets()
+
+        if self.task==2:
+            robot_pose = self._data.qpos[:2]
+            target_pose = self._data.geom("target").xpos[:2]
+            norm_distance = np.linalg.norm(target_pose - robot_pose)
+
+            if norm_distance <= 0.2 and self._ts>=self.horizon:
+
+                self.level +=1
+                self.level = np.clip(self.level, 0,6)
+
+
+            if norm_distance >= 4 and self._ts>=self.horizon:
+                self.level -=1
+                self.level = np.clip(self.level, 0,6)
+
+
+
+        if self.joystick:
+            joystick=read_control_values("src/control.json")
+            self.target_vx = joystick["control"]["vx"]
+            self.target_vy = joystick["control"]["vy"]
+            self.target_yaw = joystick["control"]["wz"]
+
+
+        if self.train:
+
+            self.total_timesteps += 1
+
+        fall = self.check_collision("floor", "trunk_t") or self._data.body("trunk").xpos[2] < 0.15
+        legs_collision_obstacles = self._check_collision("legs", "obstacles")
+        trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
+        hit_obstacle =  legs_collision_obstacles or trunk_collision_obstacles
+
+        if fall or hit_obstacle:
+            self.terminates = True
+
+
+
+
+
+    def is_absorbing(self, state):
+
+        if self.terminates == True:
+
+            return True
+
+        else:
+            return False
+
+
+
+    def controller(self, action):
+
+        cur_pos = self._data.qpos[7:19].copy()
+        cur_vel = self._data.qvel[6:18].copy()
+
+        target_q = action
+
+        torques = self.p_gains * (target_q - cur_pos) - self.d_gains * cur_vel
+
+
+        return torques
+
+
+    def get_info(self):
+        return {"success": self.success}
+
+    def setup(self, obs, cond):
+
+        self.reward_function.setup()
+
+        self.torques = list()
+
+        self.update_orientation_attributes()
+        self.success = False
+        self.terminates = False
+
+        self._ts = 0
+
+
+        # self._data.qpos[0:3] = [-3,0,0.36]
+
+
+
+        self._data.qpos[7:19] = self.default_dof_pos.copy()
+
+        self._data.qpos[0:3] = [-3, 0, 0.36]
+
+        if self._reset_state is None:
+            for i in range(0, 10):
+
+                a = self.default_dof_pos.copy() + np.zeros(12)
+                torques = self.controller(a)
+                for i in range(4):
+                    self._data.ctrl[:12] = torques
+                    mujoco.mj_step(self._model, self._data)
+
+            self._reset_state = dict(q_pos=self._data.qpos.copy(), q_vel=self._data.qvel.copy())
+
+        if self.task == 2:
+            y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
+            self._data.qpos[0:3] = [-3, y, 0.36]
+
+        else:
+            self._data.qpos = self._reset_state["q_pos"]
+            self._data.qvel = self._reset_state["q_vel"]
+            mujoco.mj_step(self._model, self._data)
+
+        self.last_dof_vel = self._reset_state["q_vel"][6:]
+        self.last_dof_pos = self._reset_state["q_pos"][6:]
+
+        self.last_action =np.zeros(12)
+
+
+        if self.task == 0:
+
+            self.handle_domain_randomization(function="setup")
+
+
+            if cond is not None:
+                self.target_vx = cond[0]
+                self.target_vy = cond[1]
+                self.target_yaw = cond[2]
+
+            else:
+
+                self.resample_targets()
+
+
+        #
+        if self.task ==2:
+            if not self.antagonist:
+                self.obstacle_curriculum()
+            y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
+            self._data.qpos[0:3] = [-3, y, 0.36]
+            # y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
+            self._data.joint("obstacle_1").qpos = y
+            self._data.ctrl[12] = self.obstacle_velocity*np.random.choice([-1,1])
+
+            # self.reset_map()
+
+
+    def obstacle_curriculum(self):
+        # print("level", self.level)
+        self.obstacle_velocity_levels = 1.5*np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5])
+
+        if self.level<= 5:
+            self.obstacle_velocity = self.obstacle_velocity_levels[self.level]
+        else:
+            self.obstacle_velocity = np.random.choice(self.obstacle_velocity_levels[1:])
+
+
+
+
+        # self.occupancy_grid.display_grid()
+
+
+    def reset_map(self):
+        self.occupancy_grid.reset()
+        self.occupancy_grid.add_rectangle(0, -3, 10,
+                                          0.2)
+        self.occupancy_grid.add_rectangle(0, 3, 10,
+                                          0.2)
+        self.occupancy_grid.add_rectangle(-5, 0, 0.2,
+                                          6)
+        self.occupancy_grid.add_rectangle(5, 0, 0.2,
+                                          6)
+
+        sx, sy = self._model.geom("obstacle_1").size[:2]
+        y = self._data.joint("obstacle_1").qpos[0]
+        self.occupancy_grid.add_rectangle(0, y, 2 * sx, 2 * sy)
+
+
+
+
+
+
+
+
+
+

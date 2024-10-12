@@ -1,0 +1,184 @@
+<mujoco model="planar walker">
+  <include file="./common/visual.xml"/>
+  <include file="./common/skybox.xml"/>
+  <include file="./common/materials.xml"/>
+
+  <option timestep="0.0025"/>
+
+  <statistic extent="2" center="0 0 1"/>
+
+  <default>
+    <joint damping=".1" armature="0.01" limited="true" solimplimit="0 .99 .01"/>
+    <geom contype="1" conaffinity="0" friction=".7 .1 .1"/>
+    <motor ctrlrange="-1 1" ctrllimited="true"/>
+    <site size="0.01"/>
+    <default class="walker">
+      <geom material="self" type="capsule"/>
+      <joint axis="0 -1 0"/>
+    </default>
+    <default class="object">
+      <geom material="self" rgba=".0 .5 .3 1" conaffinity="1" friction=".7 .1 .1"/>
+    </default>
+
+
+
+  </default>
+
+
+
+
+
+
+  <worldbody>
+    <geom name="floor" type="plane" conaffinity="1" pos="0 0 0" size=" 100 5 .2" material="grid" zaxis="0 0 1"/>
+
+    <geom  name="box0" type="box"  size="0.25 2. 0.35" pos="6 0 0.35" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+
+<geom  name="box1" type="box"  size="0.25 2. 0.4" pos="10.299999999999999 0 0.4" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box2" type="box"  size="0.25 2. 0.3" pos="14.499999999999998 0 0.3" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box3" type="box"  size="0.25 2. 0.4" pos="18.7 0 0.4" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box4" type="box"  size="0.25 2. 0.5" pos="22.900000000000002 0 0.5" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box5" type="box"  size="0.25 2. 0.6" pos="27.100000000000005 0 0.6" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box6" type="box"  size="0.25 2. 0.6" pos="31.300000000000008 0 0.6" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box7" type="box"  size="0.25 2. 0.6" pos="35.50000000000001 0 0.6" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box8" type="box"  size="0.25 2. 0.7" pos="39.70000000000001 0 0.7" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box9" type="box"  size="0.25 2. 0.8" pos="43.90000000000001 0 0.8" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box10" type="box"  size="0.25 2. 0.8" pos="48.100000000000016 0 0.8" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box11" type="box"  size="0.25 2. 0.9" pos="52.30000000000002 0 0.9" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box12" type="box"  size="0.25 2. 1.0" pos="56.50000000000002 0 1.0" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box13" type="box"  size="0.25 2. 1.0" pos="60.700000000000024 0 1.0" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box14" type="box"  size="0.25 2. 1.2" pos="64.90000000000002 0 1.2" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+<geom  name="box15" type="box"  size="0.25 2. 1.3" pos="69.10000000000001 0 1.3" conaffinity="1" material="grid"  rgba=".0 .5 .3 1" />
+
+    <geom name="target" type="sphere" pos="70 0 1.3" size=".1" material="target" conaffinity="0"/>
+    <light name="target_light" diffuse="1 1 1" pos="70 0 4.4"/>
+
+    <body name="torso" pos="0 0 1.3" childclass="walker">
+      <light name="light" pos="0 0 2" mode="trackcom"/>
+      <camera name="side" pos="0 -2 .7" euler="60 0 0" mode="trackcom"/>
+      <camera name="back" pos="-2 0 .5" xyaxes="0 -1 0 1 0 3" mode="trackcom"/>
+      <joint name="rootz" axis="0 0 1" type="slide" limited="false" armature="0" damping="0"/>
+      <joint name="rootx" axis="1 0 0" type="slide" limited="false" armature="0" damping="0"/>
+      <joint name="rooty" axis="0 1 0" type="hinge" limited="false" armature="0" damping="0"/>
+      <geom name="torso" size="0.07 0.3"/>
+      <body name="right_thigh" pos="0 -.05 -0.3">
+        <joint name="right_hip" range="-20 100"/>
+        <geom name="right_thigh" pos="0 0 -0.225" size="0.05 0.225"/>
+        <body name="right_leg" pos="0 0 -0.7">
+          <joint name="right_knee" pos="0 0 0.25" range="-150 0"/>
+          <geom name="right_leg" size="0.04 0.25"/>
+
+          <body name="right_foot" pos="0.06 0 -0.25">
+            <joint name="right_ankle" pos="-0.06 0 0" range="-45 45"/>
+            <geom name="right_foot" zaxis="1 0 0" size="0.05 0.1"/>
+            <site name="right_foot_heel" pos="-0.1 0 0" zaxis="1 0 0" size="0.05"/>
+            <site name="right_foot_tip" pos="0.1 0 0" zaxis="1 0 0" size="0.05"/>
+            <site name="right_foot_sole" pos="0 0 -0.01" zaxis="1 0 0" size="0.05"/>
+          </body>
+        </body>
+      </body>
+      <body name="left_thigh" pos="0 .05 -0.3" >
+        <joint name="left_hip" range="-20 100"/>
+        <geom name="left_thigh" pos="0 0 -0.225" size="0.05 0.225"/>
+        <body name="left_leg" pos="0 0 -0.7">
+          <joint name="left_knee" pos="0 0 0.25" range="-150 0"/>
+          <geom name="left_leg" size="0.04 0.25"/>
+          <body name="left_foot" pos="0.06 0 -0.25">
+            <joint name="left_ankle" pos="-0.06 0 0" range="-45 45"/>
+            <geom name="left_foot" zaxis="1 0 0" size="0.05 0.1"/>
+            <site name="left_foot_heel" pos="-0.1 0 0" zaxis="1 0 0" size="0.05"/>
+            <site name="left_foot_tip" pos="0.1 0 0" zaxis="1 0 0" size="0.05"/>
+            <site name="left_foot_sole" pos="0 0 -0.01" zaxis="1 0 0" size="0.05"/>
+          </body>
+        </body>
+      </body>
+    </body>
+
+
+<!--    <body name="platforms"    childclass="object">-->
+
+<!--    </body>-->
+
+
+
+<!--<geom  name="box2" type="box"  size="1 .8 0.5" pos="3 0 0.5"  conaffinity="1" />-->
+
+<!--    <geom  name="box1" type="box"  size="1 .8 0.5" pos="7 0 0.5"  conaffinity="1"/>-->
+
+
+<!--    <geom  name="box3" type="box"  size="1 .8 0.5" pos="10 0 0.5"  conaffinity="1"/>-->
+
+<!--     <geom  name="box4" type="box"  size="1 .8 0.5" pos="15 0 0.5"  conaffinity="1"/>-->
+
+<!--        <body name="box5"    childclass="object">-->
+<!--      <geom  name="box5" type="box"  size="1 .8 0.5" pos="17 0 0.5" />-->
+<!--    </body>-->
+
+<!--        <body name="box5"    childclass="object">-->
+<!--      <geom  name="box5" type="box"  size="1 .8 0.5" pos="17 0 0.5" />-->
+<!--    </body>-->
+<!--    <geom  name="box5" type="box"  size="1 .8 0.5" pos="20 0 0.5"  conaffinity="1"/>-->
+
+<!--    <geom  name="box3" type="box"  size="1 .8 0.5" pos="20 0 0.5"  conaffinity="1"/>-->
+
+
+
+
+<!--    <geom  name="box3" type="box"  size="1 .8 0.5" pos="20 0 0.5"  conaffinity="1"/>-->
+<!--&lt;!&ndash;        <body name="box2"    childclass="object">&ndash;&gt;-->
+<!--&lt;!&ndash;      &ndash;&gt;-->
+<!--&lt;!&ndash;    </body>&ndash;&gt;-->
+
+<!--      <geom  name="box3" type="box"  size="1 .8 0.5" pos="12 0 0.5" />-->
+
+
+<!--      <geom  name="box4" type="box"  size="1 .8 0.5" pos="16 0 0.5" />-->
+
+<!--    <geom  name="box5" type="box"  size="1 .8 0.5" pos="20 0 0.5" />-->
+<!--    <geom  name="box6" type="box"  size="1 .8 0.5" pos="20 0 0.5" />-->
+<!--    <geom  name="box7" type="box"  size="1 .8 0.5" pos="24 0 0.5" />-->
+<!--    <geom  name="box8" type="box"  size="1 .8 0.5" pos="28 0 0.5" />-->
+<!--    <geom  name="box9" type="box"  size="1 .8 0.5" pos="32 0 0.5" />-->
+<!--    <geom  name="box10" type="box"  size="1 .8 0.5" pos="36 0 0.5" />-->
+<!--    <geom  name="box11" type="box"  size="1 .8 0.5" pos="40 0 0.5" />-->
+<!--    <geom  name="box12" type="box"  size="1 .8 0.5" pos="44 0 0.5" />-->
+<!--    <geom  name="box13" type="box"  size="1 .8 0.5" pos="48 0 0.5" />-->
+<!--    <geom  name="box14" type="box"  size="1 .8 0.5" pos="52 0 0.5" />-->
+
+<!--    <geom name="box2" type="box"   size="1.5 .8 0.5"  pos="4 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box3" type="box"   size="1.5 .8 0.5"  pos="7.5 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box4" type="box"   size="1.5 .8 0.5"  pos="11 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box5" type="box"   size="1.5 .8 0.5"  pos="15 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box6" type="box"   size="1.5 .8 0.5"  pos="19 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box7" type="box"   size="1.5 .8 0.5"  pos="24 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box8" type="box"   size="1.5 .8 0.5"  pos="29 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box9" type="box"   size="1.5 .8 0.5"  pos="33 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+<!--    <geom name="box10" type="box"   size="1.5 .8 0.5"  pos="40 0 0.5" rgba=".0 .5 .3 1" conaffinity="1"/>-->
+
+<!--    <light name="target_light" diffuse="1 1 1" pos="8.5 0 4.4"/>-->
+
+
+  </worldbody>
+
+  <sensor>
+    <subtreelinvel name="torso_subtreelinvel" body="torso"/>
+    <touch name="touch_right_foot_heel" site="right_foot_heel"/>
+    <touch name="touch_right_foot_sole" site="right_foot_sole"/>
+    <touch name="touch_right_foot_tip" site="right_foot_tip"/>
+
+    <touch name="touch_left_foot_heel" site="left_foot_heel"/>
+    <touch name="touch_left_foot_sole" site="left_foot_sole"/>
+    <touch name="touch_left_foot_tip" site="left_foot_tip"/>
+
+
+  </sensor>
+
+  <actuator>
+    <motor name="right_hip" joint="right_hip" gear="100"/>
+    <motor name="right_knee" joint="right_knee" gear="50"/>
+    <motor name="right_ankle" joint="right_ankle" gear="20"/>
+    <motor name="left_hip" joint="left_hip" gear="100"/>
+    <motor name="left_knee" joint="left_knee" gear="50"/>
+    <motor name="left_ankle" joint="left_ankle" gear="20"/>
+  </actuator>
+</mujoco>

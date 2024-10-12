@@ -1,0 +1,23 @@
+
+old_model_path: src/nominal_models/walker/nominal_walker
+
+model:
+  name: residual
+
+  params:
+    alpha_lr: 3e-4
+    batch_size: 256
+
+critic:
+  network_class: CriticNetwork
+  params:
+    n_features: 256
+    lr: 3e-4
+    critic_tau: 0.005
+
+actor:
+  network_class: ActorNetwork
+  params:
+    n_features: 256
+    log_std_bounds: [-2, 2]
+    lr: 1e-4
