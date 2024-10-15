@@ -5,71 +5,56 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from src.algorithm.deep_actor_critic.sac import  SAC
-from mushroom_rl.algorithms.actor_critic import PPO
-from mushroom_rl.policy import GaussianTorchPolicy
+
 from mushroom_rl.core import Agent
 
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
 from src.envs.go1_env import Go1
-from src.networks.nets import ActorNetwork, CriticNetwork,ActorGO1Network,CriticGO1Network
-import torch.nn as nn
+from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork
+from src.teachers.self_paced_gamma_teacher_fixed_beta import SelfPacedGammaTemperatureTeacherFixedBeta
+
+
+from src.utils.buffer import Buffer
+from src.utils.state_preprocessor import StateVariableConcatenation
 
 from mushroom_rl.utils.dataset import compute_J, parse_dataset
 
 from tqdm import trange
 
+class Teacher:
+    def __init__(self,
+                 type="gamma_fixed_beta",
+                 initial_conc: np.ndarray = np.array([50]),
+                 target_conc: np.ndarray = np.array([1]),
+                    fixed_rate: np.ndarray = np.array([1000]),
+                    conc_lower_bound: float = 1e-8,
+                    max_kl: float = 0.5,
+                    performance_lower_bound: int = 10,  # cheetah: 10, walker: 10, hopper: 1, cartpole: 10, quad:100
+                    target_kl_threshold: float = 0.01,
+                    temperature_bounds: list = [-np.inf, np.inf],
+                    n_samples_for_dist_update: int = 30):
 
-class PolicyNetwork(nn.Module):
-    def __init__(self, input_shape, output_shape, n_features, **kwargs):
-        super().__init__()
+        self.teacher = SelfPacedGammaTemperatureTeacherFixedBeta(
+            initial_conc,
+            target_conc,
+            fixed_rate,
+            max_kl,
+            performance_lower_bound,
+            conc_lower_bound,
+            target_kl_threshold,
+            temperature_bounds,
+        )
+    def provide_teacher(self):
+        return self.teacher
 
-        n_input = input_shape[-1]
-        n_output = output_shape[0]
+    def sample_n_temperatures(self, n):
+        sampled_temperatures = np.zeros(n)
+        for i in range(n):
+            sampled_temperatures[i] = self.teacher.sample()
 
-        self._h1 = nn.Linear(n_input, n_features)
-        self._h2 = nn.Linear(n_features, n_features)
-        self._h3 = nn.Linear(n_features, n_output)
+        return sampled_temperatures
 
-        nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
-        nn.init.constant_(self._h1.bias, 0.0)
-        nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
-        nn.init.constant_(self._h2.bias, 0.0)
-        nn.init.orthogonal_(self._h3.weight, 0.01)
-        nn.init.constant_(self._h3.bias, 0.0)
-
-    def forward(self, state, **kwargs):
-        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
-        features2 = F.elu(self._h2(features1))
-        a = self._h3(features2)
-
-        return a
-
-
-class ValueNetwork(nn.Module):
-    def __init__(self, input_shape, output_shape, n_features, **kwargs):
-        super().__init__()
-
-        n_input = input_shape[-1]
-        n_output = output_shape[0]
-
-        self._h1 = nn.Linear(n_input, n_features)
-        self._h2 = nn.Linear(n_features, n_features)
-        self._h3 = nn.Linear(n_features, n_output)
-
-        nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
-        nn.init.constant_(self._h1.bias, 0.0)
-        nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
-        nn.init.constant_(self._h2.bias, 0.0)
-        nn.init.orthogonal_(self._h3.weight, 1.0)
-        nn.init.constant_(self._h3.bias, 0.0)
-
-    def forward(self, state, **kwargs):
-        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
-        features2 = F.elu(self._h2(features1))
-        a = self._h3(features2)
-
-        return a
 
 
 def calculate_success_rate(info, last):
@@ -83,7 +68,7 @@ def calculate_success_rate(info, last):
 def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control_agent=None):
 
     np.random.seed()
-
+    use_antagonist = True
     logger = Logger(alg.__name__, results_dir=None)
     logger.strong_line()
     task_name = "obstacles_navigation"
@@ -91,6 +76,8 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
     agent_task = "{}_obstacle_avoidance_min_max".format(task_name)
     logger.info('Experiment Algorithm: ' + alg.__name__ + " task " + agent_task )
 
+    use_quarl=None
+    view = False
     # MDP
     horizon = 1000
     gamma = 0.99
@@ -103,8 +90,8 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-
-
+    teacher = Teacher()
+    obs_size = 18 + 1
 
     cfg_rewards=dict(tracking_goal_vel = 2,
                     tracking_yaw = 1.5,
@@ -141,7 +128,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
               task_name=task_name)
 
     # actor_input_shape = mdp.info.observation_space.shape
-    actor_input_shape = (5*18,)
+    actor_input_shape = (5*obs_size,)
     actor_mu_params = dict(network=ActorNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
@@ -202,7 +189,19 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
                 critic_fit_params=None, range=[-1, 1])
 
     # Algorithm
-    core = Core([agent, antagonist], mdp, low_level_agent=control_agent)
+    if use_quarl:
+        preprocessor = StateVariableConcatenation()
+    else:
+        preprocessor = None
+
+    core = Core([agent, antagonist],
+                mdp,
+                low_level_agent=control_agent,
+                preprocessors=[preprocessor],
+                obs_dim=obs_size)
+
+    temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
+
     dataset = core.evaluate(n_episodes=5, render=True)
     s, *_ = parse_dataset(dataset)
 
@@ -216,11 +215,13 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
     mdp.train = False
 
     for it in trange(n_epochs, leave=False):
+        sampled_temperatures = teacher.sample_n_temperatures(n=5)
+
         mdp.train=True
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit)
         mdp.train = False
 
-        if it % 10==0:
+        if it % 10==0 and view:
             render=True
         else:
             render=False
@@ -235,8 +236,14 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
 
         if it % 10 == 0:
             agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1',alg.__name__, agent_task, it))
-
+            if use_antagonist:
+                antagonist.save("checkpoint/{}/{}/{}/{}/epoch_{}".format('GO1',"ANTAGONIST_minmax",alg.__name__, agent_task, it))
         logger.epoch_info(it + 1, J=J, R=R, entropy=E)
+
+    agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1', alg.__name__, agent_task, "last"))
+
+    if use_antagonist:
+        antagonist.save("checkpoint/{}/{}/{}/{}/epoch_{}".format('GO1', "ANTAGONIST_minmax", alg.__name__, agent_task, "last"))
 
     logger.info('Press a button to visualize')
     input()

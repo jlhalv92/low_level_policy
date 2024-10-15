@@ -1,6 +1,7 @@
 import random
 import time
 
+from six import reraise
 from sympy.physics.units import velocity
 from sympy.strategies.branch import condition
 
@@ -13,7 +14,6 @@ import cv2
 import dm_control.utils.transformations as tr
 import json# Function to read the JSON file
 
-from src.envs.curriculum.curriculum import RewardThresholdCurriculum
 
 def calculate_square_vertices(x, y, s, theta):
     # Half diagonal distance from the center to a vertex
@@ -272,19 +272,21 @@ class Go1(MuJoCo):
 
     """
 
-    def __init__(self, horizon, gamma, n_substep=1, target_pose=None, task_name="nominal_parkour",timestep=0.002,  cfg=None):
+    def __init__(self, horizon, gamma, target_pose=None, task_name="nominal",timestep=0.002,  cfg=None):
         """
         Constructor.
 
         """
-        self.curriculum = False
-        self.resample = True
-        self.joystick = False
+
+        self.curriculum = cfg["curriculum"]
+        self.resample =  cfg["resample"]
+        self.joystick =  cfg["joystick"]
         self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
         self.level = 0
-        self.antagonist = True
+        self.antagonist = cfg["antagonist"]
+        self.max_level = cfg["max_level"]
         self.obstacle_velocity = 0
-        self.occupancy_grid = OccupancyGrid(15,15,0.01)
+        # self.occupancy_grid = OccupancyGrid(15,15,0.01)
 
         self.default_dof_pos = np.array([
             -0.1, -0.8, 1.5,
@@ -491,6 +493,12 @@ class Go1(MuJoCo):
         self.reward_function.init()
 
 
+    def get_info(self):
+        if self.task == 2:
+            return dict(succes=self.success)
+        else:
+            return dict()
+
     def handle_domain_randomization(self, function="setup"):
         if function == "setup":
             self.should_randomize_domain_perturbation = self.sampling.setup()
@@ -548,6 +556,8 @@ class Go1(MuJoCo):
            self.target_vx, self.target_vy, self.target_yaw = obs[54:57]
 
         if self.task == 2:
+            obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+
             linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
             vx = linear_velocity[0]
             vy = linear_velocity[1]
@@ -570,51 +580,6 @@ class Go1(MuJoCo):
             obs[63:65] = target_pos - robot_pos
             obs[65:] = (obstacle_pos -robot_pos).flatten()
 
-
-
-
-        #     # pass
-        #     # obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
-        #     # print(obs[54:57])
-        #     # obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
-        #     x, y = self._data.qpos[:2]
-        #     yaw = self.orientation_euler[2]
-        #
-        #     self.reset_map()
-        #     sampling_points =create_rotated_ring_grid((x,y), yaw,inner_radius=0.2,
-        #                                               outer_radius=1.5,
-        #                                               num_points_radius=15,
-        #                                               num_points_angle=20)
-        #     # #
-        #     # # lidar = create_rotated_ring_grid(x, y, 0.4, 1.5, 10, 30, yaw)
-        #     # #
-        #     occupancy = self.occupancy_grid.get_grid_values(sampling_points)
-        #     # cmap = plt.get_cmap('tab10')  # 'tab10' can handle up to 10 unique labels
-        #     # # #
-        #     # # # #
-        #     # if self._ts %50==0:
-        #     #     plt.scatter(sampling_points[0,:],sampling_points[1,:],c=occupancy, cmap=cmap)
-        #     #     self.occupancy_grid.display_grid()
-        #     obs[-300:] = occupancy
-
-
-           # current_pos = self._data.body("trunk").xpos[:2]
-           # target_pos = self._model.site("target").pos[:2]
-           # current_d = np.linalg.norm(target_pos - current_pos)
-           # obs[-1] = 1-current_d/(self.d_base + 1e-6)
-
-        # Norm and clip
-        # obs[:12]  /= 4.6 #joint pos
-        # obs[12:24]/= 35.0 #joint vel
-        # obs[24:36] /= 10.0 # last action
-        # obs[36:39] = projected_gravity  # gravity
-        # obs[39:42] = np.clip(angular_velocity / 50.0, -1.0, 1.0)
-        # obs[42:45] = np.clip(linear_velocity / 10.0, -1.0, 1.0)
-        # obs[45:49] = (obs[45:49] / 0.5) - 1.0
-        # obs[49:53] = np.clip((obs[49:53] / (5.0 / 2)) - 1.0, -1.0, 1.0)
-        # obs[53] = np.clip((self._data.qpos[2]/0.325), -1.0, 1.0)
-        #
-        # obs[54:57] = np.array([self.target_vx, self.target_vy, self.target_yaw])
 
 
         # Norm and clip
@@ -703,11 +668,8 @@ class Go1(MuJoCo):
         return False
 
     def _step_init(self, obs, action):
-        #
-    #     # self._data.qvel[-5] = 1
-    #     if self._ts <2:
-    #          self._data.joint("obstacle_1").qvel = 1
-        if self.curriculum:
+
+        if self.curriculum or self.max_level:
 
             pos_obstacle =  self._data.joint("obstacle_1").qpos
 
@@ -997,17 +959,18 @@ class Go1(MuJoCo):
             robot_pose = self._data.qpos[:2]
             target_pose = self._data.geom("target").xpos[:2]
             norm_distance = np.linalg.norm(target_pose - robot_pose)
+            self.success = False
 
             if norm_distance <= 0.2 and self._ts>=self.horizon:
-
+                self.success = True
                 self.level +=1
                 self.level = np.clip(self.level, 0,6)
+
 
 
             if norm_distance >= 4 and self._ts>=self.horizon:
                 self.level -=1
                 self.level = np.clip(self.level, 0,6)
-
 
 
         if self.joystick:
@@ -1028,8 +991,6 @@ class Go1(MuJoCo):
 
         if fall or hit_obstacle:
             self.terminates = True
-
-
 
 
 
@@ -1073,15 +1034,25 @@ class Go1(MuJoCo):
         self._ts = 0
 
 
-        # self._data.qpos[0:3] = [-3,0,0.36]
-
 
 
         self._data.qpos[7:19] = self.default_dof_pos.copy()
 
         self._data.qpos[0:3] = [-3, 0, 0.36]
 
+            # a = self.default_dof_pos.copy() + np.zeros(12)
+            # torques = self.controller(a)
+            # for i in range(4):
+            #     self._data.ctrl[:12] = torques
+            #     mujoco.mj_step(self._model, self._data)
+
+
+
+
         if self._reset_state is None:
+            if self.task==2:
+                self.reset_states()
+
             for i in range(0, 10):
 
                 a = self.default_dof_pos.copy() + np.zeros(12)
@@ -1092,14 +1063,14 @@ class Go1(MuJoCo):
 
             self._reset_state = dict(q_pos=self._data.qpos.copy(), q_vel=self._data.qvel.copy())
 
-        if self.task == 2:
-            y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
-            self._data.qpos[0:3] = [-3, y, 0.36]
+
 
         else:
             self._data.qpos = self._reset_state["q_pos"]
             self._data.qvel = self._reset_state["q_vel"]
-            mujoco.mj_step(self._model, self._data)
+            if self.task==2:
+                self.reset_states()
+                mujoco.mj_step(self._model, self._data)
 
         self.last_dof_vel = self._reset_state["q_vel"][6:]
         self.last_dof_pos = self._reset_state["q_pos"][6:]
@@ -1123,21 +1094,23 @@ class Go1(MuJoCo):
 
 
         #
-        if self.task ==2:
-            if not self.antagonist:
-                self.obstacle_curriculum()
-            y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
-            self._data.qpos[0:3] = [-3, y, 0.36]
-            # y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
-            self._data.joint("obstacle_1").qpos = y
-            self._data.ctrl[12] = self.obstacle_velocity*np.random.choice([-1,1])
 
             # self.reset_map()
+    def reset_states(self):
 
+
+        if self.curriculum:
+            self.obstacle_curriculum()
+        if self.max_level:
+            self.obstacle_velocity = 1
+        y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
+        self._data.qpos[0:3] = [-3, y, 0.36]
+        self._data.joint("obstacle_1").qpos = y
+        # self._data.ctrl[12] = self.obstacle_velocity * np.random.choice([-1, 1])
 
     def obstacle_curriculum(self):
         # print("level", self.level)
-        self.obstacle_velocity_levels = 1.5*np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5])
+        self.obstacle_velocity_levels = 2*np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5])
 
         if self.level<= 5:
             self.obstacle_velocity = self.obstacle_velocity_levels[self.level]
@@ -1146,24 +1119,6 @@ class Go1(MuJoCo):
 
 
 
-
-        # self.occupancy_grid.display_grid()
-
-
-    def reset_map(self):
-        self.occupancy_grid.reset()
-        self.occupancy_grid.add_rectangle(0, -3, 10,
-                                          0.2)
-        self.occupancy_grid.add_rectangle(0, 3, 10,
-                                          0.2)
-        self.occupancy_grid.add_rectangle(-5, 0, 0.2,
-                                          6)
-        self.occupancy_grid.add_rectangle(5, 0, 0.2,
-                                          6)
-
-        sx, sy = self._model.geom("obstacle_1").size[:2]
-        y = self._data.joint("obstacle_1").qpos[0]
-        self.occupancy_grid.add_rectangle(0, y, 2 * sx, 2 * sy)
 
 
 

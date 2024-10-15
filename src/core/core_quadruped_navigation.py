@@ -1,6 +1,5 @@
 from audioop import avgpp
 
-from dm_control.utils.transformations import quat_to_euler
 from tqdm import tqdm
 import numpy as np
 from collections import deque
@@ -26,13 +25,13 @@ class Core(object):
     Implements the functions to run a generic algorithm.
 
     """
-    def __init__(self, agents, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None):
+    def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
+                 preprocessors=None, low_level_agent=None, obs_dim=18):
         """
         Constructor.
 
         Args:
-            agents List of agents(Agent): the agent moving according to a policy;
+             the agent moving according to a policy;
             mdp (Environment): the environment in which the agent moves;
             callbacks_fit (list): list of callbacks to execute at the end of
                 each fit;
@@ -40,16 +39,16 @@ class Core(object):
             preprocessors (list): list of state preprocessors to be
                 applied to state variables before feeding them to the
                 agent.
-            prior_pretrain_only (bool): tells us whether to only pretrain a policy with samples from a prior
-            use_data_prior (bool): tells us whether to use a prior from mdp for biasing data collection
+
 
         """
+        self.joystick=False
         self.history = HistoryStore(5)
         self.use_history = True
-        self.use_antagonist = True
-        self.nav_obs_dim = 18
-        self.agent = agents[0]
-        self.antagonist = agents[1]
+        self.agent = agent
+        self.nav_obs_dim = obs_dim
+
+
         self.action = np.zeros(3)
         self.command = np.zeros(3)
         self.low_level_agent = low_level_agent
@@ -72,8 +71,16 @@ class Core(object):
         self._n_steps_per_fit = None
         self._n_episodes_per_fit = None
 
+
+    def set_variables_for_training(self, new_variables):
+        for preprocessor in self._preprocessors:
+            preprocessor.reset_episode_count()
+            preprocessor.set_variables(new_variables)
+
+
+
     def learn(self, n_steps=None, n_episodes=None, n_steps_per_fit=None,
-              n_episodes_per_fit=None, render=False, quiet=False, get_renders=False):
+              n_episodes_per_fit=None, render=False, quiet=False, get_renders=False, id_agent=None):
         """
         This function moves the agent in the environment and fits the policy
         using the collected samples. The agent can be moved for a given number
@@ -179,7 +186,8 @@ class Core(object):
                 self.t_i = 0
                 self.reset(initial_states, initial_conditions)
 
-            sample, antagonist_sample = self._step(render, get_renders, learning)
+
+            sample = self._step(render, get_renders, learning)
 
             self.callback_step([sample])
 
@@ -191,12 +199,14 @@ class Core(object):
                 self._total_episodes_counter += 1
                 self._current_episodes_counter += 1
                 episodes_progress_bar.update(1)
-
             dataset.append(sample)
-            dataset_antagonist.append(antagonist_sample)
+
+
             if fit_condition():
+
                 self.agent.fit(dataset)
-                self.antagonist.fit(dataset_antagonist)
+
+
                 self._current_episodes_counter = 0
                 self._current_steps_counter = 0
 
@@ -208,7 +218,7 @@ class Core(object):
             last = sample[-1]
 
         self.agent.stop()
-        self.antagonist.stop()
+
         self.mdp.stop()
 
         steps_progress_bar.close()
@@ -277,32 +287,28 @@ class Core(object):
         """
         obs_dim = self.nav_obs_dim
 
+
         if not self.use_history:
             navigation_state = self._state[-obs_dim:]
+
         else:
             navigation_state =  self.history.get_history()
 
         if learning:
             # navigation_state = self._state[-obs_dim:]
             self.action = self.agent.draw_noisy_action(navigation_state)
-            action_antagonist = self.antagonist.draw_noisy_action(navigation_state)
 
-            self.mdp.obstacle_velocity = action_antagonist
             robot_state = self._state[:-obs_dim]
-            robot_state[54:57] =  np.array([2,2,0.25]) * self.action
+            if not self.joystick:
+                robot_state[54:57] =  np.array([2,2,0.25]) * self.action
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
         else: # Default
             self.action = self.agent.draw_action(navigation_state)
-            action_antagonist = self.antagonist.draw_action(navigation_state)
-
-
-            self.mdp.obstacle_velocity = action_antagonist
-
             robot_state = self._state[:-obs_dim]
-
-            robot_state[54:57] = np.array([2,2,0.25])* self.action
+            if not self.joystick:
+                robot_state[54:57] = np.array([2,2,0.25])* self.action
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
@@ -326,48 +332,29 @@ class Core(object):
 
         self._state = next_state
 
+        if not self.use_history:
 
+            if get_renders:
+                img = self.mdp.get_render()
+                return img, state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
 
-        if not self.use_antagonist:
-            if not self.use_history:
-
-                if get_renders:
-                    img = self.mdp.get_render()
-                    return img, state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
-
-                return state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
-            else:
-                if get_renders:
-                    img = self.mdp.get_render()
-                    return img, history_state, self.action, reward, history_next_state, absorbing, info, last
-
-                return history_state, self.action, reward, history_next_state, absorbing, info, last
+            return state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
         else:
-            if not self.use_history:
-                trajectory_antagonist = [state[-obs_dim:], action_antagonist, -reward, next_state[-obs_dim:], absorbing,
-                                         info, last]
-                if get_renders:
-                    img = self.mdp.get_render()
-                    return img, state[-obs_dim:], self.action, reward, next_state[-obs_dim:], absorbing, info, last, trajectory_antagonist
+            if get_renders:
+                img = self.mdp.get_render()
+                return img, history_state, self.action, reward, history_next_state, absorbing, info, last
 
-                return state[-obs_dim:], self.action, reward, next_state[-obs_dim:], absorbing, info, last, trajectory_antagonist
-            else:
-                trajectory_antagonist = [history_state, action_antagonist, -reward, history_next_state, absorbing,
-                                         info, last]
-                if get_renders:
-                    img = self.mdp.get_render()
-                    trajectory = img, history_state, self.action, reward, history_next_state, absorbing, info, last
-                    return trajectory, trajectory_antagonist
+            return history_state, self.action, reward, history_next_state, absorbing, info, last
 
-                trajectory = history_state, self.action, reward, history_next_state, absorbing, info, last
-
-                return trajectory, trajectory_antagonist
 
     def reset(self, initial_states=None, initial_conditions=None):
         """
         Reset the state of the agent.
 
         """
+        for preprocessor in self._preprocessors:
+            preprocessor.update_episode_count(self._total_episodes_counter)
+
         if initial_states is None\
             or self._total_episodes_counter == self._n_episodes:
             initial_state = None
@@ -391,11 +378,6 @@ class Core(object):
 
         self.agent.episode_start()
         self.agent.next_action = None
-        if self.use_antagonist:
-            self.antagonist.episode_start()
-            self.antagonist.next_action = None
-
-
         self._episode_steps = 0
 
 

@@ -4,6 +4,59 @@ import torch.nn.functional as F
 import numpy as np
 
 
+class PolicyNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, **kwargs):
+        super().__init__()
+
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+
+        self._h1 = nn.Linear(n_input, n_features)
+        self._h2 = nn.Linear(n_features, n_features)
+        self._h3 = nn.Linear(n_features, n_output)
+
+        nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
+        nn.init.constant_(self._h1.bias, 0.0)
+        nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
+        nn.init.constant_(self._h2.bias, 0.0)
+        nn.init.orthogonal_(self._h3.weight, 0.01)
+        nn.init.constant_(self._h3.bias, 0.0)
+
+    def forward(self, state, **kwargs):
+        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
+        features2 = F.elu(self._h2(features1))
+        a = self._h3(features2)
+
+        return a
+
+
+class ValueNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, **kwargs):
+        super().__init__()
+
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+
+        self._h1 = nn.Linear(n_input, n_features)
+        self._h2 = nn.Linear(n_features, n_features)
+        self._h3 = nn.Linear(n_features, n_output)
+
+        nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
+        nn.init.constant_(self._h1.bias, 0.0)
+        nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
+        nn.init.constant_(self._h2.bias, 0.0)
+        nn.init.orthogonal_(self._h3.weight, 1.0)
+        nn.init.constant_(self._h3.bias, 0.0)
+
+    def forward(self, state, **kwargs):
+        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
+        features2 = F.elu(self._h2(features1))
+        a = self._h3(features2)
+
+        return a
+
+
+
 class CriticNetwork(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):
         super().__init__()
