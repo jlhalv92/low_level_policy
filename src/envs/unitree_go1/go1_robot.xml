@@ -75,7 +75,7 @@
 
 
 
-    <body name="trunk" pos="-3 0 0.5" childclass="go1">
+    <body name="trunk" pos="-4 0 0.5" childclass="go1">
       <camera name="track" mode="trackcom" pos="0 -2 0" xyaxes="1 0 0 0 0 1"/>
       <freejoint/>
 
@@ -103,7 +103,7 @@
             diaginertia="0.00478717 0.00460903 0.000709268"/>
           <joint axis="0 -1 0" range="-4.501 0.686" name="FR_thigh_joint"/>
           <geom class="visual" mesh="thigh_mirror"/>
-          <geom class="thigh1"/>
+          <geom class="thigh1" name="FR_thigh1"/>
           <geom class="thigh2"/>
           <geom class="thigh3"/>
           <body name="FR_calf" pos="0 0 -0.213">
@@ -129,7 +129,7 @@
             diaginertia="0.00478717 0.00460903 0.000709268"/>
           <joint axis="0 1 0" range="-0.686 4.501" name="FL_thigh_joint"/>
           <geom class="visual" mesh="thigh"/>
-          <geom class="thigh1"/>
+          <geom class="thigh1" name="FL_thigh1"/>
           <geom class="thigh2"/>
           <geom class="thigh3"/>
           <body name="FL_calf" pos="0 0 -0.213">
@@ -156,7 +156,7 @@
             diaginertia="0.00478717 0.00460903 0.000709268"/>
           <joint axis="0 -1 0" range="-4.501 0.686" name="RR_thigh_joint"/>
           <geom class="visual" mesh="thigh_mirror"/>
-          <geom class="thigh1"/>
+          <geom class="thigh1" name="RR_thigh1"/>
           <geom class="thigh2"/>
           <geom class="thigh3"/>
           <body name="RR_calf" pos="0 0 -0.213">
@@ -183,7 +183,7 @@
             diaginertia="0.00478717 0.00460903 0.000709268"/>
           <joint axis="0 1 0" range="-0.686 4.501" name="RL_thigh_joint"/>
           <geom class="visual" mesh="thigh"/>
-          <geom class="thigh1"/>
+          <geom class="thigh1" name="RL_thigh1"/>
           <geom class="thigh2"/>
           <geom class="thigh3"/>
           <body name="RL_calf" pos="0 0 -0.213">

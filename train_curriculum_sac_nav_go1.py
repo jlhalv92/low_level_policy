@@ -166,13 +166,14 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 
     core.evaluate(n_episodes=5, render=True)
-
+    if log:
+        wandb.finish()
 
 if __name__ == '__main__':
 
     path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
     control_agent = Agent.load(path)
-    for i in range(5):
+    for i in range(1,5):
         experiment(method_name="Curriculum_SAC",
                    alg=SAC,
                    n_epochs=200,

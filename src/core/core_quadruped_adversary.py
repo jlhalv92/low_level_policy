@@ -305,7 +305,8 @@ class Core(object):
             action = self.agents[0].draw_noisy_action(navigation_state)
 
             action_antagonist = self.agents[1].draw_noisy_action(navigation_state)
-            self.mdp.obstacle_velocity = action_antagonist
+            if self.use_antagonist:
+                self.mdp.obstacle_velocity = action_antagonist
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
                 robot_state[54:57] =  np.array([2,2,0.25]) * action
@@ -315,7 +316,8 @@ class Core(object):
         else: # Default
             action = self.agents[0].draw_action(navigation_state)
             action_antagonist = self.agents[1].draw_action(navigation_state)
-            self.mdp.obstacle_velocity = action_antagonist
+            if self.use_antagonist:
+                self.mdp.obstacle_velocity = action_antagonist
 
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
@@ -348,9 +350,15 @@ class Core(object):
 
         self._state = next_state
 
-
         if self.agent_id==1:
-            reward_agent = -reward
+            pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
+            pos_robot = self.mdp._data.body("trunk").xpos[:2]
+
+            reward_area = 1 if pos_robot[0] <= (pos_antagonist[0] + 0.6) else -1
+            reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1])) if pos_robot[0] <= (pos_antagonist[0] + 0.6) else -1
+
+            reward_agent = reward_area + reward_distance
+
         else:
             reward_agent = reward
 
@@ -393,7 +401,7 @@ class Core(object):
 
         self._state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
 
-        if self.mdp.task==2 and self.use_history:
+        if self.mdp.task==2  or self.mdp.task==3 and self.use_history:
             self.history = HistoryStore(5)
             obs= self._state[-self.nav_obs_dim:]
             for _ in range(5):

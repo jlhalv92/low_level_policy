@@ -76,7 +76,7 @@ class Core(object):
         if not fps:
             fps = int(1 / self.mdp.info.dt)
 
-        return recorder_class(fps=50, **kwargs)
+        return recorder_class(fps=fps, **kwargs)
 
     def learn(self, n_steps=None, n_episodes=None, n_steps_per_fit=None,
               n_episodes_per_fit=None, render=False, quiet=False, get_renders=False):

@@ -7,6 +7,7 @@ import torch
 from src.utils.distributions.torch_distributions import GammaTorchDistribution
 from mushroom_rl.utils.torch import to_float_tensor
 from scipy.optimize import Bounds, NonlinearConstraint, minimize
+from mushroom_rl.core import Logger
 
 G_TOL = 1e-4  # Tolerance for termination by the norm of the Lagrangian gradient
 X_TOL = 1e-6  # Tolerance for termination by the change of the independent variable
@@ -36,6 +37,7 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
             target_conc, rate, use_cuda=False, dtype=torch.float64
         )
 
+        self.new_conc = initial_conc
         self.max_kl = max_kl
         self.perf_lb = performance_lower_bound
         self.above_perf_lb = False
@@ -46,7 +48,9 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
 
         self.iteration = 0
 
+        # self._logger = Logger("self-paced", results_dir=None)
         self._logger = None
+
 
         # Data collection
         self.conc_temperature_data = [
@@ -283,6 +287,7 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
         new_conc = self.temp_dist.get_weights()[0]
         new_rate = self.temp_dist.get_weights()[1]
         perf = perf_constraint_func(new_conc)
+        self.new_conc = new_conc
         self._log_info(
             perf,
             new_conc,

@@ -1,17 +1,9 @@
-import random
-import time
-
-from six import reraise
-from sympy.physics.units import velocity
-from sympy.strategies.branch import condition
 
 from src.envs.mujoco import MuJoCo, ObservationType, mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from src.envs.reward.reward import RudinOwnVarReward as reward_f
 from src.utils.height_map  import *
-import cv2
-import dm_control.utils.transformations as tr
 import json# Function to read the JSON file
 
 
@@ -80,173 +72,15 @@ def read_control_values(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
 
-from collections import deque
-
-def create_rotated_ring_grid(robot_pose,theta, inner_radius=0.4, outer_radius=2., num_points_radius=15, num_points_angle=20):
-    # Create the radius values between inner and outer radii
-    r_values = np.linspace(inner_radius, outer_radius, num_points_radius)
-
-    # Create the angle values from 0 to 2π
-    theta_values = np.linspace(0, 2 * np.pi, num_points_angle, endpoint=False)
-
-    # Create a grid of polar coordinates (r, θ)
-    r_grid, theta_grid = np.meshgrid(r_values, theta_values)
-
-    # Convert polar coordinates to Cartesian coordinates (x, y)
-    x_grid = r_grid * np.cos(theta_grid)
-    y_grid = r_grid * np.sin(theta_grid)
-
-    # Flatten the grid points into a list of (x, y) tuples
-    points = np.vstack([x_grid.ravel(), y_grid.ravel()])
-
-    # Rotation matrix for angle theta
-    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                                [np.sin(theta), np.cos(theta)]])
-
-    # Rotate each point
-    rotated_points = np.dot(rotation_matrix, points)
-
-    # Translate back to the center (x_c, y_c)
-    rotated_points[0, :] += robot_pose[0]
-    rotated_points[1, :] += robot_pose[1]
-
-    return rotated_points
 
 
-def create_rotated_grid(robot_pose ,theta):
-
-    x = np.arange(-1.2,1.2,0.1)
-    y = np.arange(-1.,1,0.1)
-
-    xv, yv = np.meshgrid(x, y)
-
-    # Flatten the grid points into a list of (x, y) tuples
-    points = np.vstack([xv.ravel(), yv.ravel()])
-
-    # Rotation matrix for angle theta
-    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                                [np.sin(theta), np.cos(theta)]])
-
-    # Rotate each point around the center (x_c, y_c)
-    rotated_points = np.dot(rotation_matrix, points)
-
-    # Translate back to the center (x_c, y_c)
-    rotated_points[0, :] += robot_pose[0]
-    rotated_points[1, :] += robot_pose[1]
-
-    return rotated_points
-
-class OccupancyGrid:
-    def __init__(self, width_meters, height_meters, resolution=0.01):
-        """
-        Initialize the occupancy grid.
-        :param width_meters: Width of the grid in meters.
-        :param height_meters: Height of the grid in meters.
-        :param resolution: Grid resolution in meters per cell (default is 0.01 meters).
-        """
-        self.resolution = resolution  # meters per grid cell
-        self.width_cells = int(width_meters / resolution)  # total columns
-        self.height_cells = int(height_meters / resolution)  # total rows
-        self.grid = np.zeros((self.height_cells, self.width_cells), dtype=np.uint8)  # 0 means free, 1 means occupied
-
-        # The center of the grid corresponds to the origin (0, 0) in world coordinates
-        self.origin_x = self.width_cells // 2
-        self.origin_y = self.height_cells // 2
-
-    def reset(self):
-        self.grid = np.zeros((self.height_cells, self.width_cells), dtype=np.uint8)  # 0 means free, 1 means occupied
-
-
-
-    def world_to_grid(self, x, y):
-        """
-        Convert world coordinates to grid coordinates.
-        :param x: X coordinate in meters.
-        :param y: Y coordinate in meters.
-        :return: (grid_x, grid_y) in grid coordinates.
-        """
-        origin = np.array([self.origin_x, self.origin_y])
-        point = np.array([x, -y])
-        point_in_grid = origin + (point / self.resolution).astype(int)
-        return point_in_grid[0], point_in_grid[1]
-
-    def add_circle(self, x, y, radius):
-        """
-        Add a circular obstacle to the grid.
-        :param x: X coordinate of the circle center in meters.
-        :param y: Y coordinate of the circle center in meters.
-        :param radius: Radius of the circle in meters.
-        """
-        grid_center = self.world_to_grid(x, y)
-        grid_radius = int(radius / self.resolution)
-        cv2.circle(self.grid, grid_center, grid_radius, 1, -1)  # Draw filled circle (1 indicates occupied)
-
-    def add_rectangle(self, x, y, width, height):
-        """
-        Add a rectangular obstacle to the grid.
-        :param x: X coordinate of the center of the rectangle in meters.
-        :param y: Y coordinate of the center of the rectangle in meters.
-        :param width: Width of the rectangle in meters.
-        :param height: Height of the rectangle in meters.
-        """
-        half_width = width / 2
-        half_height = height / 2
-        top_left = self.world_to_grid(x - half_width, y + half_height)
-        bottom_right = self.world_to_grid(x + half_width, y - half_height)
-        cv2.rectangle(self.grid, top_left, bottom_right, 1, -1)  # Draw filled rectangle
-
-    def add_square(self, x, y, side_length):
-        """
-        Add a square obstacle to the grid.
-        :param x: X coordinate of the center of the square in meters.
-        :param y: Y coordinate of the center of the square in meters.
-        :param side_length: Side length of the square in meters.
-        """
-        self.add_rectangle(x, y, side_length, side_length)
-
-    def add_triangle(self, x, y, size):
-        """
-        Add a triangular obstacle to the grid.
-        :param x: X coordinate of the center of the triangle in meters.
-        :param y: Y coordinate of the center of the triangle in meters.
-        :param size: Side length of the triangle in meters.
-        """
-        half_size = size / 2
-        points = np.array([
-            self.world_to_grid(x, y + half_size),  # Top point
-            self.world_to_grid(x - half_size, y - half_size),  # Bottom left
-            self.world_to_grid(x + half_size, y - half_size)  # Bottom right
-        ], np.int32)
-        cv2.fillPoly(self.grid, [points], 1)  # Draw filled triangle
-
-    def get_grid_values(self, sampling_grid):
-        weights = []
-        #
-        for i in range(sampling_grid.shape[1]):
-            x_g, y_g = self.world_to_grid(sampling_grid[0, i], sampling_grid[1, i])
-            if x_g >= self.width_cells or y_g >= self.height_cells:
-                weights.append(0)
-            weights.append(self.grid[y_g, x_g])
-        return weights
-
-    def display_grid(self):
-        """
-        Display the occupancy grid for visualization.
-        """
-        extent = [-self.width_cells // 2 * self.resolution, self.width_cells // 2 * self.resolution,
-                  -self.height_cells // 2 * self.resolution, self.height_cells // 2 * self.resolution]
-        plt.imshow(self.grid,origin="upper", extent=extent)
-
-        plt.title("Occupancy Grid Map (0,0 at the center)")
-        plt.xlabel("X (meters)")
-        plt.ylabel("Y (meters)")
-        plt.show()
 
 
 
 task_map = dict(nominal=0,
                 navigation=1,
-                obstacles_navigation=2)
+                obstacles_navigation=2,
+                multi_obstacles_navigation=3)
 
 TARGET_IDS= ["target{}".format(i) for i in range(1 ,5)]
 TARGET_IDS= ["target"]
@@ -277,7 +111,10 @@ class Go1(MuJoCo):
         Constructor.
 
         """
-
+        self._all_obstacles_move = False
+        self.indices = [0, 1, 2]
+        self.obstacle_id = 0
+        self.obstacles = ["obstacle_1", "obstacle_2", "obstacle_3"]
         self.curriculum = cfg["curriculum"]
         self.resample =  cfg["resample"]
         self.joystick =  cfg["joystick"]
@@ -325,6 +162,8 @@ class Go1(MuJoCo):
         if task==2:
             xml_path = "src/envs/unitree_go1/obstacles_navigation_go1.xml"
 
+        if task==3:
+            xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1.xml"
 
         self.joint_limits = np.array([[-0.802851, 0.802851], [-1.0472, 4.18879], [-2.69653, -0.916298]] * 4)
 
@@ -405,7 +244,7 @@ class Go1(MuJoCo):
                                 robot_orientation +
                                 distance_to_target)
         
-        elif self.task==2:
+        elif self.task==2 or self.task==3:
             target_pos = [("target_pose", "target", ObservationType.POS)]
             obstacle_pos = [("obstacle_pose", "obstacle_1", ObservationType.POS_OBSTACLE)]
             robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
@@ -436,7 +275,8 @@ class Go1(MuJoCo):
                             ("FL_calf1", ["FL_calf1"]),
                             ("RR_calf1", ["RR_calf1"]),
                             ("RL_calf1", ["RL_calf1"]),
-                            ("legs", ["FR_calf1", "FL_calf1", "RR_calf1", "RL_calf1",
+                            ("legs", ["FR_thigh1","FL_thigh1","RR_thigh1","RL_thigh1",
+                                      "FR_calf1", "FL_calf1", "RR_calf1", "RL_calf1",
                                       "FR_foot", "FL_foot", "RR_foot", "RL_foot"]),
                             ("trunk", ["trunk_1", "trunk_2", "trunk_3",
                                        "trunk_4", "trunk_5", "trunk_6",
@@ -453,6 +293,10 @@ class Go1(MuJoCo):
         if self.task==2:
             collision_walls = ("walls",["left_wall", "right_wall","front_wall", "back_wall"])
             collision_obstacle =  ("obstacles",["obstacle_1"])
+            collision_groups.extend([collision_walls, collision_obstacle])
+        if self.task==3:
+            collision_walls = ("walls",["left_wall", "right_wall","front_wall", "back_wall"])
+            collision_obstacle =  ("obstacles",["obstacle_1", "obstacle_2","obstacle_3"])
             collision_groups.extend([collision_walls, collision_obstacle])
         if self.task == 0:
             max_a = self.qpos_offset
@@ -555,7 +399,7 @@ class Go1(MuJoCo):
 
            self.target_vx, self.target_vy, self.target_yaw = obs[54:57]
 
-        if self.task == 2:
+        if self.task == 2 or  self.task == 3:
             obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
 
             linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
@@ -569,10 +413,12 @@ class Go1(MuJoCo):
             robot_orientation  = self.orientation_euler[2] # (1,)
             target_pos = self._data.geom("target").xpos[:2]  # (2,)
 
-            x,y = self._data.geom("obstacle_1").xpos[:2]
-            s=1
+            i = self.indices[self.obstacle_id]
+
+            x,y = self._data.geom(self.obstacles[i]).xpos[:2]
+            s= 2*self._model.geom(self.obstacles[i]).size[0]
             theta = 0
-            obstacle_pos =calculate_square_vertices(x, y, s, theta)# (10,)
+            obstacle_pos =calculate_square_vertices(x, y, s, theta)
 
             obs[57:59] = robot_pos
             obs[59:62] = current_velocity
@@ -668,28 +514,47 @@ class Go1(MuJoCo):
         return False
 
     def _step_init(self, obs, action):
+        if self.task == 3:
+            robot_pos_x = self._data.body("trunk").xpos[0]
+            obstacle_1_pos_x = self._data.geom(self.obstacles[self.indices[0]]).xpos[0]
+            obstacle_2_pos_x = self._data.geom(self.obstacles[self.indices[1]]).xpos[0]
 
-        if self.curriculum or self.max_level:
+            obstacle_1_size_x = self._model.geom(self.obstacles[self.indices[0]]).size[0]
+            obstacle_2_size_x = self._model.geom(self.obstacles[self.indices[1]]).size[0]
 
-            pos_obstacle =  self._data.joint("obstacle_1").qpos
+            if robot_pos_x <= obstacle_1_pos_x + obstacle_1_size_x:
+                self.obstacle_id = 0
 
-            robot_y = self._data.qpos[1]
-            if robot_y > pos_obstacle:
-                self._data.ctrl[-1] = self.obstacle_velocity
+            if obstacle_2_pos_x + obstacle_2_size_x > robot_pos_x > obstacle_1_pos_x + obstacle_1_size_x:
+                self.obstacle_id = 1
 
-            if robot_y < pos_obstacle:
-                self._data.ctrl[-1] = -self.obstacle_velocity
+            if obstacle_2_pos_x + obstacle_2_size_x < robot_pos_x:
+                self.obstacle_id = 2
+        if self._all_obstacles_move:
+            if self.curriculum or self.max_level:
 
+                pos_obstacle =  self._data.joint(self.obstacles[self.indices[self.obstacle_id]] + "_y").qpos
 
-            if pos_obstacle >=2 :
-                self._data.ctrl[-1] = -1
+                robot_y = self._data.qpos[1]
+                velocity = self.obstacle_velocity * (robot_y-pos_obstacle)
 
-            if pos_obstacle <=-2:
-                self._data.ctrl[-1]= 1
+                self._data.ctrl[12+self.indices[ self.obstacle_id]] = velocity
 
+            else:
+
+                self._data.ctrl[12+self.indices[ self.obstacle_id]] = self.obstacle_velocity
         else:
 
-            self._data.ctrl[-1] = self.obstacle_velocity
+            if self.curriculum or self.max_level:
+
+                pos_obstacle = self._data.joint(self.obstacles[0] + "_y").qpos
+                robot_y = self._data.qpos[1]
+                velocity = self.obstacle_velocity * (robot_y - pos_obstacle)
+                self._data.ctrl[12] = velocity
+
+            else:
+
+                self._data.ctrl[12] = self.obstacle_velocity
 
 
 
@@ -1040,18 +905,12 @@ class Go1(MuJoCo):
 
         self._data.qpos[0:3] = [-3, 0, 0.36]
 
-            # a = self.default_dof_pos.copy() + np.zeros(12)
-            # torques = self.controller(a)
-            # for i in range(4):
-            #     self._data.ctrl[:12] = torques
-            #     mujoco.mj_step(self._model, self._data)
-
-
 
 
         if self._reset_state is None:
-            if self.task==2:
-                self.reset_states()
+            if self.task==2 or self.task==3:
+                self.obstacle_id = 0
+                self.reset_states(self.task)
 
             for i in range(0, 10):
 
@@ -1064,13 +923,18 @@ class Go1(MuJoCo):
             self._reset_state = dict(q_pos=self._data.qpos.copy(), q_vel=self._data.qvel.copy())
 
 
-
         else:
             self._data.qpos = self._reset_state["q_pos"]
             self._data.qvel = self._reset_state["q_vel"]
-            if self.task==2:
-                self.reset_states()
+            if self.task == 2 or self.task == 3:
+                self.reset_states(self.task)
                 mujoco.mj_step(self._model, self._data)
+
+
+        # print(self._data.qpos[0:3])
+        # print(self._data.qpos[-6:], self._data.geom("obstacle_1").xpos)
+        # exit()
+
 
         self.last_dof_vel = self._reset_state["q_vel"][6:]
         self.last_dof_pos = self._reset_state["q_pos"][6:]
@@ -1096,17 +960,43 @@ class Go1(MuJoCo):
         #
 
             # self.reset_map()
-    def reset_states(self):
+    def reset_states(self, task):
 
 
         if self.curriculum:
             self.obstacle_curriculum()
         if self.max_level:
             self.obstacle_velocity = 1
+
         y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
-        self._data.qpos[0:3] = [-3, y, 0.36]
-        self._data.joint("obstacle_1").qpos = y
-        # self._data.ctrl[12] = self.obstacle_velocity * np.random.choice([-1, 1])
+
+        if task==2:
+            self._data.qpos[0:3] = [-4, y, 0.36]
+
+            x = np.random.uniform(-2,2.5)
+
+            self._data.joint(self.obstacles[0] + '_x').qpos = x
+            self._data.joint(self.obstacles[0] + '_y').qpos = y
+
+
+        if task==3:
+
+            self.indices = np.random.permutation(len(self.obstacles))
+            x = [-2.5, 0, 2.5]
+            self._data.qpos[0:3] = [-4, y, 0.36]
+
+            for i,n in enumerate(self.indices):
+                x_p = x[i]
+                if n == 1:
+                    x_p = x[i] -2
+                if n == 2:
+                    x_p = x[i] -3
+                if i>0:
+                    y = np.random.uniform(-2,2)
+
+                self._data.joint(self.obstacles[n] + '_x').qpos = x_p
+                self._data.joint(self.obstacles[n] + '_y').qpos = y
+
 
     def obstacle_curriculum(self):
         # print("level", self.level)

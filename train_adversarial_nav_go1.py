@@ -181,7 +181,7 @@ def experiment(method_name, alg, n_epochs,episode, n_steps_per_fit, n_episodes_t
             render=False
 
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=0)
-        s, a, r, s1, a, info, last = parse_dataset(dataset)
+        s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy(s)

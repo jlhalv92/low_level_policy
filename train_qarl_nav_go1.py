@@ -38,13 +38,12 @@ def extract_temp_and_sample_return(data, gamma):
 
 class Teacher:
     def __init__(self,
-                 type="gamma_fixed_beta",
                  initial_conc: np.ndarray = np.array([50]),
                  target_conc: np.ndarray = np.array([1]),
                     fixed_rate: np.ndarray = np.array([1000]),
                     conc_lower_bound: float = 1e-8,
                     max_kl: float = 0.5,
-                    performance_lower_bound: int = 100,  # cheetah: 10, walker: 10, hopper: 1, cartpole: 10, quad:100
+                    performance_lower_bound: int = 10,  # cheetah: 10, walker: 10, hopper: 1, cartpole: 10, quad:100
                     target_kl_threshold: float = 0.01,
                     temperature_bounds: list = [-np.inf, np.inf]):
 
@@ -58,6 +57,8 @@ class Teacher:
             target_kl_threshold,
             temperature_bounds,
         )
+        self.temperature_list = []
+
     def provide_teacher(self):
         return self.teacher
 
@@ -90,41 +91,24 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
 
     logger.info('Experiment Algorithm: ' + method_name + " task " + agent_task )
 
-    use_quarl=True
-    view = False
+    view = True
     # MDP
     horizon = 1000
     gamma = 0.99
     n_features = 256
-    lr = 3e-4
     warmup_transitions = 3000
     batch_size = 256
     initial_replay_size = 3000
-    n_samples_for_dist_update = 30
+    n_samples_for_dist_update = 1
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
     teacher = Teacher()
 
 
-    cfg_rewards=dict(tracking_goal_vel = 2,
-                    tracking_yaw = 1.5,
-                     lin_vel_z = -1.0,
-    ang_vel_xy = -0.05,
-    orientation = -1.,
-    dof_acc = -2.5e-7,
-    collision = -1.,
-    action_rate = -0.1 ,
-    delta_torques = -1.0e-7 ,
-    torques = -0.00001 ,
-    hip_pos = -0.5,
-    dof_error = -0.04,
-    feet_stumble = -1,
-    feet_edge = -1,
-    airtime = 1,
-    clip=True)
+    cfg_rewards=dict()
 
-    log = True
+    log = False
     obs_dim = 18 + 1
 
     if log:
@@ -211,7 +195,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[-1, 1])
+                critic_fit_params=None, range=[-2, 2])
 
     # Algorithm
 
@@ -229,9 +213,33 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
                 obs_dim=obs_dim)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
+
+    samples = teacher.teacher.temp_dist.sample((1000,))
+    samples2 = teacher.teacher.target_dist.sample((1000,))
+    import matplotlib.pyplot as plt
+    samples_np = samples.detach().numpy()
+    samples_np2 = samples2.detach().numpy()
+
+    # # Plot the gamma distribution
+    # plt.figure(figsize=(8, 6))
+    # plt.hist(samples_np, bins=50, density=True, alpha=0.7, color='b', label="Sampled Gamma Distribution")
+    # plt.hist(samples_np2, bins=50, density=True, alpha=0.7, color='r', label="Sampled Gamma Distribution")
+    # print(samples_np.mean())
+    # print(samples_np2.mean())
+    # plt.title('Gamma Distribution (Torch)')
+    # plt.xlabel('x')
+    # plt.ylabel('Density')
+    # plt.legend(loc='best')
+    # plt.grid(True)
+    # plt.show()
+    #
+    # exit()
+
     evaluation_temp = teacher.teacher.temp_dist.mean()
     core.set_variables_for_training(evaluation_temp*np.ones(5))
 
+    mdp.max_level = True
+    core.use_antagonist = False
     dataset = core.evaluate(n_episodes=n_episodes, render=True, id_agent=0)
     s, *_ = parse_dataset(dataset)
 
@@ -239,20 +247,26 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
     R = np.mean(compute_J(dataset))
     E = agent.policy.entropy(s)
     temperature = evaluation_temp
-
     logger.epoch_info(0, J=J, R=R, entropy=E, temperature= temperature)
 
+
+
+    mdp.max_level = False
+    core.use_antagonist = True
     sampled_temperatures = teacher.sample_n_temperatures(n=50)
     core.set_variables_for_training(sampled_temperatures)
-
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=0)
     core.callback_step.clean()
 
+
     for it in trange(n_epochs, leave=False):
+
+        mdp.max_level = False
+        core.use_antagonist = True
         sampled_temperatures = teacher.sample_n_temperatures(n=5)
         core.set_variables_for_training(sampled_temperatures)
-
+        teacher.temperature_list.append(sampled_temperatures)
         logger.info("Training Antagonist")
         core.learn(n_episodes=n_episodes, n_steps_per_fit=n_steps_per_fit, id_agent=1)
         logger.info("Training Protagonist")
@@ -279,13 +293,37 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
 
         evaluation_temp = teacher.teacher.temp_dist.mean()
         core.set_variables_for_training(evaluation_temp*np.ones(n_episodes_test))
+        logger.info("Evaluate with Best Antagonist")
 
+        dataset = core.evaluate(n_episodes=n_episodes_test, render=render,id_agent=0)
+        s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
+        J = np.mean(compute_J(dataset, mdp.info.gamma))
+        R = np.mean(compute_J(dataset))
+        E = agent.policy.entropy(s)
+        E_a = antagonist.policy.entropy(s)
+        success_rate = calculate_success_rate(info, last)
+        evaluation_temp = teacher.teacher.temp_dist.mean()
+        logger.epoch_info(it + 1, J=J,
+                          R=R,
+                          entropy=E,
+                          entropy_antagonist=E_a,
+                          temperature=np.mean(teacher.temperature_list[-1]),
+                          current_t_dist=evaluation_temp,
+                          target_mean=teacher.teacher.target_dist.mean(),
+                          current_conc=teacher.teacher.new_conc,
+                          success_rate=success_rate)
+
+        logger.info("Evaluate with Evaluation Aggressive Obstacle")
+
+        mdp.max_level = True
+        core.use_antagonist = False
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render,id_agent=0)
         s, a, r, s1, a, info, last = parse_dataset(dataset)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy(s)
         success_rate = calculate_success_rate(info, last)
+        logger.epoch_info(it + 1, J=J, R=R, entropy=E, success_rate=success_rate)
 
         if log:
             logs_dict = {"RETURN": J, "REWARD": R, "succes_rate": success_rate}
@@ -297,7 +335,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
             antagonist.save(
                 "checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1', agent_task, method_name, run_id, "ANTAGONIST", it))
 
-        logger.epoch_info(it + 1, J=J, R=R, entropy=E)
+
 
     agent.save(
         "checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1', agent_task, method_name, run_id, 'Protagonist', "last"))

@@ -37,7 +37,8 @@
 
 <!--        <geom  name="obstacle_1" type="box"  pos="0 0 0.5" size="1 2 0.5" rgba=".7 .5 .3 1" conaffinity="1" />-->
        <body name="obstacle_1" pos="0 0 0.55" >
-           <joint name="obstacle_1" axis="0 1 0" type="slide" limited="false" armature="0" damping="0"/>
+           <joint name="obstacle_1_x" axis="1 0 0" type="slide" limited="false" armature="0" damping="0"/>
+           <joint name="obstacle_1_y" axis="0 1 0" type="slide" limited="false" armature="0" damping="0"/>
               <geom  name="obstacle_1" type="box"   size="0.5 0.5 0.5" rgba=".7 .5 .3 1" conaffinity="1" />
            <site name="obstacle_1" type="sphere" size=".1" rgba=".6 .3 .3 1"  />
 <!--           <freejoint name="obstacle_1" />-->
@@ -50,7 +51,7 @@
   </worldbody>
 
     <actuator>
-       <velocity name="obstacle_1" joint="obstacle_1" kv="500" ctrlrange="-1 1" forcerange="-500 500" />
+       <velocity name="obstacle_1" joint="obstacle_1_y" kv="500" ctrlrange="-1 1" forcerange="-500 500" />
     </actuator>
 
 </mujoco>

@@ -123,7 +123,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 
     dataset = core.evaluate(n_episodes=5, render=True)
-    s, a, r, s1, a, info, last = parse_dataset(dataset)
+    s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
     E = agent.policy.entropy(s)
@@ -166,13 +166,14 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 
     core.evaluate(n_episodes=5, render=True)
-
+    if log:
+        wandb.finish()
 
 if __name__ == '__main__':
 
     path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
     control_agent = Agent.load(path)
-    for i in range(5):
+    for i in range(1,5):
         experiment(method_name="SAC",
                    alg=SAC,
                    n_epochs=200,
