@@ -3,6 +3,7 @@ from audioop import avgpp
 from tqdm import tqdm
 import numpy as np
 from collections import deque
+from src.utils.record.record import VideoRecorder
 
 np.random.seed()
 
@@ -26,7 +27,7 @@ class Core(object):
 
     """
     def __init__(self, agents, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None, obs_dim=18):
+                 preprocessors=None, low_level_agent=None, obs_dim=18, record_dictionary=None):
         """
         Constructor.
 
@@ -47,10 +48,9 @@ class Core(object):
         self.joystick=False
         self.history = HistoryStore(5)
         self.use_history = True
-        if len(agents) >1:
-            self.use_antagonist = True
-        else:
-            self.use_antagonist = False
+
+        self.use_antagonist = True
+
         self.nav_obs_dim = obs_dim
         self.agents = agents
 
@@ -76,6 +76,30 @@ class Core(object):
         self._n_steps_per_fit = None
         self._n_episodes_per_fit = None
 
+        if record_dictionary is None:
+            record_dictionary = dict()
+        self._record = self._build_recorder_class(**record_dictionary)
+
+    def _build_recorder_class(self, recorder_class=None, fps=None, **kwargs):
+        """
+        Method to create a video recorder class.
+
+        Args:
+            recorder_class (class): the class used to record the video. By default, we use the ``VideoRecorder`` class
+                from mushroom. The class must implement the ``__call__`` and ``stop`` methods.
+
+        Returns:
+             The recorder object.
+
+        """
+
+        if not recorder_class:
+            recorder_class = VideoRecorder
+
+        if not fps:
+            fps = int(1 / self.mdp.info.dt)
+
+        return recorder_class(fps=fps, **kwargs)
 
     def set_variables_for_training(self, new_variables):
         for preprocessor in self._preprocessors:
@@ -121,7 +145,7 @@ class Core(object):
         self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders, learning=True) # Add bool to signify this is a learning run
 
     def evaluate(self, initial_states=None, n_steps=None, n_episodes=None,
-                 render=False, quiet=False, get_renders=False, initial_conditions=None, id_agent=None):
+                 render=False, quiet=False, get_renders=False, initial_conditions=None, id_agent=None, record=False):
         """
         This function moves the agent in the environment using its policy.
         The agent is moved for a provided number of steps, episodes, or from
@@ -137,6 +161,8 @@ class Core(object):
             quiet (bool, False): whether to show the progress bar or not.
 
         """
+        self.record = record
+
         fit_condition = lambda: False
         self.agent_id = id_agent
         return self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders,
@@ -317,6 +343,7 @@ class Core(object):
             action = self.agents[0].draw_action(navigation_state)
             action_antagonist = self.agents[1].draw_action(navigation_state)
             if self.use_antagonist:
+
                 self.mdp.obstacle_velocity = action_antagonist
 
             robot_state = self._state[:-obs_dim]
@@ -325,7 +352,6 @@ class Core(object):
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
-
         self._episode_steps += 1
 
         if self.agent_id ==1:
@@ -334,7 +360,10 @@ class Core(object):
             self.action = action
 
         if render:
-            self.mdp.render()
+
+            frame = self.mdp.render(record=self.record)
+            if self.record:
+                self._record(frame)
 
         last = not(
             self._episode_steps < self.mdp.info.horizon and not absorbing)

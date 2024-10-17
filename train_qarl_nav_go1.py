@@ -36,6 +36,7 @@ def extract_temp_and_sample_return(data, gamma):
 
     return temperatures, sample_returns
 
+
 class Teacher:
     def __init__(self,
                  initial_conc: np.ndarray = np.array([50]),
@@ -99,13 +100,11 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
     warmup_transitions = 3000
     batch_size = 256
     initial_replay_size = 3000
-    n_samples_for_dist_update = 1
+    n_samples_for_dist_update = 30
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
     teacher = Teacher()
-
-
     cfg_rewards=dict()
 
     log = False
@@ -134,6 +133,14 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
               timestep=0.005,
               cfg=cfg,
               task_name=task_name)
+
+    mdp_eval = Go1(horizon,
+                   gamma,
+                   timestep=0.005,
+                   cfg=cfg,
+                   task_name="multi_obstacles_navigation")
+
+
 
     # actor_input_shape = mdp.info.observation_space.shape
     actor_input_shape = (5*obs_dim,)
@@ -212,47 +219,31 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
                 preprocessors=[preprocessor],
                 obs_dim=obs_dim)
 
+    core_eval = Core([agent, antagonist],
+                     mdp_eval,
+                     callback_step=callbacks,
+                     low_level_agent=control_agent,
+                     preprocessors=[preprocessor],
+                     obs_dim=obs_dim)
+
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
-
-    samples = teacher.teacher.temp_dist.sample((1000,))
-    samples2 = teacher.teacher.target_dist.sample((1000,))
-    import matplotlib.pyplot as plt
-    samples_np = samples.detach().numpy()
-    samples_np2 = samples2.detach().numpy()
-
-    # # Plot the gamma distribution
-    # plt.figure(figsize=(8, 6))
-    # plt.hist(samples_np, bins=50, density=True, alpha=0.7, color='b', label="Sampled Gamma Distribution")
-    # plt.hist(samples_np2, bins=50, density=True, alpha=0.7, color='r', label="Sampled Gamma Distribution")
-    # print(samples_np.mean())
-    # print(samples_np2.mean())
-    # plt.title('Gamma Distribution (Torch)')
-    # plt.xlabel('x')
-    # plt.ylabel('Density')
-    # plt.legend(loc='best')
-    # plt.grid(True)
-    # plt.show()
-    #
-    # exit()
 
     evaluation_temp = teacher.teacher.temp_dist.mean()
     core.set_variables_for_training(evaluation_temp*np.ones(5))
 
-    mdp.max_level = True
-    core.use_antagonist = False
-    dataset = core.evaluate(n_episodes=n_episodes, render=True, id_agent=0)
+    dataset = core.evaluate(n_episodes=n_episodes, render=False, id_agent=0)
     s, *_ = parse_dataset(dataset)
-
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
     E = agent.policy.entropy(s)
     temperature = evaluation_temp
-    logger.epoch_info(0, J=J, R=R, entropy=E, temperature= temperature)
+
+    dataset = core_eval.evaluate(n_episodes=n_episodes, render=False, id_agent=0)
+    s, *_ = parse_dataset(dataset)
+    J_r = np.mean(compute_J(dataset, mdp_eval.info.gamma))
+    logger.epoch_info(0, J=J, J_multi_agent=J_r, R=R, entropy=E, temperature= temperature)
 
 
-
-    mdp.max_level = False
-    core.use_antagonist = True
     sampled_temperatures = teacher.sample_n_temperatures(n=50)
     core.set_variables_for_training(sampled_temperatures)
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
@@ -262,8 +253,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
 
     for it in trange(n_epochs, leave=False):
 
-        mdp.max_level = False
-        core.use_antagonist = True
+
         sampled_temperatures = teacher.sample_n_temperatures(n=5)
         core.set_variables_for_training(sampled_temperatures)
         teacher.temperature_list.append(sampled_temperatures)
@@ -303,30 +293,25 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
         E_a = antagonist.policy.entropy(s)
         success_rate = calculate_success_rate(info, last)
         evaluation_temp = teacher.teacher.temp_dist.mean()
-        logger.epoch_info(it + 1, J=J,
+
+        dataset = core_eval.evaluate(n_episodes=n_episodes, render=render, id_agent=0)
+        s, *_ = parse_dataset(dataset)
+        J_r = np.mean(compute_J(dataset, mdp_eval.info.gamma))
+
+        logger.epoch_info(it + 1,
+                          J=J,
+                          J_multi_agent=J_r,
                           R=R,
                           entropy=E,
                           entropy_antagonist=E_a,
-                          temperature=np.mean(teacher.temperature_list[-1]),
-                          current_t_dist=evaluation_temp,
-                          target_mean=teacher.teacher.target_dist.mean(),
+                          current_t_mean=evaluation_temp,
+                          target_t_mean=teacher.teacher.target_dist.mean(),
                           current_conc=teacher.teacher.new_conc,
+                          target_conc=1,
                           success_rate=success_rate)
 
-        logger.info("Evaluate with Evaluation Aggressive Obstacle")
-
-        mdp.max_level = True
-        core.use_antagonist = False
-        dataset = core.evaluate(n_episodes=n_episodes_test, render=render,id_agent=0)
-        s, a, r, s1, a, info, last = parse_dataset(dataset)
-        J = np.mean(compute_J(dataset, mdp.info.gamma))
-        R = np.mean(compute_J(dataset))
-        E = agent.policy.entropy(s)
-        success_rate = calculate_success_rate(info, last)
-        logger.epoch_info(it + 1, J=J, R=R, entropy=E, success_rate=success_rate)
-
         if log:
-            logs_dict = {"RETURN": J, "REWARD": R, "succes_rate": success_rate}
+            logs_dict = {"RETURN": J, "Multi_obstacle_RETURN":J_r, "REWARD": R, "succes_rate": success_rate, "current_t_mean": evaluation_temp}
             wandb.log(logs_dict, step=it)
 
         if it % 10 == 0:
@@ -338,9 +323,9 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
 
 
     agent.save(
-        "checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1', agent_task, method_name, run_id, 'Protagonist', "last"))
+        "src/nominal_models/{}/{}/{}/{}/{}/epoch_{}".format('GO1', agent_task, method_name, run_id, 'Protagonist', "last"))
     antagonist.save(
-        "checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1', agent_task, method_name, run_id, "ANTAGONIST", "last"))
+        "src/nominal_models/{}/{}/{}/{}/{}/epoch_{}".format('GO1', agent_task, method_name, run_id, "ANTAGONIST", "last"))
 
     if log:
         wandb.finish()

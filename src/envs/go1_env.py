@@ -699,10 +699,10 @@ class Go1(MuJoCo):
         if self.task==0:
             return self.reward_function.reward(action)
 
-        elif self.task==1:
+        if self.task==1:
             return self.reward_task_1()
 
-        elif self.task==2:
+        if self.task==2 or self.task==3:
             current_pos = self._data.body("trunk").xpos[:2]
             target_pos = self._data.geom("target").xpos[:2]
             # norm_distance = np.linalg.norm(target_pos - current_pos)
@@ -732,52 +732,7 @@ class Go1(MuJoCo):
             reward = 0.5*reward_angle + reward_velocity + reward_target
 
             return reward + penalty
-            # current_pos = self._data.body("trunk").xpos[:2]
-            # target_pos = self._data.geom("target").xpos[:2]
-            # norm_distance = np.linalg.norm(target_pos - current_pos)
-            # yaw = self.orientation_euler[2]
-            #
-            # sampling_points = create_rotated_ring_grid((current_pos[0], current_pos[1]), yaw, inner_radius=0.2,
-            #                                            outer_radius=1.5,
-            #                                            num_points_radius=15,
-            #                                            num_points_angle=20)
-            #
-            #
-            #
-            # occupancy = np.array(self.occupancy_grid.get_grid_values(sampling_points)) > 0
-            # contact_points = sampling_points[:,occupancy]
-            # velocity = self._data.qvel[:3]
-            # velocity_xy = velocity[:2]
-            # norm_velocity = np.linalg.norm(velocity_xy)
-            # unit_velocity = velocity_xy
-            #
-            # distance_vector = target_pos - current_pos
-            # unit_distance = distance_vector/(norm_distance + 1e-6)
-            #
-            # orientation_reward = unit_velocity@unit_distance
-            # proximity_penalty = 0
-            #
-            # if contact_points.shape[1] > 0:
-            #     distances = np.linalg.norm(contact_points.T - current_pos,axis=1)
-            #
-            #     index = np.argmin(distances)
-            #     vec = current_pos - contact_points[:,index]
-            #     norm = np.linalg.norm(vec)
-            #     if norm<1:
-            #         unit_vec = vec / norm
-            #         proximity_penalty = (1/(1+norm)**2)*velocity_xy@unit_vec/norm_velocity
-            #
-            # reward_target = 5*(1-norm_distance) if norm_distance <=0.5 else 0
-            #
-            # distance_reward = 1/(1 + norm_distance**2)
-            #
-            #
-            # vx = self._data.qvel[0]
-            # vy = self._data.qvel[1]
-            # wz =  self._data.qvel[5]
-            # velocity_vector = np.array([vx, vy, wz])
-            # velocity_penalty = -np.linalg.norm(velocity_vector) if np.linalg.norm(velocity_vector) >0.1 and norm_distance<=0.5 else 0
-            # return self.reward_task_1() + proximity_penalty + self.collision_penalty() + reward_target + velocity_penalty
+
 
 
 
@@ -973,7 +928,8 @@ class Go1(MuJoCo):
         if task==2:
             self._data.qpos[0:3] = [-4, y, 0.36]
 
-            x = np.random.uniform(-2,2.5)
+            x = np.random.uniform(-2.5,2.5)
+
 
             self._data.joint(self.obstacles[0] + '_x').qpos = x
             self._data.joint(self.obstacles[0] + '_y').qpos = y
