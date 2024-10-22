@@ -107,7 +107,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
     teacher = Teacher()
     cfg_rewards=dict()
 
-    log = True
+    log = False
     obs_dim = 18 + 1
 
     if log:
@@ -231,7 +231,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
     evaluation_temp = teacher.teacher.temp_dist.mean()
     core.set_variables_for_training(evaluation_temp*np.ones(5))
 
-    dataset = core.evaluate(n_episodes=n_episodes, render=False, id_agent=0)
+    dataset = core.evaluate(n_episodes=n_episodes, render=True, id_agent=0)
     s, *_ = parse_dataset(dataset)
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -334,7 +334,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
 
 if __name__ == '__main__':
 
-    path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
+    path ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
     control_agent = Agent.load(path)
     for i in range(5):
         experiment(method_name="QARL",
