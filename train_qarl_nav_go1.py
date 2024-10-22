@@ -92,7 +92,7 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
 
     logger.info('Experiment Algorithm: ' + method_name + " task " + agent_task )
 
-    view = True
+    view = False
     # MDP
     horizon = 1000
     gamma = 0.99
@@ -107,13 +107,13 @@ def experiment(method_name, alg, n_epochs, n_episodes, n_steps_per_fit, n_episod
     teacher = Teacher()
     cfg_rewards=dict()
 
-    log = False
+    log = True
     obs_dim = 18 + 1
 
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
-            project="adversarial_locomotion",
+            project="adversarial_obstacle_avoidance_locomotion",
             group=task_name,
             job_type=method_name,
             name="seed_{}".format(run_id)

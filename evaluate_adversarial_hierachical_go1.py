@@ -17,7 +17,7 @@ def calculate_success_rate(info, last):
     last_cnt = np.count_nonzero(last)
     success_rate = success_cnt / last_cnt
     return success_rate
-def experiment(method_name=None):
+def experiment(method_name=None, task_name="obstacles_navigation"):
     np.random.seed()
 
     logger = Logger(results_dir=None)
@@ -41,19 +41,19 @@ def experiment(method_name=None):
     mdp = Go1(horizon, gamma,
               timestep=0.005,
               cfg=cfg,
-              task_name="multi_obstacles_navigation")
+              task_name=task_name)
 
 
 
 
     path_c ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
     if method_name == "MIN_MAX":
-        path ="checkpoint/GO1/obstacles_navigation/Adversary_MIN_MAX/0/Protagonist/epoch_last"
-        path_adversary = "checkpoint/GO1/obstacles_navigation/Adversary_MIN_MAX/0/ANTAGONIST/epoch_last"
+        path ="src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
+        path_adversary = "src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"
 
     if method_name == "QARL":
-        path ="checkpoint/GO1/obstacles_navigation/QARL/0/Protagonist/epoch_last"
-        path_adversary = "checkpoint/GO1/obstacles_navigation/QARL/0/ANTAGONIST/epoch_last"
+        path ="src/nominal_models/GO1/obstacles_navigation/QARL/0/Protagonist/epoch_last"
+        path_adversary = "src/nominal_models/GO1/obstacles_navigation/QARL/0/ANTAGONIST/epoch_last"
 
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
@@ -62,7 +62,7 @@ def experiment(method_name=None):
         preprocessor = StateVariableConcatenation()
         obs_dim = 18 +1
         core = Core([agent, adversary], mdp,preprocessors=[preprocessor],low_level_agent=control_agent, obs_dim=obs_dim)
-        core.set_variables_for_training(0.05 * np.ones(5))
+        core.set_variables_for_training(0.1 * np.ones(5))
     else:
         obs_dim = 18
         core = Core([agent, adversary], mdp,low_level_agent=control_agent, obs_dim=obs_dim)
@@ -87,4 +87,4 @@ def experiment(method_name=None):
 if __name__ == '__main__':
 
     methods = ["MIN_MAX", "QARL"]
-    experiment(method_name="QARL")
+    experiment(method_name="MIN_MAX", task_name="multi_obstacles_navigation")
