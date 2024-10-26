@@ -36,6 +36,7 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
                curriculum=False,
                joystick=False,
                resample=False,
+               domain_randomization=False,
                rewards=cfg_rewards)
 
     mdp = Go1(horizon, gamma,

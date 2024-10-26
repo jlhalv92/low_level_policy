@@ -39,7 +39,7 @@ class DefaultDomainPerturbation:
                  push_velocity_x_min=-1.0, push_velocity_x_max=1.0,
                  push_velocity_y_min=-1.0, push_velocity_y_max=1.0,
                  push_velocity_z_min=-1.0, push_velocity_z_max=1.0,
-                 set_chance=0.5, additive_multiplier=1.5):
+                 set_chance=0.5, additive_multiplier=1):
         self.env = env
         self.push_velocity_x_min = push_velocity_x_min
         self.push_velocity_x_max = push_velocity_x_max
@@ -112,6 +112,7 @@ class Go1(MuJoCo):
 
         """
         self._all_obstacles_move = False
+        self.domain_randomization = cfg["domain_randomization"]
         self.indices = [0, 1, 2]
         self.obstacle_id = 0
         self.obstacles = ["obstacle_1", "obstacle_2", "obstacle_3"]
@@ -123,6 +124,8 @@ class Go1(MuJoCo):
         self.antagonist = cfg["antagonist"]
         self.max_level = cfg["max_level"]
         self.obstacle_velocity = 0
+
+
         # self.occupancy_grid = OccupancyGrid(15,15,0.01)
 
         self.default_dof_pos = np.array([
@@ -332,7 +335,19 @@ class Go1(MuJoCo):
         self.np_rng = np.random.default_rng(seed=0)
         self.sampling = StepProbabilitySampling(self)
         self.sampling_command = StepProbabilitySampling(self)
-        self.reward_function = reward_f(self)
+        self.sampling_friction = StepProbabilitySampling(self)
+        self.sampling_mass = StepProbabilitySampling(self)
+        self.sampling_gravity = StepProbabilitySampling(self)
+
+        self.default_trunk_mass = self._model.body_mass[1]
+        self.default_trunk_inertia = self._model.body_inertia[1]
+
+
+        if self.task==0:
+            curriculum_steps= cfg["rewards"]["curriculum_steps"]
+        else:
+            curriculum_steps = 1
+        self.reward_function = reward_f(self, curriculum_steps=curriculum_steps)
         self.perturbation = DefaultDomainPerturbation(self)
         self.reward_function.init()
 
@@ -390,7 +405,7 @@ class Go1(MuJoCo):
                                self.reward_function.time_since_last_touchdown_fl,
                                self.reward_function.time_since_last_touchdown_rr,
                                self.reward_function.time_since_last_touchdown_rl])
-        obs[53] = self._data.qpos[2]
+        obs[53] = self._data.qpos[2] #height
 
         if self.task == 0:
             obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
@@ -479,7 +494,7 @@ class Go1(MuJoCo):
 
         action = np.clip(action, -100,100)
         action *=0.25
-        action[[0,3,6,9]] *= 0.5
+        #action[[0,3,6,9]] *= 0.5
 
 
         action_full =self.default_dof_pos.copy() + action
@@ -552,7 +567,7 @@ class Go1(MuJoCo):
                 velocity = self.obstacle_velocity * (robot_y - pos_obstacle)
                 self._data.ctrl[12] = velocity
 
-            else:
+            if self.task==2:
 
                 self._data.ctrl[12] = self.obstacle_velocity
 
@@ -604,11 +619,11 @@ class Go1(MuJoCo):
         self.target_vy = np.random.normal(self.target_vy, 0.1,1)[0]
         self.target_yaw = np.random.normal(self.target_yaw, 0.1,1)[0]
 
-        if self.target_vx <= 0.5:
+        if np.abs(self.target_vx) <= 0.2:
             self.target_vx = 0
-        if self.target_vy <= 0.5:
+        if np.abs(self.target_vy) <= 0.2:
             self.target_vy = 0
-        if self.target_yaw <=0:
+        if np.abs(self.target_yaw) <=0.2:
             self.target_yaw = 0
 
         # if not self.train:
@@ -739,16 +754,6 @@ class Go1(MuJoCo):
 
     def reward(self, state, action, next_state, absorbing):
 
-        # print(self._data.qvel[:3])
-        #state[:12] /= 4.6 #joint pos
-        # state[12:24] /= 35. #joint vel
-        # print("last action: ",state[24:36])
-        # print(" action: ", action)
-        # print(state[36:39]) # gravity
-        # state[39:42]
-        # state[42:45]
-        # state[45:48]
-        #
 
         reward = self.get_reward(action)
 
@@ -766,14 +771,47 @@ class Go1(MuJoCo):
     def _step_finalize(self):
         self._ts += 1
         self.update_orientation_attributes()
-        domain_ramdomization = True
 
         if self.task==0:
-            if domain_ramdomization :
+
+
+            if self.domain_randomization :
                 self.handle_domain_randomization(function="step")
 
-            if self.sampling_command.step() and self.resample:
-                self.resample_targets()
+                if self.sampling_command.step() and self.resample:
+                    self.resample_targets()
+
+
+                if self.sampling_friction.step():
+                    factor = np.random.uniform(0,1)
+                    self.friction_tangential_min = 0.01
+                    self.friction_tangential_max = 2.0
+                    self.friction_torsional_feet_min =  0.00001
+                    self.friction_torsional_feet_max = 0.04
+                    self.friction_rolling_feet_min = 0.00001
+                    self.friction_rolling_feet_max = 0.02
+                    sampled_friction_tangential =  self.friction_tangential_min + (self.friction_tangential_max - self.friction_tangential_min) *factor
+                    sampled_friction_torsional_feet = self.friction_torsional_feet_min + (self.friction_torsional_feet_max - self.friction_torsional_feet_min) * factor
+                    sampled_friction_rolling_feet = self.friction_rolling_feet_min + (self.friction_rolling_feet_max - self.friction_rolling_feet_min) * factor
+                    self._model.geom_friction[[20, 31, 43, 55]] = [sampled_friction_tangential, sampled_friction_torsional_feet, sampled_friction_rolling_feet]
+
+                if self.sampling_mass.step():
+                    add_trunk_mass_min = -0.8
+                    add_trunk_mass_max = 0.8,
+                    trunk_mass = self.default_trunk_mass + np.random.uniform(add_trunk_mass_min,
+                                                                                        add_trunk_mass_max)
+
+                    self._model.body_mass[1] = trunk_mass
+                    self._model.body_inertia[1] = self.default_trunk_inertia * (
+                                self._model.body_mass[1] / self.default_trunk_mass)
+
+
+                if self.sampling_gravity.step():
+                    gravity_min = 8.81
+                    gravity_max = 10.81
+                    sampled_gravity = np.random.uniform(gravity_min, gravity_max)
+                    self._model.opt.gravity[2] = -sampled_gravity
+
 
         if self.task==2:
             robot_pose = self._data.qpos[:2]
@@ -794,6 +832,7 @@ class Go1(MuJoCo):
 
 
         if self.joystick:
+
             joystick=read_control_values("src/control.json")
             self.target_vx = joystick["control"]["vx"]
             self.target_vy = joystick["control"]["vy"]
@@ -804,10 +843,14 @@ class Go1(MuJoCo):
 
             self.total_timesteps += 1
 
-        fall = self.check_collision("floor", "trunk_t") or self._data.body("trunk").xpos[2] < 0.15
-        legs_collision_obstacles = self._check_collision("legs", "obstacles")
-        trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
-        hit_obstacle =  legs_collision_obstacles or trunk_collision_obstacles
+        fall = self.check_collision("floor", "trunk_t")
+        hit_obstacle = False
+
+        if self.task>1:
+            legs_collision_obstacles = self._check_collision("legs", "obstacles")
+            trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
+            hit_obstacle = legs_collision_obstacles or trunk_collision_obstacles
+
 
         if fall or hit_obstacle:
             self.terminates = True
@@ -853,9 +896,6 @@ class Go1(MuJoCo):
 
         self._ts = 0
 
-
-
-
         self._data.qpos[7:19] = self.default_dof_pos.copy()
 
         self._data.qpos[0:3] = [-3, 0, 0.36]
@@ -886,10 +926,6 @@ class Go1(MuJoCo):
                 mujoco.mj_step(self._model, self._data)
 
 
-        # print(self._data.qpos[0:3])
-        # print(self._data.qpos[-6:], self._data.geom("obstacle_1").xpos)
-        # exit()
-
 
         self.last_dof_vel = self._reset_state["q_vel"][6:]
         self.last_dof_pos = self._reset_state["q_pos"][6:]
@@ -912,9 +948,6 @@ class Go1(MuJoCo):
                 self.resample_targets()
 
 
-        #
-
-            # self.reset_map()
     def reset_states(self, task):
 
 

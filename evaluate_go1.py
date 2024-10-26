@@ -88,31 +88,29 @@ def experiment():
 
     horizon = 10000
     gamma = 0.99
-    cfg_rewards=dict(tracking_goal_vel = 1.5,
-                    tracking_yaw = 0.5,
-                     lin_vel_z = -1.0,
-    ang_vel_xy = -0.05,
-    orientation = -1.,
-    dof_acc = -2.5e-7,
-    collision = -10.,
-    action_rate = -0.1 ,
-    delta_torques = -1.0e-7 ,
-    torques = -0.00001 ,
-    hip_pos = -0.5,
-    dof_error = -0.04,
-    feet_stumble = -1,
-    feet_edge = -1,
-    airtime = 1,
-                     clip=True)
+    cfg_rewards=dict(curriculum_steps=1)
 
-    cfg = dict(kp=40,
-               kd=1,
-               interpolate=1,
-               use_all_obs=False,
+    # cfg = dict(kp=40,
+    #            kd=1,
+    #            antagonist=False,
+    #            max_level=False,
+    #            curriculum=False,
+    #            joystick=True,
+    #            resample=False,
+    #            domain_randomization=False,
+    #            rewards=cfg_rewards)
+
+    cfg = dict(kp=20,
+               kd=0.5,
+               antagonist=False,
+               max_level=False,
+               curriculum=False,
+               joystick=False,
+               resample=True,
+               domain_randomization=True,
                rewards=cfg_rewards)
 
     mdp = Go1(horizon, gamma,
-              n_substep=4,
               timestep=0.005,
               cfg=cfg,
               task_name="nominal")
@@ -126,7 +124,12 @@ def experiment():
     # path = "checkpoint/GO1/PPO/nominal_joystick_reward_param_3/epoch_280"
     # path = "checkpoint/GO1/PPO/nominal_joystick_tuning/epoch_last"
 
-    path ="checkpoint/GO1/PPO/nominal_robust_locomotion_tune/epoch_130"
+    path ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
+   # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization/epoch_1400"
+
+    # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_1000_epochs/epoch_160"
+   # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_1000_epochs/epoch_40"
 
 
     agent = Agent.load(path)
@@ -138,14 +141,10 @@ def experiment():
     # exit()
     # Algorithm
     core = Core(agent, mdp)
-
-    mdp.resample= False
-    mdp.joystick = True
-    vel_targets = None
-    dataset = core.evaluate(n_episodes=5, render=True, initial_conditions=vel_targets, record=False)
+    dataset = core.evaluate(n_episodes=5, render=True, record=False)
 
 
-    s,_,_,_,info,last = parse_dataset(dataset)
+    s,a,s_1,reward,absorbing,info,last = parse_dataset(dataset)
 
     E = agent.policy.entropy(s)
     # plt.plot(s[:,2] - s[:,-3])

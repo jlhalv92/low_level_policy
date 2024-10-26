@@ -4,7 +4,7 @@ import numpy as np
 #13M
 class RudinOwnVarReward:
     def __init__(self, env,
-                 curriculum_steps=1,
+                 curriculum_steps=1000,
                  tracking_xy_velocity_command_coeff=1.0,
                  tracking_yaw_velocity_command_coeff=0.5,
                  xy_tracking_temperature=0.25,
@@ -25,6 +25,7 @@ class RudinOwnVarReward:
                  air_time_coeff=1.,
                  air_time_max=0.5,
                  symmetry_air_coeff=0.5):
+
         self.env = env
         self.tracking_xy_velocity_command_coeff = tracking_xy_velocity_command_coeff * self.env.dt
         self.tracking_yaw_velocity_command_coeff = tracking_yaw_velocity_command_coeff * self.env.dt
@@ -79,7 +80,6 @@ class RudinOwnVarReward:
     def reward(self, action):
         total_timesteps = self.env.total_timesteps
         curriculum_coeff = min(total_timesteps / self.curriculum_steps, 1.0)
-
 
 
         if not self.env.train:

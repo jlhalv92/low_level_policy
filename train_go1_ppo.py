@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from src.algorithm.deep_actor_critic.sac import  SAC
 from mushroom_rl.algorithms.actor_critic import PPO
 from mushroom_rl.policy import GaussianTorchPolicy
 
@@ -13,7 +12,7 @@ from src.envs.go1_env import Go1
 import torch.nn as nn
 from mushroom_rl.core import Agent
 
-from mushroom_rl.utils.dataset import compute_J, parse_dataset
+from mushroom_rl.utils.dataset import compute_J
 
 from tqdm import trange
 
@@ -85,7 +84,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     logger = Logger(alg.__name__, results_dir=None)
     logger.strong_line()
     task_name = "nominal"
-    agent_task = "{}_robust_locomotion_tune".format(task_name)
+    agent_task = "{}_robust_locomotion_domain_randomization_new_2".format(task_name)
     logger.info('Experiment Algorithm: ' + alg.__name__ + " task " + agent_task )
 
     # MDP
@@ -97,29 +96,11 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     n_epochs_policy = 5
     eps_ppo = 0.2
     lam = .95
-    ent_coeff = 0.01
+    ent_coeff = 0
     retrain = True
 
 
-    cfg_rewards=dict(tracking_goal_vel = 2,
-                    tracking_yaw = 1.5,
-                     lin_vel_z = -1.0,
-    ang_vel_xy = -0.05,
-    orientation = -1.,
-    dof_acc = -2.5e-7,
-    collision = -1.,
-    action_rate = -0.1 ,
-    delta_torques = -1.0e-7 ,
-    torques = -0.00001 ,
-    hip_pos = -0.5,
-    dof_error = -0.04,
-    feet_stumble = -1,
-    feet_edge = -1,
-    airtime = 1,
-    clip=True)
-
-    log = False
-    all_obs =False
+    cfg_rewards=dict(curriculum_steps=1)
 
     policy_params = dict(
         std_0=1.,
@@ -138,10 +119,16 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
 
     actor = PolicyNetwork
     critic = ValueNetwork
-    cfg = dict(kp=40,
-               kd=1,
-               interpolate=0,
-               use_all_obs=all_obs,
+    #kp=40
+    #kd=1
+    cfg = dict(kp=20,
+               kd=0.5,
+               antagonist=False,
+               max_level=False,
+               curriculum=False,
+               joystick=False,
+               resample=True,
+               domain_randomization=True,
                rewards=cfg_rewards)
 
     mdp = Go1(horizon,
@@ -167,8 +154,8 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     alg_params['critic_params'] = critic_params
 
     if retrain:
-        # path = "checkpoint/GO1/PPO/nominal_joystick/epoch_200"
         path = "checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
 
         agent = Agent.load(path)
     else:
@@ -218,7 +205,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
 if __name__ == '__main__':
 
 
-    experiment(alg=PPO,n_epochs=150, n_steps=int(20*2048), n_steps_per_fit=2048,
+    experiment(alg=PPO,n_epochs=100, n_steps=int(20*2048), n_steps_per_fit=2048,
                n_episodes_test=5)
 
 
