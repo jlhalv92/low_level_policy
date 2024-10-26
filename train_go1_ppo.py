@@ -84,7 +84,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     logger = Logger(alg.__name__, results_dir=None)
     logger.strong_line()
     task_name = "nominal"
-    agent_task = "{}_robust_locomotion_domain_randomization_new_2".format(task_name)
+    agent_task = "{}_DR_robust_locomotion".format(task_name)
     logger.info('Experiment Algorithm: ' + alg.__name__ + " task " + agent_task )
 
     # MDP
@@ -97,10 +97,10 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     eps_ppo = 0.2
     lam = .95
     ent_coeff = 0
-    retrain = True
+    retrain = False
 
 
-    cfg_rewards=dict(curriculum_steps=1)
+
 
     policy_params = dict(
         std_0=1.,
@@ -121,8 +121,9 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     critic = ValueNetwork
     #kp=40
     #kd=1
-    cfg = dict(kp=20,
-               kd=0.5,
+    cfg_rewards = dict(curriculum_steps=12e6)
+    cfg = dict(kp=40,
+               kd=1,
                antagonist=False,
                max_level=False,
                curriculum=False,
@@ -186,7 +187,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
 
 
 
-        dataset = core.evaluate(n_episodes=n_episodes_test, render=render)
+        dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
 
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
@@ -205,7 +206,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
 if __name__ == '__main__':
 
 
-    experiment(alg=PPO,n_epochs=100, n_steps=int(20*2048), n_steps_per_fit=2048,
+    experiment(alg=PPO,n_epochs=600, n_steps=int(20*2048), n_steps_per_fit=2048,
                n_episodes_test=5)
 
 

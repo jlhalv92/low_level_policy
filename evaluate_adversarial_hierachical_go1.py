@@ -31,7 +31,7 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
 
     cfg = dict(kp=40,
                kd=1,
-               antagonist=False,
+               antagonist=True,
                max_level=False,
                curriculum=False,
                joystick=False,

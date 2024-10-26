@@ -4,9 +4,9 @@ import numpy as np
 #13M
 class RudinOwnVarReward:
     def __init__(self, env,
-                 curriculum_steps=1000,
-                 tracking_xy_velocity_command_coeff=1.0,
-                 tracking_yaw_velocity_command_coeff=0.5,
+                 curriculum_steps=1,
+                 tracking_xy_velocity_command_coeff=2.0,
+                 tracking_yaw_velocity_command_coeff=1.0,
                  xy_tracking_temperature=0.25,
                  yaw_tracking_temperature=0.25,
                  z_velocity_coeff=2e0,
@@ -22,7 +22,7 @@ class RudinOwnVarReward:
                  collision_coeff=1e0,
                  base_height_coeff=3e1,
                  nominal_trunk_z=0.325,
-                 air_time_coeff=1.,
+                 air_time_coeff=1.e-1,
                  air_time_max=0.5,
                  symmetry_air_coeff=0.5):
 
@@ -202,11 +202,9 @@ class RudinOwnVarReward:
 
         # Total reward
         tracking_reward = tracking_xy_velocity_command_reward + tracking_yaw_velocity_command_reward
-
         reward_penalty = linear_velocity_reward + angular_velocity_reward + angular_position_reward + joint_nominal_diff_reward + \
                          joint_position_limit_reward + velocity_reward + acceleration_reward + torque_reward + action_rate_reward + \
                          collision_reward + base_height_reward + air_time_reward + symmetry_air_reward
-
         reward = tracking_reward + reward_penalty
 
         # print(tracking_reward, reward_penalty, reward)

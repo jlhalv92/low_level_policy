@@ -392,7 +392,6 @@ class Go1(MuJoCo):
         diff_pose = self._data.qpos[7:19].copy() - self.default_dof_pos.copy()
         obs[:12] = diff_pose
         linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
-        # linear_velocity = self._data.qvel[:3]
         angular_velocity = self.orientation_quat_inv.apply(self._data.qvel[3:6])
         projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
 
@@ -494,7 +493,7 @@ class Go1(MuJoCo):
 
         action = np.clip(action, -100,100)
         action *=0.25
-        #action[[0,3,6,9]] *= 0.5
+        action[[0,3,6,9]] *= 0.5
 
 
         action_full =self.default_dof_pos.copy() + action
@@ -529,6 +528,7 @@ class Go1(MuJoCo):
         return False
 
     def _step_init(self, obs, action):
+
         if self.task == 3:
             robot_pos_x = self._data.body("trunk").xpos[0]
             obstacle_1_pos_x = self._data.geom(self.obstacles[self.indices[0]]).xpos[0]
@@ -545,20 +545,10 @@ class Go1(MuJoCo):
 
             if obstacle_2_pos_x + obstacle_2_size_x < robot_pos_x:
                 self.obstacle_id = 2
-        if self._all_obstacles_move:
-            if self.curriculum or self.max_level:
 
-                pos_obstacle =  self._data.joint(self.obstacles[self.indices[self.obstacle_id]] + "_y").qpos
+            self._data.ctrl[12] = self.obstacle_velocity
 
-                robot_y = self._data.qpos[1]
-                velocity = self.obstacle_velocity * (robot_y-pos_obstacle)
-
-                self._data.ctrl[12+self.indices[ self.obstacle_id]] = velocity
-
-            else:
-
-                self._data.ctrl[12+self.indices[ self.obstacle_id]] = self.obstacle_velocity
-        else:
+        if self.task == 2:
 
             if self.curriculum or self.max_level:
 
@@ -567,9 +557,13 @@ class Go1(MuJoCo):
                 velocity = self.obstacle_velocity * (robot_y - pos_obstacle)
                 self._data.ctrl[12] = velocity
 
-            if self.task==2:
+            else:
 
                 self._data.ctrl[12] = self.obstacle_velocity
+
+
+
+
 
 
 
@@ -626,22 +620,9 @@ class Go1(MuJoCo):
         if np.abs(self.target_yaw) <=0.2:
             self.target_yaw = 0
 
-        # if not self.train:
-        #     print("commands: ", self.target_vx, " ", self.target_vy, " ", self.target_yaw)
 
-    # def resample_target_pos(self):
-    #
-    #     robot_pose = self._data.body("trunk").xpos[:2]
-    #     target_theta =  np.random.uniform(-np.pi, np.pi)
-    #     target_radius = np.random.uniform(3,5)
-    #
-    #     x = robot_pose[0] + target_radius*np.cos(target_theta)
-    #     y = robot_pose[1] +  target_radius*np.sin(target_theta)
-    #
-    #     self._model.site("target").pos = [x,y,0.35]
-    #     current_pos = self._data.body("trunk").xpos[:2]
-    #     target_pos = self._model.site("target").pos[:2]
-    #     self.d_base = np.linalg.norm(target_pos - current_pos)
+
+
 
     def calculate_velocity_distance_reward(self, current_velocity, current_pos, target_pos):
         vect = target_pos - current_pos
@@ -773,7 +754,11 @@ class Go1(MuJoCo):
         self.update_orientation_attributes()
 
         if self.task==0:
-
+            if self.sampling_command.step():
+                self.target_vx = np.random.choice([-1.5,1.5])
+                self.target_vy = np.random.choice([-1.,1.])
+                self.target_yaw = np.random.choice([-1.5,1.5])
+                print(self.target_vx, self.target_vy,  self.target_yaw)
 
             if self.domain_randomization :
                 self.handle_domain_randomization(function="step")
@@ -843,7 +828,11 @@ class Go1(MuJoCo):
 
             self.total_timesteps += 1
 
-        fall = self.check_collision("floor", "trunk_t")
+        # gravity_z_proj = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))[2]
+        height = self._data.qpos[2]
+        fall = self.check_collision("floor", "trunk_t") or height <= 0.1
+
+
         hit_obstacle = False
 
         if self.task>1:
