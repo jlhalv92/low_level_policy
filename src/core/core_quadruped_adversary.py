@@ -430,7 +430,7 @@ class Core(object):
 
         self._state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
 
-        if self.mdp.task==2  or self.mdp.task==3 and self.use_history:
+        if self.mdp.task==2  or self.mdp.task==3 or self.mdp.task==4 and self.use_history:
             self.history = HistoryStore(5)
             obs= self._state[-self.nav_obs_dim:]
             for _ in range(5):

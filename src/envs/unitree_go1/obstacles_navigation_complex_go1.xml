@@ -73,8 +73,7 @@
 
     <actuator>
        <velocity name="obstacle_1" joint="obstacle_1_y" kv="500" ctrlrange="-1 1" forcerange="-500 500" />
-        <velocity name="obstacle_2" joint="obstacle_2_y" kv="500" ctrlrange="-1 1" forcerange="-500 500" />
-        <velocity name="obstacle_3" joint="obstacle_3_y" kv="500" ctrlrange="-1 1" forcerange="-500 500" />
+
     </actuator>
 
 </mujoco>
