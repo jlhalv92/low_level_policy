@@ -107,7 +107,7 @@ class Go1(MuJoCo):
 
     """
 
-    def __init__(self, horizon, gamma, target_pose=None, task_name="nominal",timestep=0.002,  cfg=None):
+    def __init__(self, horizon, gamma, target_pose=None, task_name="nominal",timestep=0.002, version=0,  cfg=None):
         """
         Constructor.
 
@@ -171,7 +171,7 @@ class Go1(MuJoCo):
             self.obstacles = ["obstacle_1", "obstacle_2", "obstacle_3"]
 
         if task==4:
-            xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1_evaluation.xml"
+            xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1_evaluation_v{}.xml".format(version)
             self.obstacles = ["obstacle_1", "obstacle_2", "obstacle_3", "obstacle_4"]
 
         self.joint_limits = np.array([[-0.802851, 0.802851], [-1.0472, 4.18879], [-2.69653, -0.916298]] * 4)

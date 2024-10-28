@@ -124,7 +124,7 @@ def calculate_success_rate(info, last):
     last_cnt = np.count_nonzero(last)
     success_rate = success_cnt / last_cnt
     return success_rate
-def experiment(method_name=None, task_name="obstacles_navigation"):
+def experiment(task_name="obstacles_navigation", version=0):
     np.random.seed()
 
     logger = Logger(results_dir=None)
@@ -151,7 +151,8 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
     mdp = Go1(horizon, gamma,
               timestep=0.005,
               cfg=cfg,
-              task_name=task_name)
+              task_name=task_name,
+              version=version)
 
 
 
@@ -265,5 +266,5 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
 
 
 if __name__ == '__main__':
-
-    experiment( task_name="maze_evaluation")
+    for i in range(5):
+        experiment( task_name="maze_evaluation",  version=i)
