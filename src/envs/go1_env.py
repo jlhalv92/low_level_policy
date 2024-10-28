@@ -580,7 +580,6 @@ class Go1(MuJoCo):
             #     self.obstacle_id = 2
 
             self.obstacle_id = self.closest_obstacle_in_front(self._data.body("trunk").xpos[:2], last_id=self.obstacle_id, n_obstacles=self.task)
-            print(self.obstacle_id)
 
             if self.antagonist:
                 self._data.ctrl[12] = self.obstacle_velocity

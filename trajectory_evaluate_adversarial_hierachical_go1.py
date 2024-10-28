@@ -3,6 +3,8 @@ from src.utils.state_preprocessor import StateVariableConcatenation
 import matplotlib.pyplot as plt
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
+from src.core.core_quadruped_navigation import Core as Core_na
+
 from src.envs.go1_env import Go1
 from mushroom_rl.utils.dataset import compute_J, parse_dataset
 from mushroom_rl.core import Agent
@@ -109,9 +111,9 @@ class OccupancyGrid:
         """
         extent = [-self.width_cells // 2 * self.resolution, self.width_cells // 2 * self.resolution,
                   -self.height_cells // 2 * self.resolution, self.height_cells // 2 * self.resolution]
-        plt.imshow(self.grid,origin="upper", extent=extent)
 
-        plt.title("Occupancy Grid Map (0,0 at the center)")
+        plt.imshow(1-self.grid,origin="upper", extent=extent, cmap='gray', vmin=0, vmax=1)
+        plt.grid()
         plt.xlabel("X (meters)")
         plt.ylabel("Y (meters)")
         plt.show()
@@ -155,41 +157,54 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
 
 
 
-
+    # Low_level_Policy, same for all
     path_c ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
-    if method_name == "MIN_MAX":
-        path ="src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
-        path_adversary = "src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"
 
-    if method_name == "QARL":
-        path ="src/nominal_models/GO1/obstacles_navigation/QARL/0/Protagonist/epoch_last"
-        path_adversary = "src/nominal_models/GO1/obstacles_navigation/QARL/0/ANTAGONIST/epoch_last"
-
+    # RARL
+    path ="/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_80"
+    path_adversary = "/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_190"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     adversary = Agent.load(path_adversary)
-    if method_name=="QARL":
-        preprocessor = StateVariableConcatenation()
-        obs_dim = 18 +1
-        core = Core([agent, adversary], mdp,preprocessors=[preprocessor],low_level_agent=control_agent, obs_dim=obs_dim)
-        core.set_variables_for_training(0.1 * np.ones(5))
-    else:
-        obs_dim = 18
-        core = Core([agent, adversary], mdp,low_level_agent=control_agent, obs_dim=obs_dim)
+    core_rarl = Core([agent, adversary], mdp, low_level_agent=control_agent, obs_dim=18)
 
-    dataset = core.evaluate(n_episodes=1, render=True, id_agent=0)
-    s, a, r, s1, a, info, last = parse_dataset(dataset)
-
-    E = agent.policy.entropy(s)
-    E_a = adversary.policy.entropy(s)
+    # QARL
+    path ="src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
+    path_adversary = "src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"
+    control_agent = Agent.load(path_c)
+    agent = Agent.load(path)
+    adversary = Agent.load(path_adversary)
+    core_qarl = Core([agent, adversary], mdp, low_level_agent=control_agent, obs_dim=18)
 
 
-    J = np.mean(compute_J(dataset, mdp.info.gamma))
-    R = np.mean(compute_J(dataset))
+    # RANDOM
+    path ="/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_40"
+    control_agent = Agent.load(path_c)
+    agent = Agent.load(path)
+    core_random = Core_na(agent, mdp, low_level_agent=control_agent, obs_dim=18)
 
-    # success_rate = calculate_success_rate(info, last)
 
-    logger.epoch_info(0, J=J, R=R, entropy=E, entropy_adversary=E_a)
+    # STATIC
+    path ="/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_30"
+    control_agent = Agent.load(path_c)
+    agent = Agent.load(path)
+    core_static = Core_na(agent, mdp, low_level_agent=control_agent, obs_dim=18)
+
+
+
+    dataset = core_rarl.evaluate(n_episodes=1, render=False, id_agent=0)
+    s1, a, r, _, _, info, last = parse_dataset(dataset)
+
+    dataset = core_qarl.evaluate(n_episodes=1, render=False, id_agent=0)
+    s2, a, r, _, _, info, last = parse_dataset(dataset)
+
+    dataset = core_random.evaluate(n_episodes=1, render=False)
+    s3, a, r, _, _, info, last = parse_dataset(dataset)
+
+    dataset = core_static.evaluate(n_episodes=1, render=False)
+    s4, a, r, _, _, info, last = parse_dataset(dataset)
+
+
 
     occupancy_grid = OccupancyGrid(15, 15, 0.01)
     occupancy_grid.reset()
@@ -208,16 +223,42 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
         occupancy_grid.add_rectangle(x, y, 2 * sx, 2 * sy)
 
     x_t,y_t = mdp._model.geom("target").pos[:2]
-
-    plt.scatter(s[:,0], s[:,1])
+    # RARL
+    alpha = 0.5
+    fig, ax = plt.subplots()
+    line1=ax.scatter(s1[:,0], s1[:,1], color='red', label="RARL", alpha=alpha)
 
     # Set up direction vectors (all pointing diagonally for this example)
-    U = s[:,2]
-    V = s[:,3]
+    U = s1[::20,2]
+    V = s1[::20,3]
+    ax.quiver(s1[::20,0], s1[::20,1], U, V, color='red', scale=4, scale_units='xy', alpha=alpha)
 
-    # Plot arrows
-    plt.quiver(s[:,0], s[:,1], U, V, color='red')
-    plt.scatter(x_t, y_t, marker='x', c="orange")
+    # QARL
+    line2=ax.scatter(s2[:,0], s2[:,1],  color='blue', label="QARL", alpha=alpha)
+
+    # Set up direction vectors (all pointing diagonally for this example)
+    U = s2[::20,2]
+    V = s2[::20,3]
+    ax.quiver(s2[::20,0], s2[::20,1], U, V, color='blue', scale=4, scale_units='xy', alpha=alpha)
+
+    # RANDOM
+    line3=ax.scatter(s3[:,0], s3[:,1], color='green', label="Random", alpha=alpha)
+
+    # Set up direction vectors (all pointing diagonally for this example)
+    U = s3[::20,2]
+    V = s3[::20,3]
+    ax.quiver(s3[::20,0], s3[::20,1], U, V, color='green', scale=4, scale_units='xy', alpha=alpha)
+
+    #STATIC
+    line4=ax.scatter(s4[:,0], s4[:,1], color='orange', label="Static", alpha=alpha)
+
+    # Set up direction vectors (all pointing diagonally for this example)
+    U = s4[::20,2]
+    V = s4[::20,3]
+    ax.quiver(s4[::20,0], s4[::20,1], U, V, color='orange', scale=4, scale_units='xy',alpha=alpha)
+
+    ax.scatter(x_t, y_t,s=100, marker='x', c="black")
+    ax.legend(handles=[line1, line2, line3, line4], loc='upper right')
     occupancy_grid.display_grid()
 
     #
@@ -225,5 +266,4 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
 
 if __name__ == '__main__':
 
-    methods = ["MIN_MAX", "QARL"]
-    experiment(method_name="MIN_MAX", task_name="maze_evaluation")
+    experiment( task_name="maze_evaluation")
