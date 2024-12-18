@@ -341,10 +341,11 @@ class Core(object):
 
         else: # Default
             action = self.agents[0].draw_action(navigation_state)
-            action_antagonist = self.agents[1].draw_action(navigation_state)
-            if self.use_antagonist:
 
-                self.mdp.obstacle_velocity = action_antagonist
+            # action_antagonist = self.agents[1].draw_action(navigation_state)
+            # if self.use_antagonist:
+
+                # self.mdp.obstacle_velocity = action_antagonist
 
             robot_state = self._state[:-obs_dim]
             if not self.joystick:

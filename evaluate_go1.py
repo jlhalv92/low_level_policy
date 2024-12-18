@@ -100,12 +100,12 @@ def experiment():
     #            domain_randomization=False,
     #            rewards=cfg_rewards)
 
-    cfg = dict(kp=25,
-               kd=0.5,
+    cfg = dict(kp=40,
+               kd=1,
                antagonist=False,
                max_level=False,
                curriculum=False,
-               joystick=False,
+               joystick=True,
                resample=False,
                domain_randomization=False,
                rewards=cfg_rewards)
@@ -126,7 +126,7 @@ def experiment():
 
 
     path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
-    path = "checkpoint/GO1/PPO/nominal_DR_robust_locomotion/epoch_160"
+    path = "src/nominal_models/go1/epoch_last"
    # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization/epoch_1400"
     #path = "src/nominal_models/GO_1/PPO_low_level/epoch_last"
     # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_1000_epochs/epoch_160"
@@ -142,7 +142,7 @@ def experiment():
     # exit()
     # Algorithm
     core = Core(agent, mdp)
-    dataset = core.evaluate(n_episodes=5, render=True, record=False)
+    dataset = core.evaluate(n_episodes=5, render=True, record=True)
 
 
     s,a,s_1,reward,absorbing,info,last = parse_dataset(dataset)

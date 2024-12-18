@@ -19,7 +19,7 @@ class ObservationType(Enum):
         SITE_POS: (3,) x, y, z position of the body
         SITE_ROT: (9,) rotation matrix of the site
     """
-    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS"
+    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS"
     BODY_POS = 0
     BODY_ROT = 1
     BODY_VEL = 2
@@ -44,6 +44,7 @@ class ObservationType(Enum):
     OCCUPANCY = 21
     POS_OBSTACLE = 22
     POS = 23
+    RAYS = 24
 
 
 class ObservationHelper:
@@ -289,9 +290,15 @@ class ObservationHelper:
             obs = np.zeros(300)
 
         elif o_type == ObservationType.POS_OBSTACLE:
-
-
             obs = np.zeros(10)
+
+        elif o_type == ObservationType.RAYS:
+            rf_readings = np.array([data.sensor("rf_{}".format(i)).data.copy()[0] for i in range(1,21)])
+
+
+            obs = rf_readings
+
+
         elif o_type==ObservationType.HEADING:
             obs = 0
 

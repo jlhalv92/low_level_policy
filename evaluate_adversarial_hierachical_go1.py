@@ -47,7 +47,7 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
 
 
 
-    path_c ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
+    path_c ="checkouts/locomotion_policy"
     if method_name == "MIN_MAX":
         path ="src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
         path_adversary = "src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"

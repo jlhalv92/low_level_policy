@@ -5,7 +5,7 @@ from scipy.spatial.transform import Rotation as R
 from src.envs.reward.reward import RudinOwnVarReward as reward_f
 from src.utils.height_map  import *
 import json# Function to read the JSON file
-
+import pygame
 
 def calculate_square_vertices(x, y, s, theta):
     # Half diagonal distance from the center to a vertex
@@ -72,6 +72,37 @@ def read_control_values(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
 
+def keyboard_control(vx, vy, wz):
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+            print("running off")
+
+    keys = pygame.key.get_pressed()
+
+    if keys[pygame.K_UP]==True:
+        vx = min(vx + 0.1,1)
+    if keys[pygame.K_UP]==False and keys[pygame.K_DOWN]==False:
+        vx = 0
+    if keys[pygame.K_LEFT]==False and keys[pygame.K_RIGHT]==False:
+        vy = 0
+    if keys[pygame.K_w]==False and keys[pygame.K_e]==False:
+        wz = 0
+
+    if keys[pygame.K_DOWN]:
+        vx = max(vx - 0.1,-1)
+
+    if keys[pygame.K_LEFT]:
+        vy = min(vy + 0.1,1)
+    if keys[pygame.K_RIGHT]:
+        vy = max(vy - 0.1,-1)
+    if keys[pygame.K_w]:
+        wz = min(wz + 0.1,1)
+
+    if keys[pygame.K_e]:
+        wz = max(wz - 0.1,-1)
+
+    return vx,vy,wz
 
 
 
@@ -120,6 +151,13 @@ class Go1(MuJoCo):
         self.curriculum = cfg["curriculum"]
         self.resample =  cfg["resample"]
         self.joystick =  cfg["joystick"]
+        if self.joystick:
+            pygame.init()
+            screen_width, screen_height = 300, 300
+            screen = pygame.display.set_mode((screen_width, screen_height))
+            pygame.display.set_caption("Keyboard Joystick Simulation")
+
+
         self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
         self.level = 0
         self.antagonist = cfg["antagonist"]
@@ -159,12 +197,15 @@ class Go1(MuJoCo):
 
         if task==0:
             xml_path = "src/envs/unitree_go1/walk_go1.xml"
+            xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
         if task==1:
             xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
 
         if task==2:
             xml_path = "src/envs/unitree_go1/obstacles_navigation_go1.xml"
+            xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+
 
         if task==3:
             xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1.xml"
@@ -275,6 +316,7 @@ class Go1(MuJoCo):
                                 robot_orientation + # (1,)
                                 target_pos + # (2,)
                                 obstacle_pos ) # (10,)
+
 
         collision_groups = [("floor", ["floor"]),
                             ("feet", ["FR_foot", "FL_foot", "RR_foot", "RL_foot"]),
@@ -845,11 +887,15 @@ class Go1(MuJoCo):
 
         if self.joystick:
 
-            joystick=read_control_values("src/control.json")
-            self.target_vx = joystick["control"]["vx"]
-            self.target_vy = joystick["control"]["vy"]
-            self.target_yaw = joystick["control"]["wz"]
 
+            # joystick= read_control_values("src/control.json")
+            # self.target_vx = joystick["control"]["vx"]
+            # self.target_vy = joystick["control"]["vy"]
+            # self.target_yaw = joystick["control"]["wz"]
+            vx,vy,wz = keyboard_control(self.target_vx, self.target_vy, self.target_yaw)
+            self.target_vx = vx
+            self.target_vy = vy
+            self.target_yaw = wz
 
         if self.train:
 
@@ -961,8 +1007,8 @@ class Go1(MuJoCo):
                 self.target_yaw = cond[2]
 
             else:
-
-                self.resample_targets()
+                if not self.joystick:
+                    self.resample_targets()
 
 
     def reset_states(self, task):

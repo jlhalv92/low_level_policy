@@ -14,8 +14,6 @@ from mushroom_rl.utils.parameters import to_parameter
 from copy import deepcopy
 from itertools import chain
 
-
-
 class SACPolicy(Policy):
     """
     Class used to implement the policy used by the Soft Actor-Critic

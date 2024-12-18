@@ -91,7 +91,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     horizon = 1000
     gamma = 0.99
     n_features = 256
-    mini_batch_size = 64
+    mini_batch_size = 64 #1000 rollout 32000
     lr = 3e-4
     n_epochs_policy = 5
     eps_ppo = 0.2

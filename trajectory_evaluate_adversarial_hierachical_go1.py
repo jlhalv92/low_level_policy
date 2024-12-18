@@ -11,6 +11,7 @@ from mushroom_rl.core import Agent
 from src.networks.nets import ActorNetwork, CriticNetwork, PolicyNetwork, ValueNetwork
 import cv2
 
+from mushroom_rl.utils.callbacks import CollectDataset
 
 class OccupancyGrid:
     def __init__(self, width_meters, height_meters, resolution=0.01):
@@ -159,44 +160,60 @@ def experiment(task_name="obstacles_navigation", version=0):
 
 
     # Low_level_Policy, same for all
-    path_c ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
+    path_c ="checkouts/locomotion_policy"
+
 
     # RARL
-    path ="/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_80"
-    path_adversary = "/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_190"
+    path ="checkouts/agent_last_rarl"
+    path_adversary = "checkouts/antagonist_last"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
+    preprocessor = StateVariableConcatenation()
+
     adversary = Agent.load(path_adversary)
-    core_rarl = Core([agent, adversary], mdp, low_level_agent=control_agent, obs_dim=18)
+    collect_dataset = CollectDataset()
+    callbacks = collect_dataset
+
+    core_rarl = Core([agent, adversary],
+                mdp,
+                low_level_agent=control_agent,
+                obs_dim=18)
 
     # QARL
-    path ="src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
-    path_adversary = "src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"
+    path ="checkouts/agent_last_qarl"
+    path_adversary = "checkouts/antagonist_last"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     adversary = Agent.load(path_adversary)
-    core_qarl = Core([agent, adversary], mdp, low_level_agent=control_agent, obs_dim=18)
+    core_qarl = Core([agent, adversary],
+                mdp,
+                callback_step=callbacks,
+                low_level_agent=control_agent,
+                preprocessors=[preprocessor],
+                obs_dim=19)
 
 
     # RANDOM
-    path ="/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_40"
+    path ="checkouts/agent_last_random"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     core_random = Core_na(agent, mdp, low_level_agent=control_agent, obs_dim=18)
 
 
     # STATIC
-    path ="/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_30"
+    path ="checkouts/agent_last_static"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     core_static = Core_na(agent, mdp, low_level_agent=control_agent, obs_dim=18)
 
 
-
+    evaluation_temp = 0.001
     dataset = core_rarl.evaluate(n_episodes=1, render=False, id_agent=0)
     s1, a, r, _, _, info, last = parse_dataset(dataset)
 
-    dataset = core_qarl.evaluate(n_episodes=1, render=False, id_agent=0)
+    evaluation_temp = 0.05
+    core_qarl.set_variables_for_training(evaluation_temp * np.ones(1))
+    dataset = core_qarl.evaluate(n_episodes=1, render=True,id_agent=0)
     s2, a, r, _, _, info, last = parse_dataset(dataset)
 
     dataset = core_random.evaluate(n_episodes=1, render=False)

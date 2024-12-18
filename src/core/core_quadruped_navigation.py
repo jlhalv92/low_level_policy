@@ -26,7 +26,7 @@ class Core(object):
 
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None, obs_dim=18,  record_dictionary=None, joystick=False):
+                 preprocessors=None, low_level_agent=None, obs_dim=28,  record_dictionary=None, joystick=False):
         """
         Constructor.
 
@@ -328,7 +328,7 @@ class Core(object):
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
         else: # Default
-            self.action = self.agent.draw_action(navigation_state)
+            self.action = self.agent.draw_noisy_action(navigation_state)
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
                 robot_state[54:57] = np.array([2,2,0.25])* self.action

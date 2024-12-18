@@ -9,7 +9,7 @@ from src.algorithm.deep_actor_critic.sac import  SAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
-from src.envs.go1_env import Go1
+from src.envs.go1_env_rays import Go1
 from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork
 import wandb
 
@@ -51,19 +51,20 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    obs_size = 18
+    obs_size = 28
 
     cfg_rewards=dict()
 
-    log = True
+    log = False
 
     cfg = dict(kp=40,
                kd=1,
                antagonist=False,
                max_level=True,
                curriculum=False,
-               joystick=False,
+               joystick=True,
                resample=False,
+               domain_randomization=False,
                rewards=cfg_rewards)
 
     mdp = Go1(horizon,
@@ -114,12 +115,10 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
                 critic_fit_params=None)
 
 
-
-
     core = Core(agent,
                 mdp,
                 low_level_agent=control_agent,
-                obs_dim=obs_size)
+                obs_dim=obs_size, joystick=True)
 
 
     dataset = core.evaluate(n_episodes=5, render=True)
@@ -172,6 +171,8 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 if __name__ == '__main__':
 
     path ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
+    path = "src/nominal_models/go1/epoch_last"
+
     control_agent = Agent.load(path)
     for i in range(1,5):
         experiment(method_name="SAC",
