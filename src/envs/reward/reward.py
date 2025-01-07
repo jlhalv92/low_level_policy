@@ -75,7 +75,7 @@ class RudinOwnVarReward:
         self.time_since_last_touchdown_fl = 0 if self.env.check_collision("floor", "FL_foot") else self.time_since_last_touchdown_fl + self.env.dt
         self.time_since_last_touchdown_rr = 0 if self.env.check_collision("floor", "RR_foot") else self.time_since_last_touchdown_rr + self.env.dt
         self.time_since_last_touchdown_rl = 0 if self.env.check_collision("floor", "RL_foot") else self.time_since_last_touchdown_rl + self.env.dt
-        self._prev_joint_vel = np.array(self.env._data.qvel[6:])
+        self._prev_joint_vel = np.array(self.env._data.qvel[6:18])
 
     def reward(self, action):
         total_timesteps = self.env.total_timesteps
@@ -118,7 +118,7 @@ class RudinOwnVarReward:
         joint_nominal_diff_reward = curriculum_coeff * self.joint_nominal_diff_coeff * -joint_nominal_diff_norm
 
         # Joint position limit reward
-        joint_positions = np.array(self.env._data.qpos[7:])
+        joint_positions = np.array(self.env._data.qpos[7:20])
         lower_limit_penalty = -np.minimum(joint_positions - self.joint_limits[:, 0], 0.0).sum()
         upper_limit_penalty = np.maximum(joint_positions - self.joint_limits[:, 1], 0.0).sum()
         joint_position_limit_reward = curriculum_coeff * self.joint_position_limit_coeff * -(lower_limit_penalty + upper_limit_penalty)
@@ -128,11 +128,11 @@ class RudinOwnVarReward:
         velocity_reward = curriculum_coeff * self.joint_velocity_coeff * -velocity_norm
 
         # Joint acceleration reward
-        acceleration_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env._data.qvel[6:]) / self.env.dt))
+        acceleration_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env._data.qvel[6:18]) / self.env.dt))
         acceleration_reward = curriculum_coeff * self.joint_acceleration_coeff * -acceleration_norm
 
         # Joint torque reward
-        torque_norm = np.sum(np.square(np.array(self.env._data.qfrc_actuator[6:])))
+        torque_norm = np.sum(np.square(np.array(self.env._data.qfrc_actuator[6:18])))
         torque_reward = curriculum_coeff * self.joint_torque_coeff * -torque_norm
 
         # Action rate reward

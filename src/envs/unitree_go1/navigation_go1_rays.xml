@@ -26,13 +26,18 @@
           <geom  name="wall_4" type="box"  pos="0 -5 0.5" size="10 0.1 1.5" rgba=".0 .4 .4 1" conaffinity="1" />
 
     <body name="obstacle_1" pos="2.5 0 0.5" >
-
-      <geom  name="obstacle_1" type="box"   size="2 2 0.5" rgba=".1 .4 .4 1" conaffinity="1" />
+        <freejoint name="obstacle"/>
+      <geom  name="obstacle_1" type="box" mass="60" size="0.5 0.5 0.8" rgba=".1 .4 .4 1" conaffinity="1" priority="1" friction="0.01" />
       <site name="obstacle_1" type="sphere" size=".1" rgba=".6 .3 .3 1"  />
 
        </body>
           <site name="target" type="sphere" pos="7 0 0.5" size=".1" rgba=".6 .3 .3 1"  />
 
   </worldbody>
+
+    <actuator>
+            <velocity name="thrust1" site="obstacle_1" gear="1 0 0 0 0 0" ctrlrange="-2 2" kv="100" />
+        <velocity name="thrust2" site="obstacle_1" gear="0 1 0 0 0 0" ctrlrange="-2 2" kv="100" />
+    </actuator>
 
 </mujoco>
