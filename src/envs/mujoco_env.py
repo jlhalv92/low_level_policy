@@ -1,40 +1,11 @@
 import mujoco
 import numpy as np
 from dm_control import mjcf
+
 from mushroom_rl.core import Environment, MDPInfo
 from mushroom_rl.utils.spaces import Box
 from src.envs.mujoco_utils import *
 
-
-def create_rotated_ring_grid(x_c, y_c, inner_radius, outer_radius, num_points_radius, num_points_angle, theta):
-    # Create the radius values between inner and outer radii
-    r_values = np.linspace(inner_radius, outer_radius, num_points_radius)
-
-    # Create the angle values from 0 to 2π
-    theta_values = np.linspace(0, 2 * np.pi, num_points_angle, endpoint=False)
-
-    # Create a grid of polar coordinates (r, θ)
-    r_grid, theta_grid = np.meshgrid(r_values, theta_values)
-
-    # Convert polar coordinates to Cartesian coordinates (x, y)
-    x_grid = r_grid * np.cos(theta_grid)
-    y_grid = r_grid * np.sin(theta_grid)
-
-    # Flatten the grid points into a list of (x, y) tuples
-    points = np.vstack([x_grid.ravel(), y_grid.ravel()])
-
-    # Rotation matrix for angle theta
-    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                                [np.sin(theta), np.cos(theta)]])
-
-    # Rotate each point
-    rotated_points = np.dot(rotation_matrix, points)
-
-    # Translate back to the center (x_c, y_c)
-    rotated_points[0, :] += x_c
-    rotated_points[1, :] += y_c
-
-    return rotated_points
 
 
 class MuJoCo(Environment):
@@ -93,40 +64,7 @@ class MuJoCo(Environment):
 
         """
 
-        # mjcf_model = mjcf.from_path('/home/jose-luis/Project/residual_rl/src/envs/unitree_go1/navigation_walk_go1.xml')
-        #
-        # mjcf_model.worldbody.add('geom', name='left_wall',
-        #                          type='box', pos=[-5, 0, 1], size=[0.05,5,1], conaffinity=1 )
-        # mjcf_model.worldbody.add('geom', name='right_wall',
-        #                          type='box', pos=[5, 0, 1], size=[0.05,5,1], conaffinity=1)
-        # mjcf_model.worldbody.add('geom', name='front_wall',
-        #                          type='box', pos=[0, 5, 1], size=[5,0.05,1], conaffinity=1)
-        # mjcf_model.worldbody.add('geom', name='back_wall',
-        #                          type='box', pos=[0, -5, 1], size=[5,0.05,1], conaffinity=1)
-        #
-        # mjcf_model.worldbody.add('geom', name='obstacle_1',
-        #                          type='box', pos=[2, .2, 0.5], size=[1,1,0.5], conaffinity=1)
-        # mjcf_model.worldbody.add('site', name='obstacle_1',
-        #                          type='sphere', pos=[2, .2, 0.5])
-        # robot = mjcf_model.worldbody.find("body", 'trunk')
-        # # for j in range(5):
-        # #     for i in range(30):
-        # #         x = (0.4 + j*0.2)* np.cos(2*(np.pi/30)*i)
-        # #         y = (0.4 + j*0.2)* np.sin(2*(np.pi/30)*i)
-        #
-        # # points = create_rotated_ring_grid(0, 0, 0.4, 2, 10, 30,
-        # # #                          0)
-        # #
-        # # for i, point in enumerate(points.T):
-        # #     robot.add('site', name='lidar_{}'.format( i),
-        # #               type='sphere', pos=[point[0], point[1], 0], size=[0.03])
-        #
-        # target = mjcf_model.worldbody.find("site",'target')
-        #
-        # target.pos = [4,0,0.35]
-        # # xml = mjcf_model.to_xml_string()
-        # # Create the simulation
-        # self._model =  mujoco.MjModel.from_xml_string(xml=mjcf_model.to_xml_string(), assets=mjcf_model.get_assets())
+
         self._model = self.load_model(xml_file)
 
 
@@ -166,16 +104,9 @@ class MuJoCo(Environment):
                 self.additional_data[key] = (name, ot)
 
         # Pre-process the collision groups for "fast" detection of contacts
-        self.collision_groups = {}
 
-        if collision_groups is not None:
-            for name, geom_names in collision_groups:
-                col_group = list()
-                for geom_name in geom_names:
-                    mj_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
-                    assert mj_id != -1, f"geom \"{geom_name}\" not found! Can't be used for collision-checking."
-                    col_group.append(mj_id)
-                self.collision_groups[name] = set(col_group)
+        self.collision_groups = self.create_collision_groups(collision_groups)
+
 
         # Finally, we create the MDP information and call the constructor of
         # the parent class
@@ -197,6 +128,21 @@ class MuJoCo(Environment):
 
 
         super().__init__(mdp_info)
+
+    def create_collision_groups(self, collision_groups):
+        collision_groups_dict = {}
+
+        if collision_groups is not None:
+            for name, geom_names in collision_groups:
+                col_group = list()
+                for geom_name in geom_names:
+                    mj_id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+                    assert mj_id != -1, f"geom \"{geom_name}\" not found! Can't be used for collision-checking."
+                    col_group.append(mj_id)
+                collision_groups_dict[name] = set(col_group)
+
+        return collision_groups_dict
+
 
     def seed(self, seed):
         np.random.seed(seed)
@@ -259,11 +205,17 @@ class MuJoCo(Environment):
     # def curriculum_reset(self):
     #     pass
 
-    def render(self, record=False):
+    def render(self, record=False, headless=False, second_cam=False, cam_name=None):
         if self._viewer is None:
-            self._viewer = MujocoViewer(self._model, self.dt, record=record, **self._viewer_params)
+            self._viewer = MujocoViewer(self._model, self.dt, headless=headless, record=record, **self._viewer_params)
 
-        return self._viewer.render(self._data, record)
+        return self._viewer.render(self._data, record, second_cam, cam_name)
+
+    def get_render(self, cam_name=None, depth=0):
+        if self._viewer is None:
+            raise NameError("No viewer initalized!")
+        frame = self._viewer.get_frames_from_cam(self._data, cam_name, depth=depth)
+        return frame
 
     def stop(self):
         if self._viewer is not None:

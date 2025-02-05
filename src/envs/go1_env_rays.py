@@ -1,27 +1,84 @@
+from sympy.physics.units import length
+from torch.utils.hipify.hipify_python import file_add_header
 
-from src.envs.mujoco import MuJoCo, ObservationType, mujoco
+from src.envs.mujoco_env import MuJoCo, ObservationType, mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from src.envs.reward.reward import RudinOwnVarReward as reward_f
 from src.utils.height_map  import *
 import json# Function to read the JSON file
 import pygame
+from collections import deque
 
-def calculate_square_vertices(x, y, s, theta):
-    # Half diagonal distance from the center to a vertex
-    half_diagonal = (s * np.sqrt(2)) / 2
+class HistoryStore:
+    def __init__(self, max_size=5):
+        # Initialize with a maximum size and a deque to store the history
+        self.max_size = max_size
+        self.history = deque(maxlen=max_size)
 
-    # List to store the coordinates of the four vertices
-    vertices = [[x,y]]
+    def reset_history(self, n_rays=10, max_length_ray=20):
+        self.history = deque(maxlen=self.max_size)
+        array = np.log2(max_length_ray) * np.ones(n_rays)
 
-    # Iterate over the 4 angles (45° + k * 90°)
-    for k in range(4):
-        angle =  theta + np.pi/4 + k * (np.pi / 2)
-        vertex_x = x + half_diagonal * np.cos(angle)
-        vertex_y = y + half_diagonal * np.sin(angle)
-        vertices.append((round(vertex_x, 3), round(vertex_y, 3)))
+        for _ in range(self.max_size):
+            self.add_sample(array)
 
-    return np.array(vertices)
+    def add_sample(self, sample):
+        # Add a new sample to the history
+        self.history.append(sample)
+
+    def get_history(self):
+        # Return the current history as a list
+        return np.array(list(self.history)).flatten()
+
+def get_bounding_box_vertices(height, width, length, center_x, center_y, center_z, theta=0):
+    """
+    Calculate the vertices of a cube given its dimensions, center position, and yaw rotation.
+
+    Parameters:
+        height (float): Height of the cube.
+        width (float): Width of the cube.
+        length (float): Length of the cube.
+        center_x (float): X-coordinate of the cube's center.
+        center_y (float): Y-coordinate of the cube's center.
+        theta (float): Yaw angle (rotation around z-axis) in radians.
+
+    Returns:
+        np.ndarray: A (8, 3) array containing the coordinates of the vertices.
+    """
+    # Half dimensions
+    half_h = height / 2
+    half_w = width / 2
+    half_l = length / 2
+
+    # Define relative positions of vertices from the cube's center
+    relative_vertices = np.array([
+        [-half_l, -half_w, -half_h],
+        [-half_l, half_w, -half_h],
+        [half_l, half_w, -half_h],
+        [half_l, -half_w, -half_h],
+        [-half_l, -half_w, half_h],
+        [-half_l, half_w, half_h],
+        [half_l, half_w, half_h],
+        [half_l, -half_w, half_h],
+    ])
+
+    # Define the rotation matrix for yaw (rotation around z-axis)
+    rotation_matrix = np.array([
+        [np.cos(theta), -np.sin(theta), 0],
+        [np.sin(theta), np.cos(theta),  0],
+        [0,             0,              1]
+    ])
+
+    # Rotate vertices
+    rotated_vertices = np.dot(relative_vertices, rotation_matrix.T)
+
+    # Center the cube in space
+    center = np.array([center_x, center_y, center_z])
+    vertices = rotated_vertices + center
+
+    return vertices
+
 
 class StepProbabilitySampling:
     def __init__(self, env, probability=0.005):
@@ -72,40 +129,21 @@ def read_control_values(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
 
+
+
 def keyboard_control(vx, vy, wz):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
             print("running off")
+            return 0, 0, 0  # Stop motion on quit
 
     keys = pygame.key.get_pressed()
 
-    if keys[pygame.K_UP]==True:
-        vx = min(vx + 0.1,1)
-    if keys[pygame.K_UP]==False and keys[pygame.K_DOWN]==False:
-        vx = 0
-    if keys[pygame.K_LEFT]==False and keys[pygame.K_RIGHT]==False:
-        vy = 0
-    if keys[pygame.K_w]==False and keys[pygame.K_e]==False:
-        wz = 0
+    vx = min(vx + 0.1, 1.5) if keys[pygame.K_UP] else max(vx - 0.1, -1.5) if keys[pygame.K_DOWN] else 0
+    vy = min(vy + 0.1, 0.6) if keys[pygame.K_LEFT] else max(vy - 0.1, -0.6) if keys[pygame.K_RIGHT] else 0
+    wz = min(wz + 0.1, 1.5) if keys[pygame.K_w] else max(wz - 0.1, -1.5) if keys[pygame.K_e] else 0
 
-    if keys[pygame.K_DOWN]:
-        vx = max(vx - 0.1,-1)
-
-    if keys[pygame.K_LEFT]:
-        vy = min(vy + 0.1,1)
-    if keys[pygame.K_RIGHT]:
-        vy = max(vy - 0.1,-1)
-    if keys[pygame.K_w]:
-        wz = min(wz + 0.1,1)
-
-    if keys[pygame.K_e]:
-        wz = max(wz - 0.1,-1)
-
-    return vx,vy,wz
-
-
-
+    return vx, vy, wz
 
 
 task_map = dict(nominal=0,
@@ -143,11 +181,16 @@ class Go1(MuJoCo):
         Constructor.
 
         """
+        self.behaviour_cloning = False
+        self.number_obstacles = 10
+        self.rays_history = HistoryStore()
+        self.robot_collisions = None
+        self.not_hit_obstacle = None
         self._all_obstacles_move = False
         self.domain_randomization = cfg["domain_randomization"]
-        self.indices = [0, 1, 2]
+        self.static_obstacles = cfg["static_obstacles"]
         self.obstacle_id = 0
-
+        self._room_width = 10
         self.curriculum = cfg["curriculum"]
         self.resample =  cfg["resample"]
         self.joystick =  cfg["joystick"]
@@ -197,23 +240,26 @@ class Go1(MuJoCo):
 
         if task==0:
             xml_path = "src/envs/unitree_go1/walk_go1.xml"
-            xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
         if task==1:
-            xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
+            self.xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
 
         if task==2:
-            xml_path = "src/envs/unitree_go1/obstacles_navigation_go1.xml"
-            xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+            if self.behaviour_cloning:
+                self.xml_path = "src/envs/unitree_go1/navigation_go1_rays_behaviour_cloning.xml"
+
+
+            else:
+                self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+
 
 
         if task==3:
-            xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1.xml"
-            self.obstacles = ["obstacle_1", "obstacle_2", "obstacle_3"]
+            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
         if task==4:
-            xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1_evaluation_v{}.xml".format(version)
-            self.obstacles = ["obstacle_1", "obstacle_2", "obstacle_3", "obstacle_4"]
+            self.xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1_evaluation_v{}.xml".format(version)
 
         self.joint_limits = np.array([[-0.802851, 0.802851], [-1.0472, 4.18879], [-2.69653, -0.916298]] * 4)
 
@@ -294,10 +340,34 @@ class Go1(MuJoCo):
                                 robot_orientation +
                                 distance_to_target)
         
-        elif self.task==2 or self.task==3 or self.task==4:
+        elif self.task==2:
             target_pos = [("target_pose", "target", ObservationType.POS)]
             rays = [("distance_rays", "distance_rays", ObservationType.RAYS)]
             robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
+            robot_orientation = [("orientation", "orientation_sensor", ObservationType.HEADING)]
+            current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
+            room_width = [("room_width", "room_width", ObservationType.ROOM_WIDTH)]
+            # robot_bounding_box = [("robot_bounding_box", "robot_bounding_box", ObservationType.ROBOT_BOUNDING_BOX)]
+            # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
+
+
+
+            observation_spec = (propioception +
+                                last_actions +
+                                gravity_projection +
+                                angular_velocity +
+                                linear_velocity +
+                                contact +
+                                airtime +
+                                height +
+                                commands +
+                                current_velocity + # (3,)
+                                robot_orientation + # (1,)
+                                rays +   # (100,)
+                                 room_width) # (2,)
+
+        elif self.task==3:
+            rays = [("distance_rays_small", "distance_rays_small", ObservationType.RAYS_SMALL)]
             robot_orientation = [("orientation", "orientation_sensor", ObservationType.HEADING)]
             current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
 
@@ -310,11 +380,9 @@ class Go1(MuJoCo):
                                 airtime +
                                 height +
                                 commands +
-                                robot_pos +  # (2,)
                                 current_velocity + # (3,)
                                 robot_orientation + # (1,)
-                                target_pos + # (2,)
-                                rays ) # (20,)
+                                rays ) # (2,)
 
 
         collision_groups = [("floor", ["floor"]),
@@ -339,29 +407,45 @@ class Go1(MuJoCo):
                             ("trunk_5", ["trunk_5"]),
                             ("trunk_6", ["trunk_6"]),
                             ("trunk_7", ["trunk_7"]),
-                            ("trunk_8", ["trunk_8"])]
+                            ("trunk_8", ["trunk_8"]),
+                            ("robot", ["FR_thigh1","FL_thigh1","RR_thigh1","RL_thigh1",
+                                      "FR_calf1", "FL_calf1", "RR_calf1", "RL_calf1",
+                                      "FR_foot", "FL_foot", "RR_foot", "RL_foot",
+                                       "trunk_1", "trunk_2", "trunk_3",
+                                       "trunk_4", "trunk_5", "trunk_6",
+                                       "trunk_7", "trunk_8"])]
         if self.task==2:
-            collision_walls = ("walls",["wall_1", "wall_2","wall_3", "wall_4"])
+            # collision_walls = ("walls",["wall_1", "wall_2","wall_3", "wall_4"])
+            collision_walls = ("walls",["wall_3", "wall_4"])
+
             collision_obstacle =  ("obstacles",["obstacle_1"])
             collision_groups.extend([collision_walls, collision_obstacle])
-        if self.task==3 or self.task==4:
-            collision_walls = ("walls",["left_wall", "right_wall","front_wall", "back_wall"])
-            collision_obstacle =  ("obstacles",self.obstacles)
-            collision_groups.extend([collision_walls, collision_obstacle])
+        if self.task==3:
+            collision_walls = ("walls",["wall_3", "wall_4"])
+            collision_walls = ("walls",["wall_3", "wall_4"])
+
+            collision_groups.extend([collision_walls])
+
+        self.collision_groups_list = collision_groups
+
         if self.task == 0:
             max_a = self.qpos_offset
             min_a = - self.qpos_offset
 
         else:
-            max_a = np.array([1.,1.,1.])
-            min_a = np.array([-1.,-1,-1])
+            max_a = 1*np.array([1.5,0.6,1.5])
+            min_a = 1*np.array([-1.5,-0.6,-1.5])
 
 
-        super().__init__(xml_path, action_spec, observation_spec, gamma, horizon, collision_groups=collision_groups,
-                          n_intermediate_steps=4, timestep=timestep,
+        super().__init__(self.xml_path, action_spec,
+                         observation_spec,
+                         gamma, horizon,
+                         collision_groups=collision_groups,
+                          n_intermediate_steps=4,
+                         timestep=timestep,
                          max_a=max_a, min_a=min_a)
 
-
+        # self.renderer = mujoco.Renderer(self._model)
         self.last_action =  np.array(12 * [0])
         self.torques = list()
         x,y = self._data.qpos[:2]
@@ -436,66 +520,64 @@ class Go1(MuJoCo):
 
     def _modify_observation(self, obs):
         # target yaw
+        #
         diff_pose = self._data.qpos[7:19].copy() - self.default_dof_pos.copy()
         obs[:12] = diff_pose
         linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
         angular_velocity = self.orientation_quat_inv.apply(self._data.qvel[3:6])
         projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
-
-        obs[24:36]= self.last_action #last action
-        obs[36:39] = projected_gravity # gravity
-        obs[39:42] = angular_velocity
-        obs[42:45] = linear_velocity
-        obs[45:49] = np.array([self.check_collision("floor", foot_name) for foot_name in self.foot_names])
-        obs[49:53] = np.array([self.reward_function.time_since_last_touchdown_fr,
+        contacts = np.array([self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        airtime = np.array([self.reward_function.time_since_last_touchdown_fr,
                                self.reward_function.time_since_last_touchdown_fl,
                                self.reward_function.time_since_last_touchdown_rr,
                                self.reward_function.time_since_last_touchdown_rl])
-        obs[53] = self._data.qpos[2] #height
+        obs[24:36]= self.last_action #last action
+        obs = self.obs_helper.modify_obs(obs, "gravity_projection", projected_gravity)
+        obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
+        obs = self.obs_helper.modify_obs(obs, "linear_velocity", linear_velocity)
+        obs = self.obs_helper.modify_obs(obs, "feet_contact", contacts)
+        obs = self.obs_helper.modify_obs(obs, "feet_airtime", airtime)
+        obs = self.obs_helper.modify_obs(obs, "height", self._data.qpos[2])
+
 
         if self.task == 0:
-            obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+            commands =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+            obs = self.obs_helper.modify_obs(obs, "commands", commands)
 
         if self.task == 1:
-
            self.target_vx, self.target_vy, self.target_yaw = obs[54:57]
 
-        if self.task == 2 or  self.task == 3 or self.task == 4:
-            obs[54:57] =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+        if self.task == 2:
+            commands =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+            obs = self.obs_helper.modify_obs(obs, "commands", commands)
 
             linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
             vx = linear_velocity[0]
             vy = linear_velocity[1]
             wz = self._data.qvel[5]
-            # obs[-3:] = np.array([vx,vy,wz])*np.array([2,2,0.25])
-            robot_pos = self._data.qpos[:2]
-            # (2,)
             current_velocity = np.array([vx, vy, wz])*np.array([2,2,0.25])  # (3,)
             robot_orientation  = self.orientation_euler[2] # (1,)
-            target_pos = self._data.site("target").xpos[:2]  # (2,)
 
+            obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
+            obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
 
+            room_width = self._room_width
+            obs = self.obs_helper.modify_obs(obs, "room_width",room_width)
+            # obs = self.obs_helper.modify_obs(obs, "obstacle_bounding_box",obstacle_bounding_box_robot)
+            # obs = self.obs_helper.modify_obs(obs, "robot_bounding_box",obstacle_bounding_box_robot)
+        if self.task == 3:
+            commands =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+            obs = self.obs_helper.modify_obs(obs, "commands", commands)
 
-            # i = self.indices[self.obstacle_id]
-            # i = self.obstacle_id
-            #
-            # x,y = self._data.geom(self.obstacles[i]).xpos[:2]
-            # s= 2*self._model.geom(self.obstacles[i]).size[0]
-            # theta = 0
-            # obstacle_pos =calculate_square_vertices(x, y, s, theta)
-            obs[57:59] = robot_pos
-            obs[59:62] = current_velocity
-            obs[62] = robot_orientation
-            obs[63:65] = target_pos - robot_pos
-            rf_readings = obs[65:].copy()
-            no_intersection = -1
-            rf_readings = np.where(rf_readings >=5, -1.0, rf_readings)
-            rf_readings = np.where(rf_readings == no_intersection, np.log(5), np.log(rf_readings))
-            obs[65:] = rf_readings
+            linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+            vx = linear_velocity[0]
+            vy = linear_velocity[1]
+            wz = self._data.qvel[5]
+            current_velocity = np.array([vx, vy, wz])*np.array([2,2,0.25])  # (3,)
+            robot_orientation  = self.orientation_euler[2] # (1,)
 
-            # obs[65:] = (obstacle_pos -robot_pos).flatten()
-
-
+            obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
+            obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
 
         # Norm and clip
         obs[:12]  *= 1 #joint pos
@@ -582,56 +664,22 @@ class Go1(MuJoCo):
 
         return False
 
-    def closest_obstacle_in_front(self, robot_pos, n_obstacles=3, last_id=0):
-        """
-        Given a robot position (x, y) and a set of obstacle positions [(id, x, y), ...],
-        returns the id of the closest obstacle directly in front of the robot in the x-direction.
 
-        Parameters:
-        - robot_pos: tuple (x, y) representing the robot's position.
-        - obstacles: list of tuples [(id, x, y), ...] representing obstacles with their (id, x, y) coordinates.
-
-        Returns:
-        - closest_id: ID of the closest obstacle in front of the robot. None if no obstacle is found in front.
-        """
-        robot_x, robot_y = robot_pos
-        min_distance = float('inf')
-        closest_id = last_id
-        obstacles = [(i,self._data.geom(self.obstacles[i]).xpos[0],self._data.geom(self.obstacles[i]).xpos[1]) for i in range(n_obstacles)]
-
-        for obs_id, obs_x, obs_y in obstacles:
-            # Check if the obstacle is in front of the robot (same y level and x > robot_x)
-            if obs_x > robot_x:
-                obstacle_length = self._model.geom(self.obstacles[obs_id]).size[0]
-                distance = obs_x + obstacle_length - robot_x  # Calculate horizontal distance
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_id = obs_id
-
-        return closest_id
 
     def _step_init(self, obs, action):
 
-        if self.task == 3 or self.task == 4:
-            self.obstacle_id = self.closest_obstacle_in_front(self._data.body("trunk").xpos[:2], last_id=self.obstacle_id, n_obstacles=self.task)
 
-            if self.antagonist:
-                self._data.ctrl[12] = self.obstacle_velocity
-            else:
-                self._data.ctrl[12] = 0.0
 
-        # if self.task == 2:
+
+
+        # if self.task == 3 or self.task == 4:
+        #     self.obstacle_id = self.closest_obstacle_in_front(self._data.body("trunk").xpos[:2], last_id=self.obstacle_id, n_obstacles=self.task)
         #
-        #     if self.curriculum or self.max_level:
-        #
-        #         pos_obstacle = self._data.joint(self.obstacles[0] + "_y").qpos
-        #         robot_y = self._data.qpos[1]
-        #         velocity = self.obstacle_velocity * (robot_y - pos_obstacle)
-        #         self._data.ctrl[12] = velocity
-        #
-        #     else:
-        #
-        #         self._data.ctrl[12] = self.obstacle_velocity
+        if self.antagonist:
+            self._data.ctrl[-1] = self.obstacle_velocity
+
+
+
 
 
     def check_any_collision(self, groups):
@@ -735,22 +783,23 @@ class Go1(MuJoCo):
 
     def collision_penalty(self):
         legs_collision_walls = self._check_collision("legs", "walls")
-        legs_collision_obstacles = self._check_collision("legs", "obstacles")
-        trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
+        feet_collision_walls = self._check_collision("feet", "walls")
         trunk_collision_walls = self._check_collision("trunk", "walls")
 
+        legs_collision_obstacles = self._check_collision("legs", "obstacles")
+        trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
+        feet_collision_obstacles = self._check_collision("feet", "obstacles")
 
-        penalty =  -5 *(legs_collision_walls + trunk_collision_walls)  -10 *(legs_collision_obstacles + trunk_collision_obstacles)
-
+        collision_obstacle =  legs_collision_obstacles + trunk_collision_obstacles + feet_collision_obstacles
+        collision_wall  =  legs_collision_walls + trunk_collision_walls + feet_collision_walls
+        penalty =  -20*(collision_obstacle + collision_wall)
         return penalty
 
     def reward_velocity(self, current_velocity,target_pos, current_pos):
-
         vect = target_pos - current_pos
         norm = np.linalg.norm(vect)
         vect_norm = vect / (norm + 1e-5)
-        projected_vel = np.clip(np.dot(vect_norm, current_velocity),0,1)
-
+        projected_vel = max(np.dot(vect_norm, current_velocity),0)
         r = np.min([projected_vel, 1])
         return r
 
@@ -763,27 +812,15 @@ class Go1(MuJoCo):
             return self.reward_task_1()
 
         if self.task==2 or self.task==3 or self.task==4:
-            current_pos = self._data.body("trunk").xpos[:2]
-            target_pos = self._data.site("target").xpos[:2]
-            # norm_distance = np.linalg.norm(target_pos - current_pos)
-            vect_direction = target_pos - current_pos
-            norm_distance = np.linalg.norm(vect_direction)
-            target_vec_norm = vect_direction / (norm_distance + 1e-5)
-
-            target_yaw = np.arctan2(target_vec_norm[1], target_vec_norm[0])
             yaw = self.orientation_euler[2]
-            reward_angle = np.exp(-np.abs(target_yaw - yaw))
-
-            local_vel = self.orientation_quat_inv.apply(self._data.qvel[:3])[:2]
-            velocity_norm = np.linalg.norm(local_vel)
-            reward_velocity = self.reward_velocity(local_vel, target_pos, current_pos)
-
-            stall_penalty = -1 if norm_distance > 0.5 and  velocity_norm < 0.1 else 0
-
-            penalty = self.collision_penalty() + stall_penalty
-            reward_target = 5*(1/(1+norm_distance)) if norm_distance < 0.5 else 0
-            reward = 0.5*reward_angle + reward_velocity + reward_target
-
+            global_vel = self._data.qvel[:2]
+            y_pos = self._data.body("trunk").xpos[1]
+            desired_yaw = 0  # Assuming 0 is the forward direction
+            yaw_deviation_penalty = np.abs(yaw - desired_yaw)
+            distance =  self._data.site("target").xpos[0] - self._data.qpos[0]
+            penalty = self.collision_penalty()
+            extra_reward = (-np.abs(y_pos) + -yaw_deviation_penalty)*(distance < -0.35)
+            reward = 1.5*np.clip(min(1, global_vel[0]), 0,1) + extra_reward
             return reward + penalty
 
 
@@ -791,7 +828,6 @@ class Go1(MuJoCo):
 
 
     def reward(self, state, action, next_state, absorbing):
-
 
         reward = self.get_reward(action)
 
@@ -805,11 +841,19 @@ class Go1(MuJoCo):
         self.last_action = action
 
 
+    def get_student_rays(self):
+        rf_readings = np.array([self._data.sensor("rf_l_{}".format(i + 1)).data.copy()[0] for i in range(10)])
+        rf_readings = np.where(rf_readings == -1, 20, rf_readings)
+        rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
+        rf_readings_2 = np.where(rf_readings >= 20, 20, rf_readings)
+        rf_readings_f = np.log2(rf_readings_2)
+        obs = rf_readings_f
+        return obs
 
     def _step_finalize(self):
+        # print(self._data.sensor("collision_distance").data)
         self._ts += 1
         self.update_orientation_attributes()
-
         if self.task==0:
 
             if self.domain_randomization :
@@ -849,23 +893,41 @@ class Go1(MuJoCo):
                     sampled_gravity = np.random.uniform(gravity_min, gravity_max)
                     self._model.opt.gravity[2] = -sampled_gravity
 
+        if self.task==3:
 
-        if self.task==2:
+            if not self.static_obstacles:
+                for object_id in range(self.number_obstacles):
+                    obstacle_pose = self._data.body(f"n-obstacle{object_id}").xpos[1]
+
+                    if obstacle_pose >= self.wall_pos -  2*self.obstacle_sizes[object_id]:
+
+
+                        action = - np.random.uniform(0.1, 1)
+                        self.set_control_obstacle(object_id, action)
+
+                    if obstacle_pose <= -self.wall_pos +  2*self.obstacle_sizes[object_id]:
+                        action = np.random.uniform(0.1, 1)
+
+                        self.set_control_obstacle(object_id, action)
+
+        if self.task==2 :
+            if not self.static_obstacles:
+                if not self.antagonist:
+                    obstacle_pose = self._data.body("obstacle_1").xpos[1]
+                    robot_pose = self._data.body("trunk").xpos[1]
+                    self._data.ctrl[-3] = self.obstacle_pose_x
+                    self._data.ctrl[-2] = 0
+                    self._data.ctrl[-1] = 1.*(robot_pose - obstacle_pose)
+
+        if self.task==3 or self.task==2:
             robot_pose = self._data.qpos[:2]
             target_pose = self._data.site("target").xpos[:2]
-            norm_distance = np.linalg.norm(target_pose - robot_pose)
-            self.success = False
+            norm_distance = target_pose[0] - robot_pose[0]
+            pass_finish_line = norm_distance <= 0.1
 
-            if norm_distance <= 0.2 and self._ts>=self.horizon:
-                self.success = True
-                self.level +=1
-                self.level = np.clip(self.level, 0,6)
+            if self._ts>=self.horizon:
+                self.success = self.robot_collisions == 0 and pass_finish_line
 
-
-
-            if norm_distance >= 4 and self._ts>=self.horizon:
-                self.level -=1
-                self.level = np.clip(self.level, 0,6)
 
 
         if self.joystick:
@@ -884,15 +946,16 @@ class Go1(MuJoCo):
         fall = self.check_collision("floor", "trunk_t") or height <= 0.1
 
 
-        hit_obstacle = False
-
         if self.task>1:
             legs_collision_obstacles = self._check_collision("legs", "obstacles")
             trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
-            hit_obstacle = legs_collision_obstacles or trunk_collision_obstacles
+            collision_robot = legs_collision_obstacles or trunk_collision_obstacles
+            self.robot_collisions += (self._check_collision("robot", "obstacles") + self._check_collision("robot", "walls"))
+            # collision = self._check_collision("robot", "obstacles") or self._check_collision("robot", "walls")
 
 
-        if fall or hit_obstacle:
+
+        if fall | collision_robot:
             self.terminates = True
 
 
@@ -922,10 +985,15 @@ class Go1(MuJoCo):
 
 
     def get_info(self):
-        return {"success": self.success}
+        return {"success": self.success, "collisions": self.robot_collisions}
+
+
+
+
 
     def setup(self, obs, cond):
 
+        self.robot_collisions = 0
         self.reward_function.setup()
 
         self.torques = list()
@@ -935,16 +1003,12 @@ class Go1(MuJoCo):
         self.terminates = False
 
         self._ts = 0
-
+        self.episode_steps = 0
         self._data.qpos[7:19] = self.default_dof_pos.copy()
-
         self._data.qpos[0:3] = [-3, 0, 0.36]
-
-
 
         if self._reset_state is None:
             if self.task==2 or self.task==3 or self.task==4:
-                self.obstacle_id = 0
                 self.reset_states(self.task)
 
             for i in range(0, 10):
@@ -959,18 +1023,17 @@ class Go1(MuJoCo):
 
 
         else:
-            self._data.qpos = self._reset_state["q_pos"]
-            self._data.qvel = self._reset_state["q_vel"]
             if self.task == 2 or self.task == 3:
                 self.reset_states(self.task)
+            else:
+                self._data.qpos = self._reset_state["q_pos"]
+                self._data.qvel = self._reset_state["q_vel"]
+
 
             mujoco.mj_step(self._model, self._data)
 
-        self.last_dof_vel = self._reset_state["q_vel"][6:]
-        self.last_dof_pos = self._reset_state["q_pos"][6:]
-
         self.last_action =np.zeros(12)
-
+        self.last_velocity_command = np.array([self.target_vx, self.target_vy, self.target_yaw])
 
         if self.task == 0:
 
@@ -988,52 +1051,160 @@ class Go1(MuJoCo):
 
 
     def reset_states(self, task):
+        self._model.site("target").pos[0] = 10
 
-
-        if self.curriculum:
-            self.obstacle_curriculum()
-        if self.max_level:
-            self.obstacle_velocity = 1
-
-        y = np.random.choice([-1, 1, 0.5, -0.5, 0, -2, 2, -1.5, 1.5])
+        # x = -4 + np.random.choice([-1, 1, 0.5, -0.5, 0, -1.5, 1.5])
 
         if task==2:
-            self._data.qpos[0:3] = [-4, y, 0.36]
+            if self.behaviour_cloning:
+                spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays_behaviour_cloning.xml")
+            else:
+                spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays.xml")
 
-            # x = np.random.uniform(-2.5,2.5)
-            #
-            #
-            # self._data.joint(self.obstacles[0] + '_x').qpos = x
-            # self._data.joint(self.obstacles[0] + '_y').qpos = y
 
+            geoms = spec.worldbody.geoms
+            walls = ["wall_3", "wall_4"]
+            self._room_width = np.random.uniform(low=2, high=5)
+
+            self._obstacle_l = np.random.uniform(0.1, 0.6)
+            self._obstacle_w = np.random.uniform(0.1, 0.6)
+            self.wall_pos = self._room_width/2
+            y_obstacle = np.random.uniform(-self.wall_pos + self._obstacle_w , self.wall_pos - self._obstacle_w)
+            y_robot = np.random.uniform(-self.wall_pos + 0.25, self.wall_pos - 0.25)
+
+            for geom in geoms:
+                if geom.name in walls:
+                    if  geom.pos[1] <0:
+                        geom.pos[1] = -self.wall_pos - geom.size[1]/2
+                    else:
+                        geom.pos[1] = self.wall_pos + geom.size[1]/2
+
+            obstacle = spec.find_body("obstacle_1")
+
+            obstacle.first_geom().size = [ self._obstacle_l , self._obstacle_w , 0.8]
+            model = spec.compile()
+            self._model = model
+            self._model.opt.timestep = 0.005
+            self._data = mujoco.MjData(model)
+            self._data.qpos[7:19] = self.default_dof_pos.copy()
+            x = np.random.uniform(-3, 1.5)
+            self._data.qpos[0:3] = [x, y_robot, 0.36]
+            self.obstacle_pose_x = np.random.uniform(2, 3.5)
+            self._data.joint("obstacle").qpos[:3] = [self.obstacle_pose_x, y_obstacle, 0.8]
+            self._model.site("target").pos[0] = self.obstacle_pose_x + 1
+            self._model.site("target").size[1] = self.wall_pos
+
+            if self._viewer is not None:
+                self._viewer.load_new_model(self._model)
+
+            if self.task == 2:
+                if not self.antagonist:
+                    if  not self.static_obstacles:
+                        self._data.ctrl[-1] = np.random.uniform(-1, 1)
+                    else:
+                        self._data.ctrl[-1] = 0
+                    self._data.ctrl[-3] = self.obstacle_pose_x
+
+                else:
+                    self._data.ctrl[-1] = self.obstacle_velocity
 
         if task==3:
+            spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays_corridor.xml")
+            obstacle = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/obstacle.xml")
 
-            self.indices = np.random.permutation(len(self.obstacles))
-            x = [-2.5, 0, 2.5]
-            self._data.qpos[0:3] = [-4, y, 0.36]
+            geoms = spec.worldbody.geoms
+            walls = ["wall_3", "wall_4"]
+            self._room_width = np.random.uniform(low=2, high=5)
 
-            for i,n in enumerate(self.indices):
-                x_p = x[i]
-                if n == 1:
-                    x_p = x[i] -2
-                if n == 2:
-                    x_p = x[i] -3
-                if i>0:
-                    y = np.random.uniform(-2,2)
+            self.wall_pos = self._room_width / 2
 
-                self._data.joint(self.obstacles[n] + '_x').qpos = x_p
-                self._data.joint(self.obstacles[n] + '_y').qpos = y
+            for geom in geoms:
+                if geom.name in walls:
+                    if geom.pos[1] < 0:
+                        geom.pos[1] = -self.wall_pos - geom.size[1] / 2
+                    else:
+                        geom.pos[1] = self.wall_pos + geom.size[1] / 2
+
+            while obstacle.keys:
+                obstacle.keys[-1].delete()
+            n_obstacles = []
 
 
-    def obstacle_curriculum(self):
-        # print("level", self.level)
-        self.obstacle_velocity_levels = 2*np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5])
+            self.wall_pos = self._room_width / 2
+            self.obstacle_pos_x_list = []
+            obstacle_pos_y_list = []
+            self.obstacle_sizes = []
 
-        if self.level<= 5:
-            self.obstacle_velocity = self.obstacle_velocity_levels[self.level]
+
+            for i in range(self.number_obstacles):
+                obstacle_l = np.random.uniform(0.1, 0.6)
+                obstacle_w = np.random.uniform(0.1, 0.6)
+                self.obstacle_sizes.append(obstacle_w)
+                y_obstacle = np.random.uniform(-self.wall_pos + obstacle_w, self.wall_pos - obstacle_w)
+
+                obstacle.find_body('obstacle').first_geom().size = [obstacle_l, obstacle_w, 0.8]
+
+                frame = spec.worldbody.add_frame(pos=[i*3, y_obstacle, 0.8])
+                frame.attach_body(obstacle.find_body('obstacle'),'n-', str(i))
+
+                spec.actuators[-2].refsite = "reference"
+                spec.actuators[-3].refsite = "reference"
+
+                n_obstacles.append(spec.find_body('n-obstacle{}'.format(i)).first_geom().name)
+                self.obstacle_pose_x = i*3
+                self.obstacle_pos_x_list.append(self.obstacle_pose_x)
+                obstacle_pos_y_list.append(y_obstacle)
+
+            model = spec.compile()
+
+
+            self._model = model
+            self._model.opt.timestep = 0.005
+            self._data = mujoco.MjData(model)
+            self._model.site("target").pos[0] = self.obstacle_pose_x + 1
+            self._model.site("target").size[1] = self.wall_pos
+
+
+            if self._viewer is not None:
+                self._viewer.load_new_model(self._model)
+
+            collision_obstacle =  ("obstacles",n_obstacles)
+            self.collision_groups_list.extend([collision_obstacle])
+            self.collision_groups = self.create_collision_groups(self.collision_groups_list)
+
+
+            self.set_control_obstacle(static=self.static_obstacles)
+
+            #
+            # self._model.site("target").pos[0]=40
+
+    def set_control_obstacle(self, object_id=None, control_value=None, static=False):
+
+        def initialize_controller(static):
+            for i in range(self.number_obstacles):
+                j = i * 3
+                slide_0 = 12 + j
+                slide_1 = 15 + j
+                if static:
+                    action = 0
+                else:
+                    velocity = np.random.uniform(0.1, 1)
+                    action =np.random.uniform(-velocity, velocity)
+
+                self._data.ctrl[slide_0:slide_1] = [self.obstacle_pos_x_list[i],
+                                                    0,
+                                                    action]
+
+        def set_control_2_obstacle(object_id, control_value):
+            j = object_id * 3
+            idx = 14 + j
+            self._data.ctrl[idx] =control_value
+
+        if object_id is None:
+            initialize_controller(static)
         else:
-            self.obstacle_velocity = np.random.choice(self.obstacle_velocity_levels[1:])
+            set_control_2_obstacle(object_id, control_value)
+
 
 
 

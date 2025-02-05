@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 from collections import deque
 from src.utils.record.record import VideoRecorder
+import cv2
 np.random.seed()
 
 class HistoryStore:
@@ -26,7 +27,7 @@ class Core(object):
 
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None, obs_dim=28,  record_dictionary=None, joystick=False):
+                 preprocessors=None, low_level_agent=None, obs_dim=28,  record_dictionary=None, joystick=False, use_history=False):
         """
         Constructor.
 
@@ -44,7 +45,7 @@ class Core(object):
         """
         self.joystick=joystick
         self.history = HistoryStore(5)
-        self.use_history = True
+        self.use_history = use_history
         self.agent = agent
         self.nav_obs_dim = obs_dim
 
@@ -102,7 +103,7 @@ class Core(object):
         return recorder_class(fps=fps, **kwargs)
 
     def learn(self, n_steps=None, n_episodes=None, n_steps_per_fit=None,
-              n_episodes_per_fit=None, render=False, quiet=False, get_renders=False, id_agent=None):
+              n_episodes_per_fit=None, render=False,headless=False, quiet=False, get_renders=False, id_agent=None):
         """
         This function moves the agent in the environment and fits the policy
         using the collected samples. The agent can be moved for a given number
@@ -134,10 +135,10 @@ class Core(object):
             fit_condition = lambda: self._current_episodes_counter\
                                      >= self._n_episodes_per_fit
 
-        self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders, learning=True) # Add bool to signify this is a learning run
+        self._run(n_steps, n_episodes, fit_condition, render, quiet,headless, get_renders, learning=True) # Add bool to signify this is a learning run
 
     def evaluate(self, initial_states=None, n_steps=None, n_episodes=None,
-                 render=False, quiet=False, get_renders=False, initial_conditions=None, record=False):
+                 render=False, headless=False, quiet=False, get_renders=False, initial_conditions=None, record=False):
         """
         This function moves the agent in the environment using its policy.
         The agent is moved for a provided number of steps, episodes, or from
@@ -156,10 +157,10 @@ class Core(object):
         self.record = record
         fit_condition = lambda: False
 
-        return self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders,
+        return self._run(n_steps, n_episodes, fit_condition, render, quiet, headless, get_renders,
                          initial_states, initial_conditions)
 
-    def _run(self, n_steps, n_episodes, fit_condition, render, quiet, get_renders=False,
+    def _run(self, n_steps, n_episodes, fit_condition, render, quiet, headless, get_renders=False,
              initial_states=None, initial_conditions=None,  learning=False):
         assert n_episodes is not None and n_steps is None and initial_states is None\
             or n_episodes is None and n_steps is not None and initial_states is None\
@@ -189,10 +190,10 @@ class Core(object):
                                          leave=False)
 
         return self._run_impl(move_condition, fit_condition, steps_progress_bar,
-                              episodes_progress_bar, render, get_renders, initial_states,initial_conditions, learning)
+                              episodes_progress_bar, render, get_renders,headless, initial_states,initial_conditions, learning)
 
     def _run_impl(self, move_condition, fit_condition, steps_progress_bar,
-                  episodes_progress_bar, render, get_renders, initial_states, initial_conditions, learning):
+                  episodes_progress_bar, render, get_renders, headless, initial_states, initial_conditions, learning):
         self._total_episodes_counter = 0
         self._total_steps_counter = 0
         self._current_episodes_counter = 0
@@ -210,7 +211,7 @@ class Core(object):
                 self.reset(initial_states, initial_conditions)
 
 
-            sample = self._step(render, get_renders, learning)
+            sample = self._step(render, headless, get_renders, learning)
 
             self.callback_step([sample])
 
@@ -293,7 +294,7 @@ class Core(object):
 
         return np.array([v_x, v_y, w_z])
 
-    def _step(self, render, get_renders=False, learning=False):
+    def _step(self, render, headless=False, get_renders=False, learning=False):
         """
         Single step.
 
@@ -308,7 +309,16 @@ class Core(object):
             of the reached state and the last step flag.
 
         """
+
+        if render:
+            frame = self.mdp.render(record=self.record, headless=headless)
+            if self.record:
+                self._record(frame)
+
         obs_dim = self.nav_obs_dim
+        # img = self.mdp.get_render(cam_name="head", depth=True)
+        # cv2.imshow("Depth Overlay", img)
+        # cv2.waitKey(1)
 
 
         if not self.use_history:
@@ -319,29 +329,36 @@ class Core(object):
 
         if learning:
             # navigation_state = self._state[-obs_dim:]
-            self.action = self.agent.draw_noisy_action(navigation_state)
-
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
+                self.action = self.agent.draw_noisy_action(navigation_state)
                 robot_state[54:57] =  np.array([2,2,0.25]) * self.action
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
         else: # Default
-            self.action = self.agent.draw_noisy_action(navigation_state)
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
+                self.action = self.agent.draw_noisy_action(navigation_state)
                 robot_state[54:57] = np.array([2,2,0.25])* self.action
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
+        if not self.joystick:
+            target_v = np.array([2,2,0.25])* self.action
+            self.mdp.target_vx = target_v[0]
+            self.mdp.target_vy = target_v[1]
+            self.mdp.target_yaw = target_v[2]
+
         self._episode_steps += 1
 
-        if render:
-            frame = self.mdp.render(record=self.record)
-            if self.record:
-                self._record(frame)
+        next_navigation_state = next_state[-obs_dim:]
+
+        if self.use_history:
+            self.history.add_sample(next_navigation_state)
+            history_next_state = self.history.get_history()
+
 
         last = not(
             self._episode_steps < self.mdp.info.horizon and not absorbing)
@@ -350,24 +367,21 @@ class Core(object):
         history_state = self.history.get_history()
 
         next_state = self._preprocess(next_state.copy())
-        next_navigation_state = next_state[-obs_dim:]
-        self.history.add_sample(next_navigation_state)
-
-        history_next_state = self.history.get_history()
 
         self._state = next_state
 
         if not self.use_history:
 
-            if get_renders:
-                img = self.mdp.get_render()
-                return img, state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
+            # if get_renders:
+            #
+            #     img = self.mdp.get_render(cam_name="head")
+            #     return img, state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
 
             return state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
         else:
-            if get_renders:
-                img = self.mdp.get_render()
-                return img, history_state, self.action, reward, history_next_state, absorbing, info, last
+            # if get_renders:
+            #     img = self.mdp.get_render()
+            #     return img, history_state, self.action, reward, history_next_state, absorbing, info, last
 
             return history_state, self.action, reward, history_next_state, absorbing, info, last
 

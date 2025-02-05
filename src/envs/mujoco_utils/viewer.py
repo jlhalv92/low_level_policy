@@ -5,6 +5,9 @@ import time
 import collections
 from itertools import cycle
 import numpy as np
+from OpenGL.GL import *
+from src.envs.mujoco_utils.render_second_cam import get_renders
+import cv2
 
 
 def _import_egl(width, height):
@@ -110,6 +113,11 @@ class MujocoViewer:
             glfw.window_hint(glfw.RESIZABLE, False)
 
         self._viewport = mujoco.MjrRect(0, 0, self._width, self._height)
+        # w, h = glfw.get_window_size(self._window)
+        # second_viewport_pos_x = w - 320
+        # second_viewport_pos_y = h - 240
+        # self._second_viewport = mujoco.MjrRect(second_viewport_pos_x, second_viewport_pos_y, 320, 240)
+
         self._loop_count = 0
         self._time_per_render = 1 / 60.
         self._run_speed_factor = 1.0
@@ -121,19 +129,35 @@ class MujocoViewer:
         self._scene = mujoco.MjvScene(self._model, 1000)
         self._scene_option = mujoco.MjvOption()
         self._camera = mujoco.MjvCamera()
+        self._camera2 = mujoco.MjvCamera()
+
+
+        #
         mujoco.mjv_defaultFreeCamera(model, self._camera)
+
         if camera_params is None:
+
             self._camera_params = self.get_default_camera_params()
         else:
             self._camera_params = self._assert_camera_params(camera_params)
-        self._all_camera_modes = ("static", "follow", "top_static")
+
+
+        self._all_camera_modes = ("static", "follow", "top_static", "robot_head")
         self._camera_mode_iter = cycle(self._all_camera_modes)
         self._camera_mode = None
         self._camera_mode_target = next(self._camera_mode_iter)
         assert default_camera_mode in self._all_camera_modes
         while self._camera_mode_target != default_camera_mode:
             self._camera_mode_target = next(self._camera_mode_iter)
+
         self._set_camera()
+
+        #Set second camera
+        camera_name = "head"
+        id = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+        self._camera2.fixedcamid = id
+        self._camera2.type = mujoco.mjtCamera.mjCAMERA_FIXED
+
 
         self.custom_render_callback = custom_render_callback
 
@@ -161,6 +185,8 @@ class MujocoViewer:
         self._model = model
         self._scene = mujoco.MjvScene(model, 1000)
         self._context = mujoco.MjrContext(model, mujoco.mjtFontScale(self._font_scale))
+        self._second_context = mujoco.MjrContext(model, mujoco.mjtFontScale(self._font_scale))
+
 
     def mouse_button(self, window, button, act, mods):
         """
@@ -305,12 +331,15 @@ class MujocoViewer:
 
     def _set_mujoco_buffers(self):
         self._context = mujoco.MjrContext(self._model, mujoco.mjtFontScale(self._font_scale))
+        self._second_context = mujoco.MjrContext(self._model, mujoco.mjtFontScale(self._font_scale))
+
         if self._headless:
             mujoco.mjr_setBuffer(mujoco.mjtFramebuffer.mjFB_OFFSCREEN, self._context)
             if self._context.currentBuffer != mujoco.mjtFramebuffer.mjFB_OFFSCREEN:
                 raise RuntimeError("Offscreen rendering not supported")
         else:
             mujoco.mjr_setBuffer(mujoco.mjtFramebuffer.mjFB_WINDOW, self._context)
+
             if self._context.currentBuffer != mujoco.mjtFramebuffer.mjFB_WINDOW:
                 raise RuntimeError("Window rendering not supported")
 
@@ -326,7 +355,7 @@ class MujocoViewer:
 
         return width, height
 
-    def render(self, data, record):
+    def render(self, data, record, second_cam=False, cam_name="head"):
         """
         Main rendering function.
 
@@ -349,11 +378,36 @@ class MujocoViewer:
             mujoco.mjv_updateScene(self._model, data, self._scene_option, None, self._camera,
                                    mujoco.mjtCatBit.mjCAT_ALL,
                                    self._scene)
-
+            w, h = self._width, self._height
             if not self._headless:
                 self._viewport.width, self._viewport.height = glfw.get_window_size(self._window)
+                w, h = glfw.get_window_size(self._window)
 
             mujoco.mjr_render(self._viewport, self._scene, self._context)
+
+
+
+            width = int(0.5 * 640)
+            height = int(0.5 * 480)
+
+            # viewport_width, viewport_height = glfw.get_framebuffer_size(
+            #     self._window)
+            # #
+            if second_cam:
+                get_renders(self._model,
+                            data,
+                            self._scene_option,
+                            self._scene,
+                            self._context,
+                            'head',
+                            loc_x=w - width,
+                            loc_y=h - height,
+                            width=width,
+                           height=height,
+                            depth_flag=1, return_img=False)
+
+
+
 
             for gridpos, [t1, t2] in self._overlay.items():
 
@@ -371,12 +425,34 @@ class MujocoViewer:
             if self.custom_render_callback is not None:
                 self.custom_render_callback(self._viewport, self._context)
 
+
+
             if not self._headless:
                 glfw.swap_buffers(self._window)
+
+
+                # depth_image_3[:] = 255*depth_image
+                # mujoco.mjr_drawPixels(rgb_img.flatten(),None, self._second_viewport, self._second_context)
+
                 glfw.poll_events()
                 if glfw.window_should_close(self._window):
                     self.stop()
                     exit(0)
+
+            # mujoco.mjv_updateScene(self._model, data, self._scene_option, None, self._camera2,
+            #                        mujoco.mjtCatBit.mjCAT_ALL.value, self._scene)
+            #
+            # mujoco.mjr_render(self._second_viewport, self._scene, self._second_context)
+            # shape = (320, 240)
+            # rgb_img = np.zeros((shape[1], shape[0], 3), dtype=np.uint8)
+            # depth_img = np.zeros((shape[1], shape[0], 1), dtype=np.float32)
+            # mujoco.mjr_readPixels(rgb_img, depth_img, self._second_viewport, self._second_context)
+            # depth_min = depth_img.min()
+            # depth_max = depth_img.max()
+            # depth_image = (depth_img - depth_min) / (depth_max - depth_min)
+            # depth_image_3 = np.zeros((shape[1], shape[0], 3), dtype=np.uint8)
+            # cv2.imshow("Depth Overlay", np.flipud(depth_image))
+            # cv2.waitKey(1)
 
             self.frames += 1
             self._overlay.clear()
@@ -397,6 +473,53 @@ class MujocoViewer:
 
         if record:
             return self.read_pixels()
+
+        # if get_render:
+        #     return get_renders(self._model, data,
+        #                        self._scene_option,
+        #                        self._scene, self._context,
+        #                        cam_name, 0, 0,
+        #                depth_flag=1)
+
+        # depth = False
+        # if depth == True:
+        #     _, depth =self.read_pixels(depth=True)
+        #     # Shift nearest values to the origin.
+        #     depth_min = depth.min()
+        #     depth_max = depth.max()
+        #     depth_image = (depth - depth_min) / (depth_max - depth_min)
+        #
+        #     down_width = 300
+        #     down_height = 200
+        #     down_points = (down_width, down_height)
+        #     resized_depth_image = cv2.resize(depth_image, down_points, interpolation=cv2.INTER_LINEAR)
+        #
+        #     cv2.imshow("Depth Overlay", resized_depth_image)
+        #     cv2.waitKey(1)
+
+    def get_frames_from_cam(self, data, cam_name='head', depth=0):
+        w, h = self._width, self._height
+
+        if not self._headless:
+            w, h = glfw.get_window_size(self._window)
+
+
+        width = int(0.5 * 640)
+        height = int(0.5 * 480)
+
+        frame = get_renders(self._model,
+                        data,
+                        self._scene_option,
+                        self._scene,
+                        self._context,
+                        cam_name,
+                        loc_x=w - width,
+                        loc_y=h - height,
+                        width=width,
+                        height=height,
+                        depth_flag=depth,
+                            return_img=True)
+        return frame
 
     def read_pixels(self, depth=False):
         """
@@ -420,10 +543,12 @@ class MujocoViewer:
             rgb_img = np.zeros((shape[1], shape[0], 3), dtype=np.uint8)
             depth_img = np.zeros((shape[1], shape[0], 1), dtype=np.float32)
             mujoco.mjr_readPixels(rgb_img, depth_img, self._viewport, self._context)
+
             return (np.flipud(rgb_img), np.flipud(depth_img))
         else:
             img = np.zeros((shape[1], shape[0], 3), dtype=np.uint8)
             mujoco.mjr_readPixels(img, None, self._viewport, self._context)
+
             return np.flipud(img)
 
     def stop(self):
@@ -515,18 +640,30 @@ class MujocoViewer:
                 self._camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
                 self._camera.trackbodyid = 0
                 self._set_camera_properties(self._camera_mode_target)
+
         elif self._camera_mode_target == "static":
             if self._camera_mode != "static":
                 self._camera.fixedcamid = 0
                 self._camera.type = mujoco.mjtCamera.mjCAMERA_FREE
                 self._camera.trackbodyid = -1
                 self._set_camera_properties(self._camera_mode_target)
+
         elif self._camera_mode_target == "top_static":
             if self._camera_mode != "top_static":
                 self._camera.fixedcamid = 0
                 self._camera.type = mujoco.mjtCamera.mjCAMERA_FREE
                 self._camera.trackbodyid = -1
                 self._set_camera_properties(self._camera_mode_target)
+
+        elif self._camera_mode_target == "robot_head":
+            if self._camera_mode != "robot_head":
+
+                camera_name = "head"
+                id=mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+                self._camera.fixedcamid = id
+                self._camera.type = mujoco.mjtCamera.mjCAMERA_FIXED
+                self._camera_mode = self._camera_mode_target
+                # self._set_camera_properties(self._camera_mode_target)
 
     def _set_camera_properties(self, mode):
         """

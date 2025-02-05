@@ -83,6 +83,8 @@
 
 
     <body name="trunk" pos="-4 0 0.5" childclass="go1">
+<!--      <site name="robot_bb" type="box" size="0.35 0.2 0.2" pos="-0.05 0 -0.1" rgba=".6 .3 .3 0.2"  />-->
+
       <camera name="track" mode="trackcom" pos="0 -2 0" xyaxes="1 0 0 0 0 1"/>
       <freejoint/>
 
@@ -100,29 +102,17 @@
       <geom  name="trunk_8" class="collision" pos="0.255 0 0.0355" size="0.021 0.052" quat="1 1 0 0"/>
 
       <site  name="camera" type="box" size="0.02 0.05 0.02" pos="0.255 0 0.08" rgba=".7 .5 .3 1"  />
-      <camera name="head" pos="0.35 0 0.08" xyaxes="0 -1 0 0 0 1"/>
-
-      <site name="rf_1" class="rangefinder" fromto=" 0.3475 -0.10825317547305482 0.08 0.285 0 0.08"/>
-<site name="rf_2" class="rangefinder" fromto=" 0.3590294065831225 -0.10072063820762225 0.08 0.285 0 0.08"/>
-<site name="rf_3" class="rangefinder" fromto=" 0.3696601964532176 -0.09196548883414145 0.08 0.285 0 0.08"/>
-<site name="rf_4" class="rangefinder" fromto=" 0.379263326222112 -0.0820940030059668 0.08 0.285 0 0.08"/>
-<site name="rf_5" class="rangefinder" fromto=" 0.3877222269031556 -0.07122600718878327 0.08 0.285 0 0.08"/>
-<site name="rf_6" class="rangefinder" fromto=" 0.3949342189008111 -0.05949342412963419 0.08 0.285 0 0.08"/>
-<site name="rf_7" class="rangefinder" fromto=" 0.4008117584018502 -0.047038671493479435 0.08 0.285 0 0.08"/>
-<site name="rf_8" class="rangefinder" fromto=" 0.40528350003865626 -0.03401293310566688 0.08 0.285 0 0.08"/>
-<site name="rf_9" class="rangefinder" fromto=" 0.4082951629253403 -0.02057432378509174 0.08 0.285 0 0.08"/>
-<site name="rf_10" class="rangefinder" fromto=" 0.4098101895541645 -0.006885970044483181 0.08 0.285 0 0.08"/>
-<site name="rf_11" class="rangefinder" fromto=" 0.4098101895541645 0.006885970044483181 0.08 0.285 0 0.08"/>
-<site name="rf_12" class="rangefinder" fromto=" 0.4082951629253403 0.02057432378509174 0.08 0.285 0 0.08"/>
-<site name="rf_13" class="rangefinder" fromto=" 0.40528350003865626 0.03401293310566685 0.08 0.285 0 0.08"/>
-<site name="rf_14" class="rangefinder" fromto=" 0.40081175840185024 0.047038671493479414 0.08 0.285 0 0.08"/>
-<site name="rf_15" class="rangefinder" fromto=" 0.39493421890081115 0.059493424129634175 0.08 0.285 0 0.08"/>
-<site name="rf_16" class="rangefinder" fromto=" 0.3877222269031556 0.07122600718878326 0.08 0.285 0 0.08"/>
-<site name="rf_17" class="rangefinder" fromto=" 0.379263326222112 0.08209400300596678 0.08 0.285 0 0.08"/>
-<site name="rf_18" class="rangefinder" fromto=" 0.3696601964532176 0.09196548883414145 0.08 0.285 0 0.08"/>
-<site name="rf_19" class="rangefinder" fromto=" 0.3590294065831225 0.10072063820762225 0.08 0.285 0 0.08"/>
-<site name="rf_20" class="rangefinder" fromto=" 0.3475 0.10825317547305482 0.08 0.285 0 0.08"/>
-
+      <camera name="head" pos="0.255 0 0.1" xyaxes="0 -1 0 0 0 1"/>
+<site name="rf_l_1" class="rangefinder" fromto=" 0.35571067811865476 -0.07071067811865475 0.08 0.285 0 0.08"/>
+<site name="rf_l_2" class="rangefinder" fromto=" 0.36691520442889913 -0.05735764363510461 0.08 0.285 0 0.08"/>
+<site name="rf_l_3" class="rangefinder" fromto=" 0.37563077870366496 -0.04226182617406995 0.08 0.285 0 0.08"/>
+<site name="rf_l_4" class="rangefinder" fromto=" 0.38159258262890683 -0.02588190451025208 0.08 0.285 0 0.08"/>
+<site name="rf_l_5" class="rangefinder" fromto=" 0.38461946980917455 -0.008715574274765818 0.08 0.285 0 0.08"/>
+<site name="rf_l_6" class="rangefinder" fromto=" 0.38461946980917455 0.008715574274765818 0.08 0.285 0 0.08"/>
+<site name="rf_l_7" class="rangefinder" fromto=" 0.38159258262890683 0.02588190451025207 0.08 0.285 0 0.08"/>
+<site name="rf_l_8" class="rangefinder" fromto=" 0.37563077870366496 0.04226182617406994 0.08 0.285 0 0.08"/>
+<site name="rf_l_9" class="rangefinder" fromto=" 0.36691520442889913 0.05735764363510461 0.08 0.285 0 0.08"/>
+<site name="rf_l_10" class="rangefinder" fromto=" 0.35571067811865476 0.07071067811865475 0.08 0.285 0 0.08"/>
 
 <!--      <site name="rf_02" class="rangefinder" fromto=".41   0   0.08 0.285  0 0.08"/>-->
 <!--      <site name="rf_03" class="rangefinder" fromto=".41  .01  0.08 0.285  0 0.08"/>-->
@@ -240,26 +230,17 @@
   </worldbody>
 
   <sensor>
-        <rangefinder name="rf_1" site="rf_1"/>
-    <rangefinder name="rf_2" site="rf_2"/>
-    <rangefinder name="rf_3" site="rf_3"/>
-    <rangefinder name="rf_4" site="rf_4"/>
-    <rangefinder name="rf_5" site="rf_5"/>
-    <rangefinder name="rf_6" site="rf_6"/>
-    <rangefinder name="rf_7" site="rf_7"/>
-    <rangefinder name="rf_8" site="rf_8"/>
-    <rangefinder name="rf_9" site="rf_9"/>
-    <rangefinder name="rf_10" site="rf_10"/>
-    <rangefinder name="rf_11" site="rf_11"/>
-    <rangefinder name="rf_12" site="rf_12"/>
-    <rangefinder name="rf_13" site="rf_13"/>
-    <rangefinder name="rf_14" site="rf_14"/>
-    <rangefinder name="rf_15" site="rf_15"/>
-    <rangefinder name="rf_16" site="rf_16"/>
-        <rangefinder name="rf_17" site="rf_17"/>
-    <rangefinder name="rf_18" site="rf_18"/>
-    <rangefinder name="rf_19" site="rf_19"/>
-    <rangefinder name="rf_20" site="rf_20"/>
+       <rangefinder name="rf_l_1" site="rf_l_1"/>
+ <rangefinder name="rf_l_2" site="rf_l_2"/>
+ <rangefinder name="rf_l_3" site="rf_l_3"/>
+ <rangefinder name="rf_l_4" site="rf_l_4"/>
+ <rangefinder name="rf_l_5" site="rf_l_5"/>
+ <rangefinder name="rf_l_6" site="rf_l_6"/>
+ <rangefinder name="rf_l_7" site="rf_l_7"/>
+ <rangefinder name="rf_l_8" site="rf_l_8"/>
+ <rangefinder name="rf_l_9" site="rf_l_9"/>
+ <rangefinder name="rf_l_10" site="rf_l_10"/>
+
 
 
   </sensor>

@@ -21,7 +21,7 @@ class RudinOwnVarReward:
                  action_rate_coeff=1e-2,
                  collision_coeff=1e0,
                  base_height_coeff=3e1,
-                 nominal_trunk_z=0.325,
+                 nominal_trunk_z=0.28,
                  air_time_coeff=1.e-1,
                  air_time_max=0.5,
                  symmetry_air_coeff=0.5):
@@ -157,6 +157,7 @@ class RudinOwnVarReward:
 
         # Walking height
         trunk_z = self.env._data.qpos[2]
+
         height_difference_squared = (trunk_z - self.nominal_trunk_z) ** 2
         base_height_reward = curriculum_coeff * self.base_height_coeff * -height_difference_squared
 
@@ -222,40 +223,5 @@ class RudinOwnVarReward:
         tracking_performance_percentage = max(np.mean(1 - (np.abs(current_global_velocities - desired_global_velocities) / np.abs(desired_global_velocities + 1e-6))), 0.0)
         self.sum_tracking_performance_percentage += tracking_performance_percentage
 
-        # info = dict()
-        # self.env.SHORT_NAME = "GO_1"
-        # # Info
-        # info[f"reward/{self.env.SHORT_NAME}/track_xy_vel_cmd"] = tracking_xy_velocity_command_reward
-        # info[f"reward/{self.env.SHORT_NAME}/track_yaw_vel_cmd"] = tracking_yaw_velocity_command_reward
-        # info[f"reward/{self.env.SHORT_NAME}/linear_velocity"] = linear_velocity_reward
-        # info[f"reward/{self.env.SHORT_NAME}/angular_velocity"] = angular_velocity_reward
-        # info[f"reward/{self.env.SHORT_NAME}/angular_position"] = angular_position_reward
-        # info[f"reward/{self.env.SHORT_NAME}/joint_nominal_diff"] = joint_nominal_diff_reward
-        # info[f"reward/{self.env.SHORT_NAME}/joint_position_limit"] = joint_position_limit_reward
-        # info[f"reward/{self.env.SHORT_NAME}/torque"] = torque_reward
-        # info[f"reward/{self.env.SHORT_NAME}/acceleration"] = acceleration_reward
-        # info[f"reward/{self.env.SHORT_NAME}/velocity"] = velocity_reward
-        # info[f"reward/{self.env.SHORT_NAME}/action_rate"] = action_rate_reward
-        # info[f"reward/{self.env.SHORT_NAME}/collision"] = collision_reward
-        # info[f"reward/{self.env.SHORT_NAME}/base_height"] = base_height_reward
-        # info[f"reward/{self.env.SHORT_NAME}/air_time"] = air_time_reward
-        # info[f"reward/{self.env.SHORT_NAME}/symmetry_air"] = symmetry_air_reward
-        # info["env_info/target_x_vel"] = desired_local_velocity_x
-        # info["env_info/target_y_vel"] = desired_local_velocity_y
-        # info["env_info/current_x_vel"] = current_trunk_velocity[0]
-        # info["env_info/current_y_vel"] = current_trunk_velocity[1]
-        # print("---------------------",self.env._ts, "---------------------")
-        # print(info)
-        # info["env_info/symmetry_violations"] = symmetry_air_violations
-        # info["env_info/walk_height"] = trunk_z
-        # info["env_info/xy_vel_diff_norm"] = xy_velocity_difference_norm
-        # info["env_info/yaw_vel_diff_norm"] = yaw_velocity_difference_norm
-        # info["env_info/torque_norm"] = torque_norm
-        # info["env_info/acceleration_norm"] = acceleration_norm
-        # info["env_info/velocity_norm"] = velocity_norm
-        # info["env_info/action_rate_norm"] = action_rate_norm
-        # info["env_info/power"] = power
-        # info["env_info/cost_of_transport"] = cost_of_transport
-        # info["env_info/froude_number"] = froude_number
 
         return reward

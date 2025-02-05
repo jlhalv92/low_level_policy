@@ -76,13 +76,15 @@
 
 
 
-    <body name="trunk" pos="-4 0 0.5" childclass="go1">
+    <body name="trunk" pos="0 0 0.5" childclass="go1">
       <camera name="track" mode="trackcom" pos="0 -2 0" xyaxes="1 0 0 0 0 1"/>
+      <camera name="head" pos="0.255 0 0.1" xyaxes="0 -1 0 0 0 1"/>
+
       <freejoint/>
 
       <inertial pos="0.0223 0.002 -0.0005" quat="-0.00342088 0.705204 0.000106698 0.708996" mass="5.204" diaginertia="0.0716565 0.0630105 0.0168101"/>
 
-      <geom class="visual" mesh="trunk"/>
+      <geom name="trunk_0" class="visual"  mesh="trunk"/>
       <geom name="trunk_1" class="collision" size="0.125 0.04 0.057" type="box"/>
       <geom name="trunk_2" class="collision" quat="1 0 1 0" pos="0 -0.04 0" size="0.058 0.125" type="cylinder"/>
       <geom name="trunk_3" class="collision" quat="1 0 1 0" pos="0 +0.04 0" size="0.058 0.125" type="cylinder"/>

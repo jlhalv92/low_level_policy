@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import torchvision.models as models
 
 
 class PolicyNetwork(nn.Module):
@@ -84,6 +85,39 @@ class CriticNetwork(nn.Module):
         return torch.squeeze(q)
 
 
+class VisualActorNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, **kwargs):
+        super(VisualActorNetwork, self).__init__()
+
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+
+        self._exteroception = models.resnet18(pretrained=True)
+        self._exteroception.fc = torch.nn.Linear(self._exteroception.fc.in_features, 20)
+
+        self._h1 = nn.Linear(n_input + 20, n_features)
+        self._h2 = nn.Linear(n_features, n_features)
+
+        nn.init.xavier_uniform_(self._h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._out = nn.Linear(n_features, n_output)
+
+        nn.init.xavier_uniform_(self._out.weight,
+                                gain=nn.init.calculate_gain('linear'))
+
+    def forward(self, state, state_img):
+        features_img = self._exteroception(torch.squeeze(state_img, 1).float())
+        all_features = torch.cat((torch.squeeze(state, 1).float(), features_img), dim=1)
+
+        features1 = F.relu(self._h1(all_features))
+        features2 = F.relu(self._h2(features1))
+
+        a = self._out(features2)
+
+        return a
 
 class ActorNetwork(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):

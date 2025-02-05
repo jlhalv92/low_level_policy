@@ -258,49 +258,7 @@ class Core(object):
 
         return dataset
 
-    def wrap_to_pi(self,angle):
-        """Wraps an angle to the range [-pi, pi]."""
-        return (angle + np.pi) % (2 * np.pi) - np.pi
-    def position_controller(self, k_x=1.0, k_y=1.0, k_yaw=1.0):
-        # Calculate position errors
-        x,y = self.mdp._data.qpos[:2]
 
-        x_target = self.mdp._data.geom("target").xpos[0]
-        y_target = self.mdp._data.geom("target").xpos[1]
-
-        x_obstacle = self.mdp._data.geom("obstacle_1").xpos[0]
-        y_obstacle = self.mdp._data.geom("obstacle_1").xpos[1]
-
-        e_x_o = x -x_obstacle
-        e_y_o = y -y_obstacle
-        distance_obs = np.sqrt(e_x_o**2 + e_y_o**2)
-        yaw = self.mdp.orientation_euler[2]
-        e_x = x_target - x
-        e_y = y_target - y
-
-        # Calculate the angle to the target
-        theta_target = np.arctan2(e_y, e_x)
-
-        # Calculate yaw error
-        e_yaw = self.wrap_to_pi(0 - yaw)
-
-        v_x_obs = (2/(1 +distance_obs**2))*e_x_o if distance_obs < 2 else 0
-        v_y_obs =  (2/(1+distance_obs**2))*e_y_o if distance_obs < 2 else 0
-
-        theta_obs_target = np.arctan2(v_x_obs, v_y_obs)
-        e_obs_yaw = (2/(1 +distance_obs**2))*self.wrap_to_pi(yaw-theta_obs_target) if distance_obs < 2 else 0
-
-        # Calculate linear and angular velocities
-        v_x =  k_x * e_x*0 + v_x_obs
-        v_y = k_y * e_y*0 + v_y_obs
-        w_z = k_yaw * e_yaw + e_obs_yaw
-
-        # Clamp velocities to the range [-1, 1]
-        v_x = np.clip(v_x, -1, 1)
-        v_y = np.clip(v_y, -1, 1)
-        w_z = np.clip(w_z, -1, 1)
-
-        return np.array([v_x, v_y, w_z])
 
     def _step(self, render, get_renders=False, learning=False):
         """
@@ -326,11 +284,15 @@ class Core(object):
         else:
             navigation_state =  self.history.get_history()
 
+        # pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
+        # pos_robot = self.mdp._data.body("trunk").xpos[:2]
+        # state_antagonist =  np.concatenate((pos_antagonist, pos_robot))
+
         if learning:
             # navigation_state = self._state[-obs_dim:]
             action = self.agents[0].draw_noisy_action(navigation_state)
+            action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
 
-            action_antagonist = self.agents[1].draw_noisy_action(navigation_state)
             if self.use_antagonist:
                 self.mdp.obstacle_velocity = action_antagonist
             robot_state = self._state[:-obs_dim]
@@ -339,13 +301,14 @@ class Core(object):
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
+
         else: # Default
             action = self.agents[0].draw_action(navigation_state)
+            action_antagonist = self.agents[1].draw_action(self._adversary_state)
 
-            # action_antagonist = self.agents[1].draw_action(navigation_state)
-            # if self.use_antagonist:
+            if self.use_antagonist:
 
-                # self.mdp.obstacle_velocity = action_antagonist
+                self.mdp.obstacle_velocity = action_antagonist
 
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
@@ -353,6 +316,11 @@ class Core(object):
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
+
+        pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
+        pos_robot = self.mdp._data.body("trunk").xpos[:2]
+        next_state_antagonist = np.concatenate((pos_antagonist, pos_robot))
+
         self._episode_steps += 1
 
         if self.agent_id ==1:
@@ -370,43 +338,40 @@ class Core(object):
             self._episode_steps < self.mdp.info.horizon and not absorbing)
 
         state = self._state
+        state_antagonist = self._adversary_state
         history_state = self.history.get_history()
 
-        next_state = self._preprocess(next_state.copy())
+        # next_state = self._preprocess(next_state.copy())
+        next_state_antagonist = self._preprocess(next_state_antagonist)
+
         next_navigation_state = next_state[-obs_dim:]
         self.history.add_sample(next_navigation_state)
 
         history_next_state = self.history.get_history()
 
         self._state = next_state
+        self._adversary_state = next_state_antagonist
+        next_state_temperature = np.array([next_state_antagonist[-1]])
+        state_temperature = np.array([state_antagonist[-1]])
 
-        if self.agent_id==1:
+        if self.agent_id == 0:
+            if not self.use_history:
+                return state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
+
+            else:
+                history_state_temp = np.concatenate((history_state, state_temperature))
+                next_history_state_temp = np.concatenate((history_state, next_state_temperature))
+                return history_state_temp, self.action, reward, next_history_state_temp, absorbing, info, last
+
+        if self.agent_id == 1:
             pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
             pos_robot = self.mdp._data.body("trunk").xpos[:2]
 
             reward_area = 1 if pos_robot[0] <= (pos_antagonist[0] + 0.6) else -1
             reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1])) if pos_robot[0] <= (pos_antagonist[0] + 0.6) else -1
 
-            reward_agent = reward_area + reward_distance
-
-        else:
-            reward_agent = reward
-
-        if not self.use_history:
-
-            if get_renders:
-                img = self.mdp.get_render()
-                return img, state[-obs_dim:],  self.action, reward_agent, next_state[-obs_dim:], absorbing, info, last
-
-            return state[-obs_dim:],  self.action, reward_agent, next_state[-obs_dim:], absorbing, info, last
-
-        else:
-            if get_renders:
-                img = self.mdp.get_render()
-                return img, history_state, self.action, reward_agent, history_next_state, absorbing, info, last
-
-            return history_state, self.action, reward_agent, history_next_state, absorbing, info, last
-
+            reward_antagonist = reward_area + reward_distance
+            return state_antagonist, self.action, reward_antagonist, next_state_antagonist, absorbing, info, last
 
     def reset(self, initial_states=None, initial_conditions=None):
         """
@@ -429,7 +394,13 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        self._state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
+        self._state = self.mdp.reset(initial_state, initial_condition).copy()
+
+        pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
+        pos_robot = self.mdp._data.body("trunk").xpos[:2]
+        adversary_state = np.concatenate((pos_antagonist, pos_robot))
+        self._adversary_state = self._preprocess(adversary_state)
+
 
         if self.mdp.task==2  or self.mdp.task==3 or self.mdp.task==4 and self.use_history:
             self.history = HistoryStore(5)

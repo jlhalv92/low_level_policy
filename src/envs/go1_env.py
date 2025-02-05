@@ -1,5 +1,5 @@
 
-from src.envs.mujoco import MuJoCo, ObservationType, mujoco
+from src.envs.mujoco_env import MuJoCo, ObservationType, mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from src.envs.reward.reward import RudinOwnVarReward as reward_f
@@ -80,7 +80,7 @@ def keyboard_control(vx, vy, wz):
 
     keys = pygame.key.get_pressed()
 
-    if keys[pygame.K_UP]==True:
+    if keys[pygame.K_UP]:
         vx = min(vx + 0.1,1)
     if keys[pygame.K_UP]==False and keys[pygame.K_DOWN]==False:
         vx = 0
@@ -197,7 +197,7 @@ class Go1(MuJoCo):
 
         if task==0:
             xml_path = "src/envs/unitree_go1/walk_go1.xml"
-            xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+            # xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
         if task==1:
             xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
@@ -383,6 +383,7 @@ class Go1(MuJoCo):
         self.np_rng = np.random.default_rng(seed=0)
         self.sampling = StepProbabilitySampling(self)
         self.sampling_command = StepProbabilitySampling(self)
+        self.sampling_gains = StepProbabilitySampling(self)
         self.sampling_friction = StepProbabilitySampling(self)
         self.sampling_mass = StepProbabilitySampling(self)
         self.sampling_gravity = StepProbabilitySampling(self)
@@ -419,6 +420,7 @@ class Go1(MuJoCo):
     def _get_ground_forces(self):
         """
         Returns the ground forces (np.array).
+
 
         """
 
@@ -680,7 +682,7 @@ class Go1(MuJoCo):
         # self.bin_id = bins
 
         self.target_vx = np.random.uniform(-1.5,1.5)
-        self.target_vy = np.random.uniform(-1,1)
+        self.target_vy = np.random.uniform(-0.8,0.8)
         self.target_yaw = np.random.uniform(-1.5,1.5)
 
         self.target_vx = np.random.normal(self.target_vx, 0.1,1)[0]
@@ -835,6 +837,12 @@ class Go1(MuJoCo):
                 if self.sampling_command.step() and self.resample:
                     self.resample_targets()
 
+                if self.sampling_gains.step():
+                    kp = 20 + np.random.uniform(low=0, high=20)
+                    kd = 0.5 + np.random.uniform(low=0, high=0.5)
+                    self.p_gains = np.array(12 * [kp])  # 60
+                    self.d_gains = np.array(12 * [kd])  # 6
+
 
                 if self.sampling_friction.step():
                     factor = np.random.uniform(0,1)
@@ -960,7 +968,7 @@ class Go1(MuJoCo):
 
         self._data.qpos[7:19] = self.default_dof_pos.copy()
 
-        self._data.qpos[0:3] = [-3, 0, 0.36]
+        self._data.qpos[0:3] = [0, 0, 0.36]
 
 
 
@@ -1051,7 +1059,7 @@ class Go1(MuJoCo):
 
 
     def obstacle_curriculum(self):
-        # print("level", self.level)
+
         self.obstacle_velocity_levels = 2*np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5])
 
         if self.level<= 5:

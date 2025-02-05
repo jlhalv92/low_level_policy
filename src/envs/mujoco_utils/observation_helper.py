@@ -3,8 +3,27 @@ import numpy as np
 from enum import Enum
 import dm_control.utils.transformations as tr
 from src.utils.rotations import quaternion_to_euler
+from collections import deque
+class HistoryStore:
+    def __init__(self, max_size):
+        # Initialize with a maximum size and a deque to store the history
+        self.max_size = max_size
+        self.history = deque(maxlen=max_size)
 
+    def reset_history(self, n_rays=10, max_length_ray=20):
+        self.history = deque(maxlen=self.max_size)
+        array = np.log2(max_length_ray)*np.ones(n_rays)
 
+        for _ in range(self.max_size):
+            self.add_sample(array)
+
+    def add_sample(self, sample):
+        # Add a new sample to the history
+        self.history.append(sample)
+
+    def get_history(self):
+        # Return the current history as a list
+        return np.array(list(self.history)).flatten()
 
 class ObservationType(Enum):
     """
@@ -19,7 +38,7 @@ class ObservationType(Enum):
         SITE_POS: (3,) x, y, z position of the body
         SITE_ROT: (9,) rotation matrix of the site
     """
-    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS"
+    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS D_RANDOMIZATION ROOM_WIDTH ROBOT_BOUNDING_BOX OBSTACLE_BOUNDING_BOX RAYS_SMALL"
     BODY_POS = 0
     BODY_ROT = 1
     BODY_VEL = 2
@@ -45,6 +64,14 @@ class ObservationType(Enum):
     POS_OBSTACLE = 22
     POS = 23
     RAYS = 24
+    D_RANDOMIZATION = 25
+    ROOM_WIDTH=26
+    ROBOT_BOUNDING_BOX =27
+    OBSTACLE_BOUNDING_BOX=28
+    RAYS_SMALL = 29
+
+
+
 
 
 class ObservationHelper:
@@ -52,6 +79,10 @@ class ObservationHelper:
         if len(observation_spec) == 0:
             raise AttributeError("No Environment observations were specified. "
                                  "Add at least one observation to the observation_spec.")
+
+        # self.history = HistoryStore(10)
+        # mockup_obs = np.log(10)*np.ones(10)
+        # self.history.init_history(mockup_obs)
 
         self.obs_low = []
         self.obs_high = []
@@ -155,25 +186,39 @@ class ObservationHelper:
         return obs[self.obs_idx_map[key][0]:self.obs_idx_map[key][-1] + 1]
 
     def modify_obs(self, obs, key, new_values):
-        """
-        Modify an existing observation given the key.
+        # Cannot use advanced indexing because it returns a copy.....
+        # We want this data to be writeable
+        new_obs = obs.copy()
+        new_obs[self.obs_idx_map[key][0]:self.obs_idx_map[key][-1] + 1] = new_values
+        return new_obs
 
-        Args:
-            obs: The current observation array.
-            key: The key of the observation to be modified.
-            new_values: The new values to replace the existing ones.
-                        Should match the length of the existing observation for this key.
-        """
-        if key not in self.obs_idx_map:
-            raise ValueError(f"Key '{key}' not found in the observation map.")
+    def scale_obs(self, obs, key, scale):
+        # Cannot use advanced indexing because it returns a copy.....
+        # We want this data to be writeable
+        new_obs = obs.copy()
+        new_obs[self.obs_idx_map[key][0]:self.obs_idx_map[key][-1] + 1] *= scale
+        return new_obs
 
-        indices = self.obs_idx_map[key]
-
-        if len(new_values) != len(indices):
-            raise ValueError(f"New values must have length {len(indices)} for key '{key}'.")
-
-        # Update the observation array with new values
-        obs[indices[0]:indices[-1] + 1] = new_values
+    # def modify_obs(self, obs, key, new_values):
+    #     """
+    #     Modify an existing observation given the key.
+    #
+    #     Args:
+    #         obs: The current observation array.
+    #         key: The key of the observation to be modified.
+    #         new_values: The new values to replace the existing ones.
+    #                     Should match the length of the existing observation for this key.
+    #     """
+    #     if key not in self.obs_idx_map:
+    #         raise ValueError(f"Key '{key}' not found in the observation map.")
+    #
+    #     indices = self.obs_idx_map[key]
+    #
+    #     if len(new_values) != len(indices):
+    #         raise ValueError(f"New values must have length {len(indices)} for key '{key}'.")
+    #
+    #     # Update the observation array with new values
+    #     obs[indices[0]:indices[-1] + 1] = new_values
 
     def get_joint_pos_from_obs(self, obs):
         return obs[self.joint_pos_idx]
@@ -279,7 +324,7 @@ class ObservationHelper:
             target_pose = data.geom(name).xpos.copy()
             robot_pose = data.body("trunk").xpos.copy()
 
-            obs = np.linalg.norm(target_pose - robot_pose)
+            obs = target_pose - robot_pose
 
         elif o_type== ObservationType.ORIENTATION:
 
@@ -293,17 +338,44 @@ class ObservationHelper:
             obs = np.zeros(10)
 
         elif o_type == ObservationType.RAYS:
-            rf_readings = np.array([data.sensor("rf_{}".format(i)).data.copy()[0] for i in range(1,21)])
 
+            rf_readings = np.array([data.sensor("rf_{}".format(i+1)).data.copy()[0] for i in range(50)])
+            rf_readings = np.where(rf_readings == -1 , 20, rf_readings)
+            rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
+            rf_readings_2 = np.where(rf_readings >=20 , 20, rf_readings)
+            rf_readings_f = np.log2(rf_readings_2)
+            obs = rf_readings_f
+            # self.history.add_sample(rf_readings_f)
+            #
+            # obs = self.history.get_history()
+            # obs = rf_readings_f
+        elif o_type == ObservationType.RAYS_SMALL:
 
-            obs = rf_readings
+            rf_readings = np.array([data.sensor("rf_l_{}".format(i+1)).data.copy()[0] for i in range(10)])
+            rf_readings = np.where(rf_readings == -1 , 20, rf_readings)
+            rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
+            rf_readings_2 = np.where(rf_readings >=20 , 20, rf_readings)
+            rf_readings_f = np.log2(rf_readings_2)
+            obs = rf_readings_f
 
+        elif o_type==ObservationType.D_RANDOMIZATION:
+            obs = np.zeros(3)
 
         elif o_type==ObservationType.HEADING:
             obs = 0
 
         elif o_type==ObservationType.POS:
             obs = np.zeros(2)
+
+        elif o_type==ObservationType.ROOM_WIDTH:
+            obs = 0
+
+        # elif o_type == ObservationType.ROBOT_BOUNDING_BOX:
+        #     obs = np.zeros(24)
+
+        elif o_type == ObservationType.OBSTACLE_BOUNDING_BOX:
+            obs = np.zeros(24)
+
 
 
 

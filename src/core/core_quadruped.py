@@ -279,7 +279,7 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        self._state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
+        self._state = self._preprocess(self.mdp.reset(initial_state).copy())
         self.agent.episode_start()
         self.agent.next_action = None
         self._episode_steps = 0
