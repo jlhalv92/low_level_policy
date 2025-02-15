@@ -1,4 +1,4 @@
-from audioop import avgpp
+
 
 from tqdm import tqdm
 import numpy as np
@@ -27,7 +27,7 @@ class Core(object):
 
     """
     def __init__(self, agents, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None, obs_dim=18, record_dictionary=None):
+                 preprocessors=None, low_level_agent=None, obs_dim=18, record_dictionary=None, joystick=False):
         """
         Constructor.
 
@@ -45,7 +45,7 @@ class Core(object):
 
         """
         self.agent_id = 0
-        self.joystick=False
+        self.joystick=joystick
         self.history = HistoryStore(5)
         self.use_history = True
 
@@ -145,7 +145,9 @@ class Core(object):
         self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders, learning=True) # Add bool to signify this is a learning run
 
     def evaluate(self, initial_states=None, n_steps=None, n_episodes=None,
-                 render=False, quiet=False, get_renders=False, initial_conditions=None, id_agent=None, record=False):
+                 render=False, quiet=False, get_renders=False,
+                 initial_conditions=None, id_agent=None, record=False,
+                 return_antagonist_state=False):
         """
         This function moves the agent in the environment using its policy.
         The agent is moved for a provided number of steps, episodes, or from
@@ -165,14 +167,24 @@ class Core(object):
 
         fit_condition = lambda: False
         self.agent_id = id_agent
-        return self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders,
-                         initial_states, initial_conditions)
 
-    def _run(self, n_steps, n_episodes, fit_condition, render, quiet, get_renders=False,
-             initial_states=None, initial_conditions=None,  learning=False):
+        return self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders,
+                         initial_states, initial_conditions, return_antagonist_state=return_antagonist_state)
+
+    def _run(self, n_steps,
+             n_episodes,
+             fit_condition,
+             render, quiet,
+             get_renders=False,
+             initial_states=None,
+             initial_conditions=None,
+             learning=False,
+             return_antagonist_state=False):
+
         assert n_episodes is not None and n_steps is None and initial_states is None\
             or n_episodes is None and n_steps is not None and initial_states is None\
             or n_episodes is None and n_steps is None and initial_states is not None
+
 
         self._n_episodes = len(
             initial_states) if initial_states is not None else n_episodes
@@ -197,11 +209,14 @@ class Core(object):
                                          dynamic_ncols=True, disable=quiet,
                                          leave=False)
 
-        return self._run_impl(move_condition, fit_condition, steps_progress_bar,
-                              episodes_progress_bar, render, get_renders, initial_states,initial_conditions, learning)
+        return self._run_impl(move_condition,
+                              fit_condition,
+                              steps_progress_bar,
+                              episodes_progress_bar, render, get_renders,
+                              initial_states,initial_conditions, learning, return_antagonist_state)
 
     def _run_impl(self, move_condition, fit_condition, steps_progress_bar,
-                  episodes_progress_bar, render, get_renders, initial_states, initial_conditions, learning):
+                  episodes_progress_bar, render, get_renders, initial_states, initial_conditions, learning, return_antagonist_state):
         self._total_episodes_counter = 0
         self._total_steps_counter = 0
         self._current_episodes_counter = 0
@@ -219,7 +234,7 @@ class Core(object):
                 self.reset(initial_states, initial_conditions)
 
 
-            sample = self._step(render, get_renders, learning)
+            sample = self._step(render, get_renders, learning, return_antagonist_state)
 
 
             self.callback_step([sample])
@@ -235,6 +250,7 @@ class Core(object):
             dataset.append(sample)
 
             if fit_condition():
+
 
                 self.agents[self.agent_id].fit(dataset)
 
@@ -260,7 +276,7 @@ class Core(object):
 
 
 
-    def _step(self, render, get_renders=False, learning=False):
+    def _step(self, render, get_renders=False, learning=False, return_antagonist_state=False):
         """
         Single step.
 
@@ -278,32 +294,32 @@ class Core(object):
         obs_dim = self.nav_obs_dim
 
 
-        if not self.use_history:
-            navigation_state = self._state[-obs_dim:]
 
-        else:
-            navigation_state =  self.history.get_history()
+        navigation_state = self._state[-obs_dim:]
+        nav_state = self._preprocess(navigation_state.copy())
 
-        # pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-        # pos_robot = self.mdp._data.body("trunk").xpos[:2]
-        # state_antagonist =  np.concatenate((pos_antagonist, pos_robot))
 
         if learning:
             # navigation_state = self._state[-obs_dim:]
-            action = self.agents[0].draw_noisy_action(navigation_state)
+            action = self.agents[0].draw_noisy_action(nav_state)
             action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
 
             if self.use_antagonist:
+
                 self.mdp.obstacle_velocity = action_antagonist
+
             robot_state = self._state[:-obs_dim]
+
             if not self.joystick:
                 robot_state[54:57] =  np.array([2,2,0.25]) * action
+
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
 
         else: # Default
-            action = self.agents[0].draw_action(navigation_state)
+            action = self.agents[0].draw_action(nav_state)
+
             action_antagonist = self.agents[1].draw_action(self._adversary_state)
 
             if self.use_antagonist:
@@ -337,41 +353,45 @@ class Core(object):
         last = not(
             self._episode_steps < self.mdp.info.horizon and not absorbing)
 
-        state = self._state
+
         state_antagonist = self._adversary_state
-        history_state = self.history.get_history()
 
-        # next_state = self._preprocess(next_state.copy())
-        next_state_antagonist = self._preprocess(next_state_antagonist)
+        next_state_antagonist = self._preprocess(next_state_antagonist.copy())
 
-        next_navigation_state = next_state[-obs_dim:]
-        self.history.add_sample(next_navigation_state)
-
-        history_next_state = self.history.get_history()
 
         self._state = next_state
         self._adversary_state = next_state_antagonist
-        next_state_temperature = np.array([next_state_antagonist[-1]])
-        state_temperature = np.array([state_antagonist[-1]])
+
+        # Reward Antagonist
+
+        pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
+        l_antagonist = self.mdp._model.geom("obstacle_1").size[0]
+
+        pos_robot = self.mdp._data.body("trunk").xpos[:2]
+
+        reward_collision = 10 * self.mdp.obstacle_robot_collision
+        reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1])) if pos_robot[0] <= (
+                    pos_antagonist[0] + l_antagonist) else -1
+
+        reward_antagonist = reward_collision + reward_distance
+
+
+        if return_antagonist_state and self.agent_id == 0:
+
+            tr_protagonist =(state_antagonist, self.action, reward, next_state_antagonist, absorbing, info, last)
+
+            return tr_protagonist
+
 
         if self.agent_id == 0:
-            if not self.use_history:
-                return state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
+            next_nav_state = self._preprocess(next_state[-obs_dim:].copy())
+            state = nav_state
+            return state,  self.action, reward, next_nav_state, absorbing, info, last
 
-            else:
-                history_state_temp = np.concatenate((history_state, state_temperature))
-                next_history_state_temp = np.concatenate((history_state, next_state_temperature))
-                return history_state_temp, self.action, reward, next_history_state_temp, absorbing, info, last
 
         if self.agent_id == 1:
-            pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-            pos_robot = self.mdp._data.body("trunk").xpos[:2]
 
-            reward_area = 1 if pos_robot[0] <= (pos_antagonist[0] + 0.6) else -1
-            reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1])) if pos_robot[0] <= (pos_antagonist[0] + 0.6) else -1
-
-            reward_antagonist = reward_area + reward_distance
-            return state_antagonist, self.action, reward_antagonist, next_state_antagonist, absorbing, info, last
+            return state_antagonist, action_antagonist, reward_antagonist, next_state_antagonist, absorbing, info, last
 
     def reset(self, initial_states=None, initial_conditions=None):
         """
@@ -394,19 +414,15 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        self._state = self.mdp.reset(initial_state, initial_condition).copy()
+        self._state =self.mdp.reset(initial_state, initial_condition).copy()
+
 
         pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
         pos_robot = self.mdp._data.body("trunk").xpos[:2]
         adversary_state = np.concatenate((pos_antagonist, pos_robot))
-        self._adversary_state = self._preprocess(adversary_state)
 
+        self._adversary_state = self._preprocess(adversary_state.copy())
 
-        if self.mdp.task==2  or self.mdp.task==3 or self.mdp.task==4 and self.use_history:
-            self.history = HistoryStore(5)
-            obs= self._state[-self.nav_obs_dim:]
-            for _ in range(5):
-                self.history.add_sample(obs)
 
         self.agents[self.agent_id].episode_start()
         self.agents[self.agent_id].next_action = None

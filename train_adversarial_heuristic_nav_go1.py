@@ -9,8 +9,8 @@ from src.algorithm.deep_actor_critic.sac import  SAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
-from src.envs.go1_env_rays import Go1
-from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork
+from src.envs.go1_env_privilege_rays import Go1
+from src.networks.nets import  CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork
 import wandb
 
 
@@ -35,37 +35,40 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
     logger.strong_line()
     task_name = "obstacles_navigation"
 
-    agent_task = "{}_max_velocity".format(task_name)
+    agent_task = "{}_50_rays_new_privilege_state_network_no_walls".format(task_name)
     logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
 
     view = False
     # MDP
-    horizon = 1000
+    horizon = 500
     gamma = 0.99
     n_features = 256
     lr = 3e-4
     warmup_transitions = 3000
     batch_size = 256
     initial_replay_size = 3000
-
+    retrain = False
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    obs_size = 28
+    obs_size = 60 #History all: 39, No History: 39, History Rays: 79, no_pos_obstacle 71 # 205
+    state_size = 60 #History all: 39*5, No History: 39 History Rays: 79, no_pos_obstacle 71 #205
+    history = False
 
     cfg_rewards=dict()
 
     log = False
-
+    joystick = False
     cfg = dict(kp=40,
                kd=1,
                antagonist=False,
                max_level=True,
                curriculum=False,
-               joystick=True,
+               joystick=joystick,
                resample=False,
                domain_randomization=False,
-               rewards=cfg_rewards)
+               rewards=cfg_rewards,
+               static_obstacles=False)
 
     mdp = Go1(horizon,
               gamma,
@@ -81,17 +84,19 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
             name="seed_{}".format(run_id)
         )
     # actor_input_shape = mdp.info.observation_space.shape
-    actor_input_shape = (5*obs_size,)
-    actor_mu_params = dict(network=ActorNetwork,
+    actor_input_shape = (state_size,)
+    actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
+                           size_propioception=6,
                            use_cuda=True)
 
-    actor_sigma_params = dict(network=ActorNetwork,
+    actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
+                              size_propioception=6,
                               use_cuda=True)
 
 
@@ -113,15 +118,20 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
                 actor_optimizer, critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
                 critic_fit_params=None)
-
+    if retrain:
+        path = "checkpoint/GO1/SAC/obstacles_navigation_50_rays_new_privilege_state_network/epoch_last"
+        agent = Agent.load(path)
+        agent.reset_replay_memory(initial_replay_size,
+                max_replay_size)
 
     core = Core(agent,
                 mdp,
                 low_level_agent=control_agent,
-                obs_dim=obs_size, joystick=True)
+                obs_dim=obs_size, joystick=joystick,use_history=history)
 
 
-    dataset = core.evaluate(n_episodes=5, render=True)
+    dataset = core.evaluate(n_episodes=10, render=True)
+
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -146,7 +156,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render)
-        s, a, r, s1, a, info, last  = parse_dataset(dataset)
+        s, a, r, s1, absorbing, info, last  = parse_dataset(dataset)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy(s)
@@ -164,17 +174,16 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
     agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1', method_name, agent_task, "last"))
 
 
-    core.evaluate(n_episodes=5, render=True)
+    core.evaluate(n_episodes=10, render=True)
     if log:
         wandb.finish()
 
 if __name__ == '__main__':
 
-    path ="src/nominal_models/GO_1/PPO_low_level/epoch_last"
     path = "src/nominal_models/go1/epoch_last"
 
     control_agent = Agent.load(path)
-    for i in range(1,5):
+    for i in range(1):
         experiment(method_name="SAC",
                    alg=SAC,
                    n_epochs=200,

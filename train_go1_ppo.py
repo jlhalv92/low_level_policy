@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from mushroom_rl.algorithms.actor_critic import PPO
-from mushroom_rl.policy import GaussianTorchPolicy
+from src.algorithm.deep_actor_critic.ppo import PPO
+from src.algorithm.policies.torch_policy import GaussianTorchPolicy
 
 from mushroom_rl.core import Logger
 from src.core.core_quadruped import Core
@@ -84,14 +84,14 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     logger = Logger(alg.__name__, results_dir=None)
     logger.strong_line()
     task_name = "nominal"
-    agent_task = "{}_DR_robust_locomotion".format(task_name)
+    agent_task = "{}_fast_locomotion".format(task_name)
     logger.info('Experiment Algorithm: ' + alg.__name__ + " task " + agent_task )
 
     # MDP
     horizon = 1000
     gamma = 0.99
     n_features = 256
-    mini_batch_size = 64 #1000 rollout 32000
+    mini_batch_size = int((21*4096)/4) #1000 rollout 32000
     lr = 3e-4
     n_epochs_policy = 5
     eps_ppo = 0.2
@@ -122,14 +122,14 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     #kp=40
     #kd=1
     cfg_rewards = dict(curriculum_steps=12e6)
-    cfg = dict(kp=40,
-               kd=1,
+    cfg = dict(kp=20.0,
+               kd=0.5,
                antagonist=False,
                max_level=False,
                curriculum=False,
                joystick=False,
                resample=True,
-               domain_randomization=True,
+               domain_randomization=False,
                rewards=cfg_rewards)
 
     mdp = Go1(horizon,
@@ -155,8 +155,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     alg_params['critic_params'] = critic_params
 
     if retrain:
-        path = "checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
+        path = "src/nominal_models/go1/epoch_last"
 
         agent = Agent.load(path)
     else:
@@ -186,7 +185,6 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
             render=False
 
 
-
         dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
 
         J = np.mean(compute_J(dataset, mdp.info.gamma))
@@ -206,7 +204,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
 if __name__ == '__main__':
 
 
-    experiment(alg=PPO,n_epochs=600, n_steps=int(20*2048), n_steps_per_fit=2048,
+    experiment(alg=PPO,n_epochs=300, n_steps=int(10*21*4096), n_steps_per_fit=21*4096,
                n_episodes_test=5)
 
 

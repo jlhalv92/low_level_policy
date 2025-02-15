@@ -181,6 +181,8 @@ class Go1(MuJoCo):
         Constructor.
 
         """
+        self.pass_finish_line = False
+        self.obstacle_robot_collision = False
         self.behaviour_cloning = False
         self.number_obstacles = 10
         self.rays_history = HistoryStore()
@@ -669,14 +671,11 @@ class Go1(MuJoCo):
     def _step_init(self, obs, action):
 
 
-
-
-
-        # if self.task == 3 or self.task == 4:
-        #     self.obstacle_id = self.closest_obstacle_in_front(self._data.body("trunk").xpos[:2], last_id=self.obstacle_id, n_obstacles=self.task)
-        #
         if self.antagonist:
             self._data.ctrl[-1] = self.obstacle_velocity
+
+            self._data.ctrl[-2] = 0
+            self._data.ctrl[-3] = self.obstacle_pose_x
 
 
 
@@ -792,7 +791,7 @@ class Go1(MuJoCo):
 
         collision_obstacle =  legs_collision_obstacles + trunk_collision_obstacles + feet_collision_obstacles
         collision_wall  =  legs_collision_walls + trunk_collision_walls + feet_collision_walls
-        penalty =  -20*(collision_obstacle + collision_wall)
+        penalty =  -20*(collision_obstacle)  -10*(collision_wall)
         return penalty
 
     def reward_velocity(self, current_velocity,target_pos, current_pos):
@@ -923,10 +922,10 @@ class Go1(MuJoCo):
             robot_pose = self._data.qpos[:2]
             target_pose = self._data.site("target").xpos[:2]
             norm_distance = target_pose[0] - robot_pose[0]
-            pass_finish_line = norm_distance <= 0.1
+            self.pass_finish_line = norm_distance <= 0.1
 
             if self._ts>=self.horizon:
-                self.success = self.robot_collisions == 0 and pass_finish_line
+                self.success = self.robot_collisions == 0 and self.pass_finish_line
 
 
 
@@ -952,7 +951,7 @@ class Go1(MuJoCo):
             collision_robot = legs_collision_obstacles or trunk_collision_obstacles
             self.robot_collisions += (self._check_collision("robot", "obstacles") + self._check_collision("robot", "walls"))
             # collision = self._check_collision("robot", "obstacles") or self._check_collision("robot", "walls")
-
+            self.obstacle_robot_collision = legs_collision_obstacles + trunk_collision_obstacles
 
 
         if fall | collision_robot:
@@ -1053,7 +1052,6 @@ class Go1(MuJoCo):
     def reset_states(self, task):
         self._model.site("target").pos[0] = 10
 
-        # x = -4 + np.random.choice([-1, 1, 0.5, -0.5, 0, -1.5, 1.5])
 
         if task==2:
             if self.behaviour_cloning:
@@ -1103,10 +1101,14 @@ class Go1(MuJoCo):
                         self._data.ctrl[-1] = np.random.uniform(-1, 1)
                     else:
                         self._data.ctrl[-1] = 0
-                    self._data.ctrl[-3] = self.obstacle_pose_x
+
 
                 else:
                     self._data.ctrl[-1] = self.obstacle_velocity
+
+                self._data.ctrl[-3] = self.obstacle_pose_x
+                self._data.ctrl[-2] = 0
+
 
         if task==3:
             spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays_corridor.xml")

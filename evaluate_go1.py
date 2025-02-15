@@ -90,18 +90,9 @@ def experiment():
     gamma = 0.99
     cfg_rewards=dict(curriculum_steps=1)
 
-    # cfg = dict(kp=40,
-    #            kd=1,
-    #            antagonist=False,
-    #            max_level=False,
-    #            curriculum=False,
-    #            joystick=True,
-    #            resample=False,
-    #            domain_randomization=False,
-    #            rewards=cfg_rewards)
 
-    cfg = dict(kp=40,
-               kd=1,
+    cfg = dict(kp=20,
+               kd=0.5,
                antagonist=False,
                max_level=False,
                curriculum=False,
@@ -127,6 +118,7 @@ def experiment():
 
     path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
     path = "src/nominal_models/go1/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_DR_robust_locomotion_retrain/epoch_70"
    # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization/epoch_1400"
     #path = "src/nominal_models/GO_1/PPO_low_level/epoch_last"
     # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_1000_epochs/epoch_160"

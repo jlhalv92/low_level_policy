@@ -324,6 +324,8 @@ class SAC(DeepAC):
 
         super().__init__(mdp_info, policy, actor_optimizer, policy_parameters)
 
+    def reset_replay_memory(self, initial_replay_size, max_replay_size):
+        self._replay_memory = ReplayMemory(initial_replay_size, max_replay_size)
     def fit(self, dataset):
 
         self._replay_memory.add(dataset)
@@ -341,7 +343,7 @@ class SAC(DeepAC):
 
             q_next = self._next_q(next_state, absorbing)
             q = reward + self.mdp_info.gamma * q_next
-            self._Q.append(q.copy().mean())
+            # self._Q.append(q.copy().mean())
 
 
             self._critic_approximator.fit(state, action, q,

@@ -93,33 +93,23 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
     teacher = Teacher()
     obs_size = 18 + 1
 
-    cfg_rewards=dict(tracking_goal_vel = 2,
-                    tracking_yaw = 1.5,
-                     lin_vel_z = -1.0,
-    ang_vel_xy = -0.05,
-    orientation = -1.,
-    dof_acc = -2.5e-7,
-    collision = -1.,
-    action_rate = -0.1 ,
-    delta_torques = -1.0e-7 ,
-    torques = -0.00001 ,
-    hip_pos = -0.5,
-    dof_error = -0.04,
-    feet_stumble = -1,
-    feet_edge = -1,
-    airtime = 1,
-    clip=True)
-
     log = False
     all_obs =False
 
+    cfg_rewards = dict()
 
-
-    cfg = dict(kp=40,
-               kd=1,
-               interpolate=0,
-               use_all_obs=all_obs,
-               rewards=cfg_rewards)
+    cfg = dict(
+        kp=40,
+        kd=1,
+        antagonist=True, # True if you want and intelligent obstacle
+        max_level=False,
+        curriculum=False,
+        joystick=False,
+        resample=False,
+        random_obstacle=False, # True if you want a random obstacle
+        static_obstacle=False, # True if you want a static ostacle
+        rewards=cfg_rewards,
+    )
 
     mdp = Go1(horizon,
               gamma,
@@ -253,6 +243,8 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
 if __name__ == '__main__':
 
     path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
+    path = "src/nominal_models/go1/epoch_last"
+
     control_agent = Agent.load(path)
     experiment(alg=SAC,
                n_epochs=200,

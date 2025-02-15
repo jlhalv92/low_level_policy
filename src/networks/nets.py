@@ -85,6 +85,60 @@ class CriticNetwork(nn.Module):
         return torch.squeeze(q)
 
 
+class ActorBiNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features,
+                 size_propioception=4,
+                 size_exteroception=54, **kwargs):
+        super(ActorBiNetwork, self).__init__()
+        self.size_propioception = size_propioception
+        self.size_exteroception = size_exteroception
+        n_output = output_shape[0]
+
+        # Intrinsic Processing (Expand 4 → 10)
+        self._h_intrinsic = nn.Linear(self.size_propioception, 10)
+        nn.init.xavier_uniform_(self._h_intrinsic.weight, gain=nn.init.calculate_gain('relu'))
+
+        # Extrinsic Processing (54 → n_features → 20)
+        self._h_extrinsic_1 = nn.Linear(self.size_exteroception, n_features)
+        self._h_extrinsic_2 = nn.Linear(n_features, 20)  # Increased from 10 → 20
+
+        nn.init.xavier_uniform_(self._h_extrinsic_1.weight, gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._h_extrinsic_2.weight, gain=nn.init.calculate_gain('relu'))
+
+        # State Embedding (Intrinsic: 10 + Extrinsic: 20 = 30)
+        self._h1 = nn.Linear(30, n_features)
+        self._h2 = nn.Linear(n_features, n_features)
+
+        nn.init.xavier_uniform_(self._h1.weight, gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._h2.weight, gain=nn.init.calculate_gain('relu'))
+
+        # Output Layer
+        self._out = nn.Linear(n_features, n_output)
+        nn.init.xavier_uniform_(self._out.weight, gain=nn.init.calculate_gain('linear'))
+
+    def forward(self, state):
+        state_extrinsic_privilege = state[:,self.size_propioception:]
+        state_intrinsic = state[:,:self.size_propioception]
+
+        # Intrinsic Processing
+        intrinsic_transformed = F.relu(self._h_intrinsic(state_intrinsic.float()))
+
+        # Extrinsic Processing
+        features_extrinsic_1 = F.relu(self._h_extrinsic_1(torch.squeeze(state_extrinsic_privilege, 1).float()))
+        features_extrinsic_2 = F.relu(self._h_extrinsic_2(features_extrinsic_1))
+
+        # Concatenate Intrinsic and Extrinsic Features
+        state_embedding = torch.cat((intrinsic_transformed, features_extrinsic_2.float()), dim=1)
+
+        # Fully Connected Layers
+        features1 = F.relu(self._h1(torch.squeeze(state_embedding, 1).float()))
+        features2 = F.relu(self._h2(features1))
+
+        # Output Action
+        a = self._out(features2)
+
+        return a
+
 class VisualActorNetwork(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):
         super(VisualActorNetwork, self).__init__()

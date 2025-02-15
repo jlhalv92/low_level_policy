@@ -38,7 +38,7 @@ class ObservationType(Enum):
         SITE_POS: (3,) x, y, z position of the body
         SITE_ROT: (9,) rotation matrix of the site
     """
-    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS D_RANDOMIZATION ROOM_WIDTH ROBOT_BOUNDING_BOX OBSTACLE_BOUNDING_BOX RAYS_SMALL"
+    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS D_RANDOMIZATION ROOM_WIDTH ROBOT_BOUNDING_BOX OBSTACLE_BOUNDING_BOX RAYS_SMALL A_VELOCITY"
     BODY_POS = 0
     BODY_ROT = 1
     BODY_VEL = 2
@@ -69,6 +69,7 @@ class ObservationType(Enum):
     ROBOT_BOUNDING_BOX =27
     OBSTACLE_BOUNDING_BOX=28
     RAYS_SMALL = 29
+    A_VELOCITY = 30
 
 
 
@@ -314,6 +315,8 @@ class ObservationHelper:
         elif o_type== ObservationType.IMU:
             obs = np.zeros(3)
         elif o_type== ObservationType.VELOCITY:
+            obs = np.zeros(2)
+        elif o_type== ObservationType.A_VELOCITY:
             obs = np.zeros(3)
         elif o_type== ObservationType.L_VELOCITY:
             obs = np.zeros(3)
@@ -365,7 +368,7 @@ class ObservationHelper:
             obs = 0
 
         elif o_type==ObservationType.POS:
-            obs = np.zeros(2)
+            obs = data.qpos[:2].copy()
 
         elif o_type==ObservationType.ROOM_WIDTH:
             obs = 0

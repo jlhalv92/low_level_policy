@@ -173,7 +173,7 @@ if __name__ == '__main__':
 
     path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
     control_agent = Agent.load(path)
-    for i in range(1,5):
+    for i in range(1):
         experiment(method_name="Curriculum_SAC",
                    alg=SAC,
                    n_epochs=200,

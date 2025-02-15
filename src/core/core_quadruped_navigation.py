@@ -331,15 +331,18 @@ class Core(object):
             # navigation_state = self._state[-obs_dim:]
             robot_state = self._state[:-obs_dim]
             if not self.joystick:
-                self.action = self.agent.draw_noisy_action(navigation_state)
+                if self._current_steps_counter % 5 == 0:
+                    self.action = self.agent.draw_noisy_action(navigation_state)
                 robot_state[54:57] =  np.array([2,2,0.25]) * self.action
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
         else: # Default
             robot_state = self._state[:-obs_dim]
+
             if not self.joystick:
-                self.action = self.agent.draw_noisy_action(navigation_state)
+                if self._current_steps_counter % 5 ==0:
+                    self.action = self.agent.draw_noisy_action(navigation_state)
                 robot_state[54:57] = np.array([2,2,0.25])* self.action
 
             control_action = self.low_level_agent.draw_action(robot_state)

@@ -1,3 +1,4 @@
+
 import numpy as np
 import torch
 
@@ -51,6 +52,7 @@ class AdaptiveTempSAC(SAC):
         # overwriting the initial scalar alpha tensor by alpha tensor of batch_size dimension
         self._log_alpha = torch.tensor(np.zeros(batch_size), dtype=torch.float32)
         self._fit_iteration = 0
+
     def fit(self, dataset):
         own_dataset = dataset
         self._replay_memory.add(own_dataset)

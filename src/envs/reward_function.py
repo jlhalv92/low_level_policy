@@ -5,30 +5,30 @@ class Reward:
     def __init__(self, env,
                  curriculum_steps= 750_000,
                  tracking_xy_velocity_command_coeff= 1.,
-                 tracking_yaw_velocity_command_coeff= 0.5,
-                 joint_nominal_diff_coeff= 0.5,
-                 z_velocity_coeff= -0.5,
+                 tracking_yaw_velocity_command_coeff= .5,
+                 joint_nominal_diff_coeff= 0,
+                 z_velocity_coeff= -2,
                  pitch_roll_vel_coeff= -0.05,
-                 pitch_roll_pos_coeff= -3.0,
-                 joint_position_limit_coeff= -1.0,
+                 pitch_roll_pos_coeff= -2e-1,
+                 joint_position_limit_coeff= -10.0,
                  energy_coef= -0.001,
                  joint_torque_coeff= -0.0002,
-                 action_rate_coeff= -0.01,
-                 collision_coeff= -1e0,
-                 base_height_coeff= -0.5,
-                 air_time_coeff= 0.1,
-                 trot_coeff=1,
-                 stand_still_coeff= -1,
+                 action_rate_coeff= -1e-2,
+                 collision_coeff= -1,
+                 base_height_coeff= -30,
+                 air_time_coeff= 1, # 0.1
+                 stand_still_coeff= -1.,
                  xy_tracking_temperature= 0.25,
                  yaw_tracking_temperature= 0.25,
-                 nominal_trunk_z= 0.28,
-                 soft_joint_position_limit= 0.95):
+                 # nominal_trunk_z=0.28, #0.325
+                 soft_joint_position_limit= 0.95,
+                 max_airtime =0.5):
 
         self.env = env
         self.tracking_xy_vel_reward = 0
         self.tracking_yaw_vel_reward = 0
         # Tracking rewards
-        self.trot_coeff = self.env.dt*trot_coeff
+
         self.tracking_xy_velocity_command_coeff = tracking_xy_velocity_command_coeff * self.env.dt
         self.tracking_yaw_velocity_command_coeff = tracking_yaw_velocity_command_coeff * self.env.dt
         self.curriculum_steps = curriculum_steps
@@ -46,10 +46,11 @@ class Reward:
         self.action_rate_coeff = action_rate_coeff * self.env.dt
         self.collision_coeff = collision_coeff * self.env.dt
         self.base_height_coeff = base_height_coeff * self.env.dt
-        self.nominal_trunk_z = nominal_trunk_z
+        self.nominal_trunk_z = self.env.nominal_height
         self.air_time_coeff = air_time_coeff * self.env.dt
         self.stand_still_coeff = stand_still_coeff * self.env.dt
         self._prev_joint_vel = None
+        self.max_airtime = max_airtime
 
     def init(self):
         self.joint_limits = self.env.model.jnt_range[1:].copy()
@@ -71,13 +72,13 @@ class Reward:
         cmd_norm = np.linalg.norm(commands)
 
 
-        total_timesteps = self.env.total_timesteps * self.env.nr_envs_per_type
-
-        curriculum_coeff = min(total_timesteps / self.curriculum_steps, 1.0)
-
+        # total_timesteps = self.env.total_timesteps * self.env.nr_envs_per_type
+        #
+        # curriculum_coeff = min(total_timesteps / self.curriculum_steps, 1.0)
+        curriculum_coeff = 1.0
         if self.env.eval:
             curriculum_coeff = 1.0
-
+        # curriculum_coeff = 1
         # Tracking velocity command reward
         current_global_linear_velocity = self.env.data.qvel[:3]
         current_local_linear_velocity = self.env.orientation_quat_inv.apply(current_global_linear_velocity)
@@ -86,13 +87,14 @@ class Reward:
         tracking_xy_velocity_command_reward = self.tracking_xy_velocity_command_coeff * np.exp(-xy_velocity_difference_norm / self.xy_tracking_temperature)
         self.tracking_xy_vel_reward = tracking_xy_velocity_command_reward/ self.tracking_xy_velocity_command_coeff
 
+
         # Tracking angular velocity command reward
         current_local_angular_velocity = self.env.data.qvel[3:6]
         desired_local_yaw_velocity = self.env.goal_yaw_velocity
         yaw_velocity_difference_norm = np.sum(np.square(current_local_angular_velocity[2] - desired_local_yaw_velocity))
         tracking_yaw_velocity_command_reward = self.tracking_yaw_velocity_command_coeff * np.exp(-yaw_velocity_difference_norm / self.yaw_tracking_temperature)
-        self.tracking_yaw_vel_reward = tracking_yaw_velocity_command_reward/ self.tracking_yaw_velocity_command_coeff
 
+        self.tracking_yaw_vel_reward = tracking_yaw_velocity_command_reward/ self.tracking_yaw_velocity_command_coeff
         # default Pose
         qpos = np.array(self.env.data.qpos[7:]).copy()
         default_pose = self.env.nominal_joint_positions
@@ -101,8 +103,8 @@ class Reward:
 
         # Air time reward
 
-        air_time_reward = np.sum((air_time - 0.1) * first_contact)
-        air_time_reward *= (cmd_norm > 0.01)
+        air_time_reward = np.sum((air_time - self.max_airtime) * first_contact)
+        air_time_reward *= (cmd_norm > 0.1)
         air_time_reward = curriculum_coeff * self.air_time_coeff * air_time_reward
 
         # Linear velocity reward
@@ -148,6 +150,7 @@ class Reward:
 
         # Walking height
         trunk_z = self.env.data.qpos[2]
+
         height_difference_squared = (trunk_z - self.nominal_trunk_z) ** 2
         base_height_penalty = curriculum_coeff * self.base_height_coeff * height_difference_squared
 
@@ -155,8 +158,8 @@ class Reward:
         # Stand still
         qpos = np.array(self.env.data.qpos[7:]).copy()
         default_pose = self.env.nominal_joint_positions
-        stand_still_penalty = curriculum_coeff*self.stand_still_coeff * np.sum(np.abs(qpos - default_pose)) * (cmd_norm < 0.01)
 
+        stand_still_penalty = curriculum_coeff*self.stand_still_coeff * np.sum(np.abs(qpos - default_pose)) * (cmd_norm < 0.1)
         # # trotting low speeds
         # contacts = np.array(
         #     [self.env.check_collision("floor", foot_name) for foot_name in self.env.foot_names])

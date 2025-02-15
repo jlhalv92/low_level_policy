@@ -205,7 +205,10 @@ class MuJoCo(Environment):
     # def curriculum_reset(self):
     #     pass
 
-    def render(self, record=False, headless=False, second_cam=False, cam_name=None):
+    def render(self, record=False, depth=False):
+        headless = False
+        second_cam = False
+        cam_name = None
         if self._viewer is None:
             self._viewer = MujocoViewer(self._model, self.dt, headless=headless, record=record, **self._viewer_params)
 

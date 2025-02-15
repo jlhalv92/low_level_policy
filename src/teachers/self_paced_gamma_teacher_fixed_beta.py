@@ -30,12 +30,22 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
         target_kl_threshold,
         temperature_bounds,
     ):
-        self.temp_dist = GammaTorchDistribution(
-            initial_conc, rate, use_cuda=False, dtype=torch.float64
-        )
-        self.target_dist = GammaTorchDistribution(
-            target_conc, rate, use_cuda=False, dtype=torch.float64
-        )
+
+        if doraemon:
+
+            mean, var = 0.5, 0.0016
+            a = (((1 - mean) / var) - (1 / mean)) * (mean ** 2)
+            b = a * (1 / mean - 1)
+            # a,b should be around 77, 77
+            self.temp_dist = Beta(a,b)
+            self.target_dist = Beta(1,1)
+        else:
+            self.temp_dist = GammaTorchDistribution(
+                initial_conc, rate, use_cuda=False, dtype=torch.float64
+            )
+            self.target_dist = GammaTorchDistribution(
+                target_conc, rate, use_cuda=False, dtype=torch.float64
+            )
 
         self.new_conc = initial_conc
         self.max_kl = max_kl
@@ -128,6 +138,7 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
             perf = self.compute_expected_performance(
                 dist, temps_t, old_temp_log_prob_t, temp_value_t
             )
+
             return perf.detach().cpu().numpy()
 
         def perf_constraint_grad_func(x_conc):
