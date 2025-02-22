@@ -293,10 +293,8 @@ class Core(object):
         """
         obs_dim = self.nav_obs_dim
 
-
-
-        navigation_state = self._state[-obs_dim:]
-        nav_state = self._preprocess(navigation_state.copy())
+        nav_state = self._preprocess( self._state.copy())
+        robot_state = self.mdp.get_robot_observation()
 
 
         if learning:
@@ -308,10 +306,8 @@ class Core(object):
 
                 self.mdp.obstacle_velocity = action_antagonist
 
-            robot_state = self._state[:-obs_dim]
-
             if not self.joystick:
-                robot_state[54:57] =  np.array([2,2,0.25]) * action
+                robot_state[-3:] =  action
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
@@ -326,16 +322,15 @@ class Core(object):
 
                 self.mdp.obstacle_velocity = action_antagonist
 
-            robot_state = self._state[:-obs_dim]
             if not self.joystick:
-                robot_state[54:57] = np.array([2,2,0.25])* action
+                robot_state[-3:] =  action
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
-        pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-        pos_robot = self.mdp._data.body("trunk").xpos[:2]
-        next_state_antagonist = np.concatenate((pos_antagonist, pos_robot))
+
+
+        next_state_antagonist = self.mdp.obs_antagonist()
 
         self._episode_steps += 1
 
@@ -369,12 +364,13 @@ class Core(object):
 
         pos_robot = self.mdp._data.body("trunk").xpos[:2]
 
-        reward_collision = 10 * self.mdp.obstacle_robot_collision
-        reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1])) if pos_robot[0] <= (
-                    pos_antagonist[0] + l_antagonist) else -1
+        reward_collision = 100 * self.mdp.obstacle_robot_collision
+        reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1]))
+        reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])
+        distance = self.mdp._data.site("target").xpos[0] - self.mdp._data.qpos[0]
+        pass_finish_line = distance < -0.35
 
-        reward_antagonist = reward_collision + reward_distance
-
+        reward_antagonist = (reward_collision + reward_distance + reward_velocity) * ( not pass_finish_line)
 
         if return_antagonist_state and self.agent_id == 0:
 
@@ -384,9 +380,9 @@ class Core(object):
 
 
         if self.agent_id == 0:
-            next_nav_state = self._preprocess(next_state[-obs_dim:].copy())
-            state = nav_state
-            return state,  self.action, reward, next_nav_state, absorbing, info, last
+            next_nav_state = self._preprocess(next_state.copy())
+
+            return nav_state,  self.action, reward, next_nav_state, absorbing, info, last
 
 
         if self.agent_id == 1:
@@ -415,11 +411,13 @@ class Core(object):
             initial_condition = initial_conditions[self._total_episodes_counter]
 
         self._state =self.mdp.reset(initial_state, initial_condition).copy()
+        #
+        #
+        # pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
+        # pos_robot = self.mdp._data.body("trunk").xpos[:2]
+        # adversary_state = np.concatenate((pos_antagonist, pos_robot))
 
-
-        pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-        pos_robot = self.mdp._data.body("trunk").xpos[:2]
-        adversary_state = np.concatenate((pos_antagonist, pos_robot))
+        adversary_state = self.mdp.obs_antagonist()
 
         self._adversary_state = self._preprocess(adversary_state.copy())
 

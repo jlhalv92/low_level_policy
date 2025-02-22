@@ -2,9 +2,12 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+from mushroom_rl.core import Agent
+from mushroom_rl.utils.minibatches import minibatch_generator
+from mushroom_rl.utils.dataset import parse_dataset, compute_J
 
 import torch.optim as optim
-
+from mushroom_rl.utils.torch import update_optimizer_parameters
 from src.mushroom.deep_actor_critic.deep_actor_critic import DeepAC
 from src.algorithm.policies.policy import Policy
 from mushroom_rl.approximators import Regressor
@@ -280,5 +283,64 @@ class Dagger(DeepAC):
 
         self._update_optimizer_parameters(self.policy.parameters())
 
+
+
+class DaggerSP(Agent):
+
+
+    def __init__(self, mdp_info, policy,actor_optimizer, batch_size, iterations):
+
+        self._batch_size = to_parameter(batch_size)
+        self._iterations = to_parameter(iterations)
+        self._loss_list = []
+        self._optimizer = actor_optimizer['class'](policy.parameters(), **actor_optimizer['params'])
+
+        self._add_save_attr(
+            _optimizer='torch',
+            _batch_size='mushroom',
+            _warmup_transitions='mushroom',
+            _iterations='mushroom',
+            _loss_list='primitive',
+        )
+
+        super().__init__(mdp_info, policy, None)
+
+    def fit(self, dataset,  **info):
+        x, u, r, xn, absorbing,_, last = parse_dataset(dataset)
+        obs = x.astype(np.float32)
+        actions = u.astype(np.float32)
+
+
+        for _ in range(self._iterations()):
+            for obs_i, act_i, in minibatch_generator(self._batch_size(), obs, actions):
+                self._update_policy(obs_i, act_i)
+
+
+
+    def _update_policy(self, state, action_expert):
+        self._optimizer.zero_grad()
+        state_t = torch.from_numpy(state).to(0).float()
+        prob_ratio = self.policy.draw_action_t_attach(state_t)
+
+        # predicted_action = self.policy.draw_action_t_attach(state)
+
+        action_expert_t = torch.from_numpy(action_expert).float().to(0)
+        criterion = nn.MSELoss()
+        loss = criterion(prob_ratio, action_expert_t)
+        self._loss_list.append(loss.clone().detach().cpu().numpy())
+        # loss= torch.tensor(predicted_action) - action_expert_t
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=5)
+
+        self._optimizer.step()
+
+    def _update_optimizer_parameters(self, parameters):
+        self._parameters = list(parameters)
+        if self._optimizer is not None:
+            update_optimizer_parameters(self._optimizer, self._parameters)
+
+    def _post_load(self):
+
+        self._update_optimizer_parameters(self.policy.parameters())
 
 

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Normal
 from torch.distributions import Gamma
-
+from torch.distributions import Beta
 import numpy as np
 
 from mushroom_rl.utils.torch import to_float_tensor
@@ -243,3 +243,58 @@ class GammaTorchDistribution(TorchDistribution):
 
     def parameters(self):
         return [self._conc, self._rate]
+
+
+class BetaTorchDistribution(TorchDistribution):
+    def __init__(self, alfa, beta, use_cuda, dtype):
+        super().__init__(use_cuda)
+
+        self._alfa = nn.Parameter(
+            torch.as_tensor(alfa, dtype=dtype), requires_grad=True
+        )
+        self._beta = nn.Parameter(
+            torch.as_tensor(beta, dtype=dtype), requires_grad=True
+        )
+
+        self.distribution_t = Beta(self._alfa, self._beta)
+
+    def entropy_t(self):
+        return self.distribution_t.entropy()
+
+    def mean_t(self):
+        return self.distribution_t.mean
+
+    def log_pdf_t(self, x):
+        return self.distribution_t.log_prob(x)
+
+    def sample(self, *args, **kwargs):
+        return self.distribution_t.rsample(*args, **kwargs)
+
+    @staticmethod
+    def from_weights(weights, use_cuda=False, dtype=torch.float32):
+        alfa = weights[0]
+        beta = weights[1]
+
+        return BetaTorchDistribution(alfa, beta, use_cuda=use_cuda, dtype=dtype)
+
+    def set_weights(self, weights):
+        if self.use_cuda:
+            alfa_tensor = torch.tensor([weights[0]]).type(self._alfa.data.dtype).cuda()
+            beta_tensor = torch.tensor([weights[1]]).type(self._beta.data.dtype).cuda()
+        else:
+            alfa_tensor = torch.tensor([weights[0]]).type(self._alfa.data.dtype)
+            beta_tensor = torch.tensor([weights[1]]).type(self._beta.data.dtype)
+
+        self._alfa.data = alfa_tensor
+        self._beta.data = beta_tensor
+
+        self.distribution_t = Beta(self._alfa, self._beta)
+
+    def get_weights(self):
+        alfa_weight = self._alfa.data.detach().cpu().numpy()
+        beta_weight =  self._beta.data.detach().cpu().numpy()
+
+        return  np.concatenate(np.array([alfa_weight, beta_weight]))
+
+    def parameters(self):
+        return [self._alfa, self._beta]

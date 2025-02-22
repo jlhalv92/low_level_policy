@@ -45,7 +45,7 @@ class MujocoViewer:
 
     def __init__(self, model, dt, width=1920, height=1080, start_paused=False,
                  custom_render_callback=None, record=False, camera_params=None,
-                 default_camera_mode="static", hide_menu_on_startup=None,
+                 default_camera_mode="follow", hide_menu_on_startup=None,
                  geom_group_visualization_on_startup=None, headless=False):
         """
         Constructor.
@@ -638,7 +638,7 @@ class MujocoViewer:
             if self._camera_mode != "follow":
                 self._camera.fixedcamid = -1
                 self._camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-                self._camera.trackbodyid = 0
+                self._camera.trackbodyid = self._model.body("trunk").id
                 self._set_camera_properties(self._camera_mode_target)
 
         elif self._camera_mode_target == "static":
@@ -731,7 +731,7 @@ class MujocoViewer:
         """
 
         return dict(static=dict(distance=15.0, elevation=-45.0, azimuth=90.0, lookat=np.array([0.0, 0.0, 0.0])),
-                    follow=dict(distance=3.5, elevation=0.0, azimuth=90.0),
+                    follow=dict(distance=5, elevation=-30.0, azimuth=0),
                     top_static=dict(distance=5.0, elevation=-90.0, azimuth=90.0, lookat=np.array([0.0, 0.0, 0.0])))
 
     def setup_opengl_backend_headless(self, width, height):

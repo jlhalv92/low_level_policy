@@ -126,11 +126,12 @@ class PPO(Agent):
         new_pol_dist = self.policy.distribution(x)
         kl_mean = torch.mean(torch.distributions.kl.kl_divergence(
             new_pol_dist, old_pol_dist))
+        kl_target = 0.01 #0.01
 
-        if kl_mean > 0.01 * 2:
+        if kl_mean > kl_target * 2:
             self.learning_rate = max(1e-5, self.learning_rate / 1.5)
             print("KL too big, setting lr to {}".format(self.learning_rate))
-        elif kl_mean < 0.01 / 2 and kl_mean > 0.00:
+        elif kl_mean < kl_target / 2 and kl_mean > 0.00:
             self.learning_rate = min(1e-2, self.learning_rate * 1.5)
             print("KL too small, setting lr to {}".format(self.learning_rate))
 

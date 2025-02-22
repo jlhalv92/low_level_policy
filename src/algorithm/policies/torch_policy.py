@@ -248,8 +248,10 @@ class GaussianTorchPolicy(TorchPolicy):
             s = to_float_tensor(np.atleast_2d(state), self._use_cuda)
             a = self.draw_action_mean_t(s)
 
-
         return torch.squeeze(a, dim=0).detach().cpu().numpy()
+
+    def draw_action_t_attach(self, state):
+        return self.distribution_t(state).rsample()
 
 
     def draw_action_t(self, state):

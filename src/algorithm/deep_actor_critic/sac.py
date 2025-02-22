@@ -73,14 +73,21 @@ class SACPolicy(Policy):
     def __call__(self, state, action):
         raise NotImplementedError
 
-    def draw_action(self, state):
+    def draw_stochastic_action(self, state):
         a = self.compute_action_and_log_prob_t(
             state, compute_log_prob=False).detach().cpu().numpy()
         return a
 
+    def draw_action(self, state):
+        a_raw = self._mu_approximator.predict(state, output_tensor=True)
+        a = torch.tanh(a_raw)
+
+        a_true = a * self._delta_a + self._central_a
+        return a_true.detach().cpu().numpy()
+
     def draw_noisy_action(self, state):
         # Dummy call to draw_action
-        return self.draw_action(state)
+        return self.draw_stochastic_action(state)
 
     def compute_action_and_log_prob(self, state):
         """

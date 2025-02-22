@@ -47,7 +47,8 @@ class Core(object):
         self.history = HistoryStore(5)
         self.use_history = use_history
         self.agent = agent
-        self.nav_obs_dim = obs_dim
+        self.current_action = np.zeros(3)
+
 
 
         self.action = np.zeros(3)
@@ -250,50 +251,6 @@ class Core(object):
 
         return dataset
 
-    def wrap_to_pi(self,angle):
-        """Wraps an angle to the range [-pi, pi]."""
-        return (angle + np.pi) % (2 * np.pi) - np.pi
-    def position_controller(self, k_x=1.0, k_y=1.0, k_yaw=1.0):
-        # Calculate position errors
-        x,y = self.mdp._data.qpos[:2]
-
-        x_target = self.mdp._data.geom("target").xpos[0]
-        y_target = self.mdp._data.geom("target").xpos[1]
-
-        x_obstacle = self.mdp._data.geom("obstacle_1").xpos[0]
-        y_obstacle = self.mdp._data.geom("obstacle_1").xpos[1]
-
-        e_x_o = x -x_obstacle
-        e_y_o = y -y_obstacle
-        distance_obs = np.sqrt(e_x_o**2 + e_y_o**2)
-        yaw = self.mdp.orientation_euler[2]
-        e_x = x_target - x
-        e_y = y_target - y
-
-        # Calculate the angle to the target
-        theta_target = np.arctan2(e_y, e_x)
-
-        # Calculate yaw error
-        e_yaw = self.wrap_to_pi(0 - yaw)
-
-        v_x_obs = (2/(1 +distance_obs**2))*e_x_o if distance_obs < 2 else 0
-        v_y_obs =  (2/(1+distance_obs**2))*e_y_o if distance_obs < 2 else 0
-
-        theta_obs_target = np.arctan2(v_x_obs, v_y_obs)
-        e_obs_yaw = (2/(1 +distance_obs**2))*self.wrap_to_pi(yaw-theta_obs_target) if distance_obs < 2 else 0
-
-        # Calculate linear and angular velocities
-        v_x =  k_x * e_x*0 + v_x_obs
-        v_y = k_y * e_y*0 + v_y_obs
-        w_z = k_yaw * e_yaw + e_obs_yaw
-
-        # Clamp velocities to the range [-1, 1]
-        v_x = np.clip(v_x, -1, 1)
-        v_y = np.clip(v_y, -1, 1)
-        w_z = np.clip(w_z, -1, 1)
-
-        return np.array([v_x, v_y, w_z])
-
     def _step(self, render, headless=False, get_renders=False, learning=False):
         """
         Single step.
@@ -311,52 +268,58 @@ class Core(object):
         """
 
         if render:
-            frame = self.mdp.render(record=self.record, headless=headless)
+            frame = self.mdp.render(record=self.record)
             if self.record:
                 self._record(frame)
 
-        obs_dim = self.nav_obs_dim
-        # img = self.mdp.get_render(cam_name="head", depth=True)
-        # cv2.imshow("Depth Overlay", img)
-        # cv2.waitKey(1)
 
 
         if not self.use_history:
-            navigation_state = self._state[-obs_dim:]
+            navigation_state = self._state
 
         else:
             navigation_state =  self.history.get_history()
 
+        robot_state = self.mdp.get_robot_observation()
+
         if learning:
-            # navigation_state = self._state[-obs_dim:]
-            robot_state = self._state[:-obs_dim]
+
+
             if not self.joystick:
-                if self._current_steps_counter % 5 == 0:
-                    self.action = self.agent.draw_noisy_action(navigation_state)
-                robot_state[54:57] =  np.array([2,2,0.25]) * self.action
+                # if self._current_steps_counter % 5 == 0:
+                self.action = self.agent.draw_noisy_action(navigation_state)
+
+                robot_state[-3:] =  self.action
+
+            # steps = 5
+            # for i in range(steps):
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
+            # robot_state = self.mdp.get_robot_observation()
+            # robot_state[-3:] = self.action
 
         else: # Default
-            robot_state = self._state[:-obs_dim]
+
 
             if not self.joystick:
-                if self._current_steps_counter % 5 ==0:
-                    self.action = self.agent.draw_noisy_action(navigation_state)
-                robot_state[54:57] = np.array([2,2,0.25])* self.action
+                # if self._current_steps_counter % 5 ==0:
+                self.action = self.agent.draw_action(navigation_state)
+
+                robot_state[-3:] =  self.action
 
             control_action = self.low_level_agent.draw_action(robot_state)
+
             next_state, reward, absorbing, info = self.mdp.step(control_action)
 
         if not self.joystick:
-            target_v = np.array([2,2,0.25])* self.action
+            target_v = self.action
             self.mdp.target_vx = target_v[0]
             self.mdp.target_vy = target_v[1]
             self.mdp.target_yaw = target_v[2]
 
         self._episode_steps += 1
 
-        next_navigation_state = next_state[-obs_dim:]
+        next_navigation_state = next_state
 
         if self.use_history:
             self.history.add_sample(next_navigation_state)
@@ -373,6 +336,7 @@ class Core(object):
 
         self._state = next_state
 
+
         if not self.use_history:
 
             # if get_renders:
@@ -380,7 +344,7 @@ class Core(object):
             #     img = self.mdp.get_render(cam_name="head")
             #     return img, state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
 
-            return state[-obs_dim:],  self.action, reward, next_state[-obs_dim:], absorbing, info, last
+            return state,  self.action, reward, next_state, absorbing, info, last
         else:
             # if get_renders:
             #     img = self.mdp.get_render()
@@ -414,14 +378,14 @@ class Core(object):
 
         if (self.mdp.task==2 or self.mdp.task==3 or self.mdp.task==4) and self.use_history:
             self.history = HistoryStore(5)
-            obs= self._state[-self.nav_obs_dim:]
+            obs= self._state
             for _ in range(5):
                 self.history.add_sample(obs)
 
         self.agent.episode_start()
         self.agent.next_action = None
         self._episode_steps = 0
-
+        self.current_action = np.zeros(3)
 
     def _preprocess(self, state):
         """

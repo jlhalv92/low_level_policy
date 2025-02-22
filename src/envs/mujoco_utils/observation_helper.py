@@ -300,7 +300,7 @@ class ObservationHelper:
             obs = data.sensor(name).data.copy()
 
         elif o_type == ObservationType.SENSOR_ORIENTATION:
-            obs = quaternion_to_euler(data.sensor(name).data.copy())
+            obs = np.zeros(3)
 
         elif o_type== ObservationType.TARGET_POSE:
             target_pos = data.site(name).pos.copy()
@@ -341,13 +341,22 @@ class ObservationHelper:
             obs = np.zeros(10)
 
         elif o_type == ObservationType.RAYS:
-
+            limit_distance = 5 #20
             rf_readings = np.array([data.sensor("rf_{}".format(i+1)).data.copy()[0] for i in range(50)])
-            rf_readings = np.where(rf_readings == -1 , 20, rf_readings)
+            rf_readings = np.where(rf_readings == -1 , limit_distance, rf_readings)
             rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
-            rf_readings_2 = np.where(rf_readings >=20 , 20, rf_readings)
+            rf_readings_2 = np.where(rf_readings >=limit_distance , limit_distance, rf_readings)
             rf_readings_f = np.log2(rf_readings_2)
             obs = rf_readings_f
+
+            # limit_distance = 20 #20
+            # rf_readings = np.array([data.sensor("rf_{}".format(i+1)).data.copy()[0] for i in range(50)])
+            # rf_readings = np.where(rf_readings == -1 , limit_distance, rf_readings)
+            # rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
+            # rf_readings_2 = np.where(rf_readings >=limit_distance , limit_distance, rf_readings)
+            # # rf_readings_f = np.log2(rf_readings_2)
+            # obs = rf_readings_2/limit_distance
+
             # self.history.add_sample(rf_readings_f)
             #
             # obs = self.history.get_history()

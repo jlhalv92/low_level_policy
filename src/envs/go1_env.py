@@ -81,7 +81,7 @@ def keyboard_control(vx, vy, wz):
     keys = pygame.key.get_pressed()
 
     if keys[pygame.K_UP]:
-        vx = min(vx + 0.1,1)
+        vx = min(vx + 0.1,1.5)
     if keys[pygame.K_UP]==False and keys[pygame.K_DOWN]==False:
         vx = 0
     if keys[pygame.K_LEFT]==False and keys[pygame.K_RIGHT]==False:
@@ -90,17 +90,17 @@ def keyboard_control(vx, vy, wz):
         wz = 0
 
     if keys[pygame.K_DOWN]:
-        vx = max(vx - 0.1,-1)
+        vx = max(vx - 0.5,-1.5)
 
     if keys[pygame.K_LEFT]:
-        vy = min(vy + 0.1,1)
+        vy = min(vy + 0.5,1.5)
     if keys[pygame.K_RIGHT]:
-        vy = max(vy - 0.1,-1)
+        vy = max(vy - 0.5,-1.5)
     if keys[pygame.K_w]:
-        wz = min(wz + 0.1,1)
+        wz = min(wz + 0.5,1.5)
 
     if keys[pygame.K_e]:
-        wz = max(wz - 0.1,-1)
+        wz = max(wz - 0.5,-1.5)
 
     return vx,vy,wz
 
@@ -256,7 +256,7 @@ class Go1(MuJoCo):
 
         last_actions = [("last_actions", "torques", ObservationType.ACTIONS)]
         gravity_projection = [("gravity_projection", "orientation", ObservationType.IMU)]
-        angular_velocity = [("angular_velocity", "a_velocity", ObservationType.VELOCITY)]
+        angular_velocity = [("angular_velocity", "a_velocity", ObservationType.A_VELOCITY)]
         linear_velocity = [("linear_velocity", "l_velocity", ObservationType.L_VELOCITY)]
         contact = [("feet_contact", "feet_sensor", ObservationType.FEET_SENSOR)]
         airtime = [("feet_airtime", "feet_sensor", ObservationType.FEET_SENSOR)]

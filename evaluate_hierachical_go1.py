@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
 from src.envs.go1_env_rays import Go1
-from src.envs.go1_env_privilege_rays import Go1
+# from src.envs.go1_env_privilege_rays import Go1
 
 from mushroom_rl.utils.dataset import compute_J, parse_dataset
 from mushroom_rl.core import Agent

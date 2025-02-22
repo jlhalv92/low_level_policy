@@ -99,10 +99,15 @@ class RewardThresholdCurriculum(Curriculum):
         self.episode_duration = np.zeros(len(self))
 
     def get_local_bins(self, bin_inds, range=0.1):
-        adjacent_inds = np.logical_and(
-            self.grid[:, None, :].repeat(len(bin_inds), axis=1) >= self.grid[:, bin_inds, None] - range,
-            self.grid[:, None, :].repeat(len(bin_inds), axis=1) <= self.grid[:, bin_inds, None] + range
-        ).all(axis=0)
+        # Calculate the squared Euclidean distance between grid points and bin center points
+        grid_repeated = self.grid[:, None, :].repeat(len(bin_inds), axis=1)
+        centers = self.grid[:, bin_inds, None]
+
+        # Compute the distance between each grid point and each center
+        distances_sq = np.sum((grid_repeated - centers) ** 2, axis=0)
+
+        # Select points within the spherical radius
+        adjacent_inds = distances_sq <= range
 
         return adjacent_inds
 
@@ -122,19 +127,3 @@ class RewardThresholdCurriculum(Curriculum):
         self.episode_ang_vel_raw[bin_inds] = ang_vel_raw.cpu().numpy()
         self.episode_duration[bin_inds] = episode_duration.cpu().numpy()
 
-
-
-
-
-    # adjacents = r.get_local_bins(np.array([10, ]), range=0.5)
-    # for adjacent in adjacents:
-    #     adjacent_inds = np.array(adjacent.nonzero()[0])
-    #     print(adjacent_inds)
-    #     r.update(bin_inds=adjacent_inds, lin_vel_rewards=np.ones_like(adjacent_inds),
-    #              ang_vel_rewards=np.ones_like(adjacent_inds), lin_vel_threshold=0.0, ang_vel_threshold=0.0,
-    #              local_range=0.5)
-
-    # samples, bins = r.sample(10_000)
-
-    # plt.scatter(*samples.T[:2])
-    # plt.show()

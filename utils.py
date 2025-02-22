@@ -8,8 +8,8 @@ from mushroom_rl.utils.dataset import compute_J
 
 def make_env():
     def thunk():
-
-        env = UnitreeGo1(42, render=False)
+        env_args = dict(vx_limit=1.2, wz_limit=1.5)
+        env = UnitreeGo1(42, render=False, **env_args)
 
         return env
 

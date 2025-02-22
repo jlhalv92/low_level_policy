@@ -304,7 +304,7 @@ class Go1(MuJoCo):
 
         last_actions = [("last_actions", "torques", ObservationType.ACTIONS)]
         gravity_projection = [("gravity_projection", "orientation", ObservationType.IMU)]
-        angular_velocity = [("angular_velocity", "a_velocity", ObservationType.VELOCITY)]
+        angular_velocity = [("angular_velocity", "a_velocity", ObservationType.A_VELOCITY)]
         linear_velocity = [("linear_velocity", "l_velocity", ObservationType.L_VELOCITY)]
         contact = [("feet_contact", "feet_sensor", ObservationType.FEET_SENSOR)]
         airtime = [("feet_airtime", "feet_sensor", ObservationType.FEET_SENSOR)]
@@ -347,7 +347,7 @@ class Go1(MuJoCo):
             rays = [("distance_rays", "distance_rays", ObservationType.RAYS)]
             robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
             robot_orientation = [("orientation", "orientation_sensor", ObservationType.HEADING)]
-            current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
+            current_velocity = [("current_velocity", "a_velocity", ObservationType.L_VELOCITY)]
             room_width = [("room_width", "room_width", ObservationType.ROOM_WIDTH)]
             # robot_bounding_box = [("robot_bounding_box", "robot_bounding_box", ObservationType.ROBOT_BOUNDING_BOX)]
             # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
@@ -447,7 +447,6 @@ class Go1(MuJoCo):
                          timestep=timestep,
                          max_a=max_a, min_a=min_a)
 
-        # self.renderer = mujoco.Renderer(self._model)
         self.last_action =  np.array(12 * [0])
         self.torques = list()
         x,y = self._data.qpos[:2]

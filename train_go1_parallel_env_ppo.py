@@ -40,6 +40,8 @@ class PolicyNetwork(nn.Module):
         nn.init.orthogonal_(self._h4.weight, 0.01)
         nn.init.constant_(self._h4.bias, 0.0)
 
+
+
     def forward(self, state, **kwargs):
         features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
         features2 = F.elu(self._h2(features1))
@@ -110,7 +112,9 @@ def experiment(alg, n_epochs,
     n_epochs_policy = 5
     eps_ppo = 0.2
     lam = .95
-    ent_coeff = 0.01
+    ent_coeff = 0.01 # 0.01
+
+
     retrain = retrain
 
 
@@ -133,9 +137,10 @@ def experiment(alg, n_epochs,
 
     actor = PolicyNetwork
     critic = ValueNetwork
-
-    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True)
-    mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True)
+    # env_args = dict(vx_limit=1.2, wz_limit=1.5)
+    env_args = dict(vx_limit=3, vy_limit=2, wz_limit=3)
+    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, **env_args)
+    mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
 
     obs_shape = (mdp_eval.info.observation_space.shape[0],)
     action_shape = (mdp_eval.info.action_space.shape[0],)
@@ -159,14 +164,16 @@ def experiment(alg, n_epochs,
     alg_params['critic_params'] = critic_params
 
     if retrain:
-        path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_vmax_domain_randomization/epoch_last"
-        path ="checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization_vmax/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization_vmax_rt/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_Priv/epoch_60"
-        path ="checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_Priv/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_r/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_300M_vc/epoch_last"
+        #BASE POLICY
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_120"
+
+        #SAFE POLICY
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
+
+        #AGILE POLICY
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+        # AGILE SAFE
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65/epoch_220"
 
         agent = Agent.load(path)
     else:
@@ -179,7 +186,7 @@ def experiment(alg, n_epochs,
     mdp_eval.env.eval=True
     core_eval = CoreEval(agent, mdp_eval)
 
-    dataset = core_eval.evaluate(n_episodes=5, render=False)
+    dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -211,25 +218,25 @@ def experiment(alg, n_epochs,
     agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1', alg.__name__, agent_task, "last"))
     logger.info('Press a button to visualize')
     input()
-    core_eval.evaluate(n_episodes=5, render=True)
+    core_eval.evaluate(n_episodes=n_episodes_test, render=True)
 
 
 if __name__ == '__main__':
 
     n_envs= 100 #100
     n_steps = 10
-    n_steps_per_fit= 1000 #1000
-    n_epochs = 200 # 150
+    n_steps_per_fit= 2000 #1000
+    n_epochs = 100 # 150
     total_data = n_epochs*n_steps*n_steps_per_fit
     print('Total number of steps per env: {}'.format(total_data), "total number of steps: {}".format(total_data*n_envs))
     experiment(alg=PPO,
                n_epochs=n_epochs,
-               n_steps=int(n_steps*n_steps_per_fit),
+               n_steps=int(20_000),
                n_steps_per_fit=n_steps_per_fit,
-               n_episodes_test=5,
+               n_episodes_test=10,
                n_envs=n_envs,
-               n_minibatches=4,
+               n_minibatches=20,
                retrain=False,
-               name_exp="RAPID_LOCOMOTION_200M_VC")
+               name_exp=f"LOCOMOTION_{n_epochs}_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65_regularization_torques_qvel")
 
 

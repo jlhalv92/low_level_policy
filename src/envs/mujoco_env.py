@@ -5,6 +5,7 @@ from dm_control import mjcf
 from mushroom_rl.core import Environment, MDPInfo
 from mushroom_rl.utils.spaces import Box
 from src.envs.mujoco_utils import *
+# from src.envs.viewer import MujocoViewer
 
 
 

@@ -244,8 +244,6 @@ class Core(object):
                 if single_done:
                     actual_next_state[i] = info["final_observation"][i]
 
-            # buffer.append(self._state, actions, reward, actual_next_state, terminated, done, info)
-
             for env in range(self.mdp.env.num_envs):
                 datasets[env].append([self._state[env]
                                    ,actions[env],

@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 import torch
-from src.utils.distributions.torch_distributions import GammaTorchDistribution
+from src.utils.distributions.torch_distributions import GammaTorchDistribution, BetaTorchDistribution
 from mushroom_rl.utils.torch import to_float_tensor
 from scipy.optimize import Bounds, NonlinearConstraint, minimize
 from mushroom_rl.core import Logger
@@ -13,7 +13,7 @@ G_TOL = 1e-4  # Tolerance for termination by the norm of the Lagrangian gradient
 X_TOL = 1e-6  # Tolerance for termination by the change of the independent variable
 
 
-class SelfPacedGammaTemperatureTeacherFixedBeta:
+class SelfPaced:
     """
     Klink et al.: A Probabilistic Interpretation of Self-Paced Learning with Applications to Reinforcement Learning
     Implementation based on: https://github.com/psclklnk/spdl
@@ -29,16 +29,22 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
         conc_lower_bound,
         target_kl_threshold,
         temperature_bounds,
+        doraemon=False,
+        mean= 0.5,
+        var = 0.0016
     ):
-
+        self.doraemon = doraemon
         if doraemon:
 
-            mean, var = 0.5, 0.0016
             a = (((1 - mean) / var) - (1 / mean)) * (mean ** 2)
             b = a * (1 / mean - 1)
             # a,b should be around 77, 77
-            self.temp_dist = Beta(a,b)
-            self.target_dist = Beta(1,1)
+            self.temp_dist = BetaTorchDistribution(np.array([a]),np.array([b]),
+                                                   use_cuda=False, dtype=torch.float64)
+
+            self.target_dist = BetaTorchDistribution(np.array([1]),np.array([1]),
+                                                     use_cuda=False, dtype=torch.float64 )
+
         else:
             self.temp_dist = GammaTorchDistribution(
                 initial_conc, rate, use_cuda=False, dtype=torch.float64
@@ -58,17 +64,17 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
 
         self.iteration = 0
 
-        # self._logger = Logger("self-paced", results_dir=None)
-        self._logger = None
+        self._logger = Logger("self-paced")
+        # self._logger = None
 
-
-        # Data collection
-        self.conc_temperature_data = [
-            self.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
-        ]
-        self.rate_temperature_data = [
-            self.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
-        ]
+        if not doraemon:
+            # Data collection
+            self.conc_temperature_data = [self.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]]
+            self.rate_temperature_data = [ self.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]]
+        else:
+            # Data collection
+            self.conc_temperature_data = [self.temp_dist.parameters()[0].data.detach().cpu().numpy()]
+            self.rate_temperature_data = [ self.temp_dist.parameters()[1].data.detach().cpu().numpy()]
 
     def compute_temp_kl(self, old_temp_dist):
         return torch.distributions.kl.kl_divergence(
@@ -91,11 +97,14 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
     def update_temperature_distribution(self, temperatures, values, training_iteration):
         # self.iteration and training_iteration are different
         self.iteration += 1
-
-        old_temp_dist = GammaTorchDistribution.from_weights(
-            self.temp_dist.get_weights(), dtype=torch.float64
-        )
-
+        if not self.doraemon:
+            old_temp_dist = GammaTorchDistribution.from_weights(
+                self.temp_dist.get_weights(), dtype=torch.float64
+            )
+        else:
+            old_temp_dist = BetaTorchDistribution.from_weights(
+                self.temp_dist.get_weights(), dtype=torch.float64
+            )
         temps_t = to_float_tensor(temperatures, use_cuda=False)
         old_temp_log_prob_t = old_temp_dist.log_pdf_t(temps_t).detach()
 
@@ -104,23 +113,43 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
 
         # Define the KL constraint
         def kl_constraint_func(x_conc):
-            dist = GammaTorchDistribution.from_weights(
-                [x_conc, self.rate], dtype=torch.float64
-            )
-            kl_div = torch.distributions.kl.kl_divergence(
-                dist.distribution_t, old_temp_dist.distribution_t
-            )
+            if not self.doraemon:
+                dist = GammaTorchDistribution.from_weights(
+                    [x_conc, self.rate], dtype=torch.float64
+                )
+                kl_div = torch.distributions.kl.kl_divergence(
+                    dist.distribution_t, old_temp_dist.distribution_t
+                )
+            else:
+                dist = BetaTorchDistribution.from_weights(
+                    [x_conc, x_conc], dtype=torch.float64
+                )
+                kl_div = torch.distributions.kl.kl_divergence(
+                    dist.distribution_t, old_temp_dist.distribution_t
+                )
             return kl_div.detach().cpu().numpy()
 
+
+
         def kl_constraint_grad_func(x_conc):
-            dist = GammaTorchDistribution.from_weights(
-                [x_conc, self.rate], dtype=torch.float64
-            )
-            kl_div = torch.distributions.kl.kl_divergence(
-                dist.distribution_t, old_temp_dist.distribution_t
-            )
-            conc_grad = torch.autograd.grad(kl_div, dist.parameters()[:1])
-            return np.array([conc_grad[0].detach().cpu().numpy()])
+            if not self.doraemon:
+                dist = GammaTorchDistribution.from_weights(
+                    [x_conc, self.rate], dtype=torch.float64
+                )
+                kl_div = torch.distributions.kl.kl_divergence(
+                    dist.distribution_t, old_temp_dist.distribution_t
+                )
+                conc_grad = torch.autograd.grad(kl_div, dist.parameters()[:1])
+                return np.array([conc_grad[0].detach().cpu().numpy()])
+            else:
+                dist = BetaTorchDistribution.from_weights(
+                    [x_conc, x_conc], dtype=torch.float64
+                )
+                kl_div = torch.distributions.kl.kl_divergence(
+                    dist.distribution_t, old_temp_dist.distribution_t
+                )
+                conc_grad = torch.autograd.grad(kl_div, dist.parameters()[:1])
+                return np.array([conc_grad[0].detach().cpu().numpy()])
 
         kl_constraint = NonlinearConstraint(
             kl_constraint_func,
@@ -132,9 +161,15 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
 
         # Define the performance constraint
         def perf_constraint_func(x_conc):
-            dist = GammaTorchDistribution.from_weights(
-                [x_conc, self.rate], dtype=torch.float64
-            )
+            if not self.doraemon:
+                dist = GammaTorchDistribution.from_weights(
+                    [x_conc, self.rate], dtype=torch.float64
+                )
+            else:
+                dist = BetaTorchDistribution.from_weights(
+                    [x_conc, x_conc], dtype=torch.float64
+                )
+
             perf = self.compute_expected_performance(
                 dist, temps_t, old_temp_log_prob_t, temp_value_t
             )
@@ -142,13 +177,20 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
             return perf.detach().cpu().numpy()
 
         def perf_constraint_grad_func(x_conc):
-            dist = GammaTorchDistribution.from_weights(
-                [x_conc, self.rate], dtype=torch.float64
-            )
+            if not self.doraemon:
+                dist = GammaTorchDistribution.from_weights(
+                    [x_conc, self.rate], dtype=torch.float64
+                )
+            else:
+                dist = BetaTorchDistribution.from_weights(
+                    [x_conc, x_conc], dtype=torch.float64
+                )
             perf = self.compute_expected_performance(
                 dist, temps_t, old_temp_log_prob_t, temp_value_t
             )
+
             conc_grad = torch.autograd.grad(perf, dist.parameters()[:1])
+
             return np.array([conc_grad[0].detach().cpu().numpy()])
 
         perf_constraint = NonlinearConstraint(
@@ -162,7 +204,7 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
         if self.compute_target_temp_kl() > self.target_kl_threshold:
             # Define the conc constraint as bounds
             cones = np.ones_like(self.temp_dist.get_weights()[:1])
-            lb = cones.copy()
+            # lb = cones.copy()
             lb = self.conc_lb
             ub = np.inf * cones.copy()
             bounds = Bounds(lb, ub, keep_feasible=True)
@@ -185,17 +227,31 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
 
                 # Define the objective plus Jacobian
                 def objective(x_conc):
-                    dist = GammaTorchDistribution.from_weights(
-                        [x_conc, self.rate], dtype=torch.float64
-                    )
-                    kl_div = torch.distributions.kl.kl_divergence(
-                        dist.distribution_t, self.target_dist.distribution_t
-                    )
-                    conc_grad = torch.autograd.grad(kl_div, dist.parameters()[:1])
+                    if not self.doraemon:
+                        dist = GammaTorchDistribution.from_weights(
+                            [x_conc, self.rate], dtype=torch.float64
+                        )
+                        kl_div = torch.distributions.kl.kl_divergence(
+                            dist.distribution_t, self.target_dist.distribution_t
+                        )
+                        conc_grad = torch.autograd.grad(kl_div, dist.parameters()[:1])
 
-                    return kl_div.detach().cpu().numpy(), np.array(
-                        conc_grad[0].detach().cpu().numpy()
-                    ).astype(np.float64)
+                        return kl_div.detach().cpu().numpy(), np.array(
+                            conc_grad[0].detach().cpu().numpy()
+                        ).astype(np.float64)
+
+                    else:
+                        dist = BetaTorchDistribution.from_weights(
+                            [x_conc[0], x_conc[0]], dtype=torch.float64
+                        )
+                        kl_div = torch.distributions.kl.kl_divergence(
+                            dist.distribution_t, self.target_dist.distribution_t
+                        )
+                        conc_grad = torch.autograd.grad(kl_div, dist.parameters()[:1])
+
+                        return kl_div.detach().cpu().numpy(), np.array(
+                            conc_grad[0].detach().cpu().numpy()
+                        ).astype(np.float64)
 
                 res = minimize(
                     objective,
@@ -241,7 +297,9 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
                 # )
             else:
                 res = None
+
         except Exception as e:
+
             os.makedirs("optimization_errors", exist_ok=True)
             with open(
                 os.path.join("optimization_errors", "error_" + str(time.time())), "wb"
@@ -254,10 +312,17 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
             res = None
 
         if res is not None and res.success:
-            self.temp_dist.set_weights([res.x[0], self.rate[0]])
+            # print("Optimization succeeded!")
+            if not self.doraemon:
+                self.temp_dist.set_weights([res.x[0], self.rate[0]])
+
+            else:
+                self.temp_dist.set_weights([res.x[0], res.x[0]])
+
         elif res is not None:
             # If it was not a success, but the objective value was improved and the bounds are still valid, we still
             # use the result
+            print("Optimization failed!")
             old_f = objective(self.temp_dist.get_weights()[:1])
             cons_ok = True
             for constraint in constraints:
@@ -269,7 +334,10 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
                 np.all(bounds.lb <= res.x) and np.all(res.x <= bounds.ub)
             )
             if cons_ok and rate_ok and res.fun < old_f:
-                self.temp_dist.set_weights([res.x[0], self.rate[0]])
+                if not self.doraemon:
+                    self.temp_dist.set_weights([res.x[0], self.rate[0]])
+                else:
+                    self.temp_dist.set_weights([res.x[0], res.x[0]])
             else:
                 print(
                     "Warning! Context optimization unsuccessful - will keep old values. Message: %s"
@@ -283,22 +351,34 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
             [self.conc_temperature_data[-1]]
             * (training_iteration - len(self.conc_temperature_data))
         )
-        self.conc_temperature_data.append(
-            self.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
-        )
+        if self.doraemon:
+            self.conc_temperature_data.append(
+                self.temp_dist.parameters()[0].data.detach().cpu().numpy()
+            )
+        else:
+            self.conc_temperature_data.append(
+                self.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+            )
         self.rate_temperature_data.extend(
             [self.rate_temperature_data[-1]]
             * (training_iteration - len(self.rate_temperature_data))
         )
-        self.rate_temperature_data.append(
-            self.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
-        )
+        if self.doraemon:
+            self.rate_temperature_data.append(
+                self.temp_dist.parameters()[1].data.detach().cpu().numpy()
+            )
+        else:
+            self.rate_temperature_data.append(
+                self.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
+            )
 
         # Logging
         new_conc = self.temp_dist.get_weights()[0]
         new_rate = self.temp_dist.get_weights()[1]
+
         perf = perf_constraint_func(new_conc)
         self.new_conc = new_conc
+
         self._log_info(
             perf,
             new_conc,
@@ -322,8 +402,9 @@ class SelfPacedGammaTemperatureTeacherFixedBeta:
                 round(float(performance), 6),
                 round(float(conc), 6),
                 round(float(rate), 6),
-                round(float(temp_kl.detach().cpu().numpy()[0]), 6),
-                round(float(target_temp_kl[0]), 6),
+                round(float(temp_kl.detach().cpu().numpy()), 6),
+                round(float(target_temp_kl), 6),
             )
+
 
             self._logger.info(msg)

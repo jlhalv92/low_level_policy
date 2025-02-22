@@ -84,14 +84,48 @@ class CriticNetwork(nn.Module):
 
         return torch.squeeze(q)
 
+class PolicyNetworkStudent(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, **kwargs):
+        super().__init__()
+
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+
+        self._h1 = nn.Linear(n_input, 2*n_features)
+        self._h2 = nn.Linear(2*n_features, n_features)
+        self._h3 = nn.Linear(n_features, int(n_features/2))
+        self._h4 = nn.Linear(int(n_features/2), n_output)
+
+        nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
+        nn.init.constant_(self._h1.bias, 0.0)
+        nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
+        nn.init.constant_(self._h2.bias, 0.0)
+        nn.init.orthogonal_(self._h3.weight, np.sqrt(2))
+        nn.init.constant_(self._h3.bias, 0.0)
+        nn.init.orthogonal_(self._h4.weight, 0.01)
+        nn.init.constant_(self._h4.bias, 0.0)
+
+    def forward(self, state, **kwargs):
+        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
+        features2 = F.elu(self._h2(features1))
+        features3 = F.elu(self._h3(features2))
+        a = self._h4(features3)
+
+        return a
 
 class ActorBiNetwork(nn.Module):
-    def __init__(self, input_shape, output_shape, n_features,
+    def __init__(self, input_shape,
+                 output_shape,
+                 n_features,
                  size_propioception=4,
-                 size_exteroception=54, **kwargs):
+                 size_exteroception=None, **kwargs):
         super(ActorBiNetwork, self).__init__()
+
         self.size_propioception = size_propioception
-        self.size_exteroception = size_exteroception
+        if size_exteroception:
+            self.size_exteroception = size_exteroception
+        else:
+            self.size_exteroception = input_shape[0] - size_propioception
         n_output = output_shape[0]
 
         # Intrinsic Processing (Expand 4 → 10)
@@ -114,11 +148,14 @@ class ActorBiNetwork(nn.Module):
 
         # Output Layer
         self._out = nn.Linear(n_features, n_output)
-        nn.init.xavier_uniform_(self._out.weight, gain=nn.init.calculate_gain('linear'))
+        # nn.init.xavier_uniform_(self._out.weight, gain=nn.init.calculate_gain('linear'))
+
+        nn.init.uniform_(self._out.weight, -0.05, 0.05)  # Small uniform values
+        nn.init.zeros_(self._out.bias)  # Initialize bias to zero
 
     def forward(self, state):
-        state_extrinsic_privilege = state[:,self.size_propioception:]
         state_intrinsic = state[:,:self.size_propioception]
+        state_extrinsic_privilege = state[:,self.size_propioception:]
 
         # Intrinsic Processing
         intrinsic_transformed = F.relu(self._h_intrinsic(state_intrinsic.float()))
@@ -201,6 +238,35 @@ class ActorNetwork(nn.Module):
 
         return a
 
+
+
+class ActorObstacleNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, **kwargs):
+        super(ActorObstacleNetwork, self).__init__()
+
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+
+        self._h1 = nn.Linear(n_input, n_features)
+        self._h2 = nn.Linear(n_features, n_features)
+
+        nn.init.xavier_uniform_(self._h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._out = nn.Linear(n_features, n_output)
+
+        nn.init.uniform_(self._out.weight, -0.5, 0.5)  # Small uniform values
+        nn.init.zeros_(self._out.bias)  # Initialize bias to zero
+
+    def forward(self, state):
+
+        features1 = F.relu(self._h1(torch.squeeze(state, 1).float()))
+        features2 = F.relu(self._h2(features1))
+        a = self._out(features2)
+
+        return a
 
 class ActorNetworkObjectDect(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):

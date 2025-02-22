@@ -93,8 +93,8 @@ def experiment_qarl(
             name="seed_{}".format(run_id),
         )
 
-    cfg = dict(kp=40,
-               kd=1,
+    cfg = dict(kp=20,
+               kd=0.5,
                antagonist=True,
                max_level=False,
                curriculum=False,

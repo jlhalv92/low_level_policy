@@ -82,7 +82,7 @@
 
 
 
-    <body name="trunk" pos="-2 0 0.5" childclass="go1">
+    <body name="trunk" pos="0 0 0.5" childclass="go1">
 <!--      <site name="robot_bb" type="box" size="0.35 0.2 0.2" pos="-0.05 0 -0.1" rgba=".6 .3 .3 0.2"  />-->
         <site name="robot_contact_limit" type="cylinder" size=".4 0.5" rgba=".6 .3 .3 0.1"  />
       <camera name="track" mode="trackcom" pos="0 -2 0" xyaxes="1 0 0 0 0 1"/>
@@ -101,60 +101,60 @@
       <geom  name="trunk_7" class="collision" pos="0.25 0 -0.05" size="0.01 0.06" quat="1 1 0 0"/>
       <geom  name="trunk_8" class="collision" pos="0.255 0 0.0355" size="0.021 0.052" quat="1 1 0 0"/>
 
-      <site  name="camera" type="box" size="0.02 0.05 0.02" pos="0.255 0 0.08" rgba=".7 .5 .3 1"  />
+<!--      <site  name="camera" type="box" size="0.02 0.05 0.02" pos="0.255 0 0.08" rgba=".7 .5 .3 1"  />-->
       <camera name="head" pos="0.255 0 0.1" xyaxes="0 -1 0 0 0 1"  fovy="58"/>
 
 
-        <site name="rf_1" class="rangefinder" fromto=" 0.385 0.0 0.08 0.285 0 0.08"/>
-<site name="rf_2" class="rangefinder" fromto=" 0.3841790013823246 0.0127877161684506 0.08 0.285 0 0.08"/>
-<site name="rf_3" class="rangefinder" fromto=" 0.3817294863039029 0.025365458390950738 0.08 0.285 0 0.08"/>
-<site name="rf_4" class="rangefinder" fromto=" 0.37769167573460216 0.03752670048793741 0.08 0.285 0 0.08"/>
-<site name="rf_5" class="rangefinder" fromto=" 0.3721318704123389 0.049071755200393787 0.08 0.285 0 0.08"/>
-<site name="rf_6" class="rangefinder" fromto=" 0.36514136218679566 0.05981105304912159 0.08 0.285 0 0.08"/>
-<site name="rf_7" class="rangefinder" fromto=" 0.35683493500977276 0.06956825506034864 0.08 0.285 0 0.08"/>
-<site name="rf_8" class="rangefinder" fromto=" 0.34734898018587335 0.07818314824680299 0.08 0.285 0 0.08"/>
-<site name="rf_9" class="rangefinder" fromto=" 0.3368392568310525 0.08551427630053461 0.08 0.285 0 0.08"/>
-<site name="rf_10" class="rangefinder" fromto=" 0.3254783343122394 0.09144126230158124 0.08 0.285 0 0.08"/>
-<site name="rf_11" class="rangefinder" fromto=" 0.31345275866310324 0.09586678530366606 0.08 0.285 0 0.08"/>
-<site name="rf_12" class="rangefinder" fromto=" 0.3009599895033379 0.09871817834144501 0.08 0.285 0 0.08"/>
-<site name="rf_13" class="rangefinder" fromto=" 0.2882051577571655 0.09994862162006879 0.08 0.285 0 0.08"/>
-<site name="rf_14" class="rangefinder" fromto=" 0.2753976974092318 0.09953791129491983 0.08 0.285 0 0.08"/>
-<site name="rf_15" class="rangefinder" fromto=" 0.26274790660436853 0.09749279121818237 0.08 0.285 0 0.08"/>
-<site name="rf_16" class="rangefinder" fromto=" 0.2504634945578692 0.09384684220497605 0.08 0.285 0 0.08"/>
-<site name="rf_17" class="rangefinder" fromto=" 0.23874617097591647 0.08865993063730002 0.08 0.285 0 0.08"/>
-<site name="rf_18" class="rangefinder" fromto=" 0.22778833398778303 0.08201722545969561 0.08 0.285 0 0.08"/>
-<site name="rf_19" class="rangefinder" fromto=" 0.21776991097386833 0.07402779970753158 0.08 0.285 0 0.08"/>
-<site name="rf_20" class="rangefinder" fromto=" 0.20885540416308657 0.06482283953077887 0.08 0.285 0 0.08"/>
-<site name="rf_21" class="rangefinder" fromto=" 0.20119118951081594 0.054553490121054905 0.08 0.285 0 0.08"/>
-<site name="rf_22" class="rangefinder" fromto=" 0.19490311320975806 0.043388373911755825 0.08 0.285 0 0.08"/>
-<site name="rf_23" class="rangefinder" fromto=" 0.1900944252989331 0.03151082180236209 0.08 0.285 0 0.08"/>
-<site name="rf_24" class="rangefinder" fromto=" 0.18684408430089344 0.019115862870137255 0.08 0.285 0 0.08"/>
-<site name="rf_25" class="rangefinder" fromto=" 0.18520546072496635 0.006407021998071323 0.08 0.285 0 0.08"/>
-<site name="rf_26" class="rangefinder" fromto=" 0.18520546072496635 -0.006407021998071256 0.08 0.285 0 0.08"/>
-<site name="rf_27" class="rangefinder" fromto=" 0.18684408430089344 -0.01911586287013719 0.08 0.285 0 0.08"/>
-<site name="rf_28" class="rangefinder" fromto=" 0.19009442529893308 -0.031510821802362025 0.08 0.285 0 0.08"/>
-<site name="rf_29" class="rangefinder" fromto=" 0.19490311320975806 -0.043388373911755804 0.08 0.285 0 0.08"/>
-<site name="rf_30" class="rangefinder" fromto=" 0.20119118951081588 -0.05455349012105485 0.08 0.285 0 0.08"/>
-<site name="rf_31" class="rangefinder" fromto=" 0.2088554041630865 -0.06482283953077882 0.08 0.285 0 0.08"/>
-<site name="rf_32" class="rangefinder" fromto=" 0.21776991097386827 -0.07402779970753152 0.08 0.285 0 0.08"/>
-<site name="rf_33" class="rangefinder" fromto=" 0.22778833398778298 -0.08201722545969557 0.08 0.285 0 0.08"/>
-<site name="rf_34" class="rangefinder" fromto=" 0.23874617097591644 -0.0886599306373 0.08 0.285 0 0.08"/>
-<site name="rf_35" class="rangefinder" fromto=" 0.25046349455786915 -0.09384684220497602 0.08 0.285 0 0.08"/>
-<site name="rf_36" class="rangefinder" fromto=" 0.26274790660436853 -0.09749279121818237 0.08 0.285 0 0.08"/>
-<site name="rf_37" class="rangefinder" fromto=" 0.27539769740923176 -0.09953791129491982 0.08 0.285 0 0.08"/>
-<site name="rf_38" class="rangefinder" fromto=" 0.2882051577571655 -0.09994862162006879 0.08 0.285 0 0.08"/>
-<site name="rf_39" class="rangefinder" fromto=" 0.3009599895033378 -0.09871817834144503 0.08 0.285 0 0.08"/>
-<site name="rf_40" class="rangefinder" fromto=" 0.3134527586631032 -0.09586678530366609 0.08 0.285 0 0.08"/>
-<site name="rf_41" class="rangefinder" fromto=" 0.32547833431223927 -0.09144126230158128 0.08 0.285 0 0.08"/>
-<site name="rf_42" class="rangefinder" fromto=" 0.3368392568310524 -0.08551427630053465 0.08 0.285 0 0.08"/>
-<site name="rf_43" class="rangefinder" fromto=" 0.34734898018587335 -0.078183148246803 0.08 0.285 0 0.08"/>
-<site name="rf_44" class="rangefinder" fromto=" 0.3568349350097727 -0.0695682550603487 0.08 0.285 0 0.08"/>
-<site name="rf_45" class="rangefinder" fromto=" 0.3651413621867956 -0.059811053049121626 0.08 0.285 0 0.08"/>
-<site name="rf_46" class="rangefinder" fromto=" 0.37213187041233886 -0.04907175520039386 0.08 0.285 0 0.08"/>
-<site name="rf_47" class="rangefinder" fromto=" 0.37769167573460216 -0.037526700487937464 0.08 0.285 0 0.08"/>
-<site name="rf_48" class="rangefinder" fromto=" 0.3817294863039029 -0.025365458390950835 0.08 0.285 0 0.08"/>
-<site name="rf_49" class="rangefinder" fromto=" 0.3841790013823246 -0.012787716168450664 0.08 0.285 0 0.08"/>
-<site name="rf_50" class="rangefinder" fromto=" 0.385 -2.4492935982947065e-17 0.08 0.285 0 0.08"/>
+<site name="rf_1" class="rangefinder" fromto=" 0.1 0.0 0.08 0. 0 0.08"/>
+<site name="rf_2" class="rangefinder" fromto=" 0.0991790013823246 0.0127877161684506 0.08 0. 0 0.08"/>
+<site name="rf_3" class="rangefinder" fromto=" 0.09672948630390296 0.02536545839095074 0.08 0. 0 0.08"/>
+<site name="rf_4" class="rangefinder" fromto=" 0.09269167573460217 0.037526700487937416 0.08 0. 0 0.08"/>
+<site name="rf_5" class="rangefinder" fromto=" 0.08713187041233894 0.04907175520039378 0.08 0. 0 0.08"/>
+<site name="rf_6" class="rangefinder" fromto=" 0.08014136218679568 0.05981105304912158 0.08 0. 0 0.08"/>
+<site name="rf_7" class="rangefinder" fromto=" 0.07183493500977277 0.06956825506034864 0.08 0. 0 0.08"/>
+<site name="rf_8" class="rangefinder" fromto=" 0.06234898018587335 0.078183148246803 0.08 0. 0 0.08"/>
+<site name="rf_9" class="rangefinder" fromto=" 0.051839256831052505 0.08551427630053461 0.08 0. 0 0.08"/>
+<site name="rf_10" class="rangefinder" fromto=" 0.040478334312239406 0.09144126230158123 0.08 0. 0 0.08"/>
+<site name="rf_11" class="rangefinder" fromto=" 0.028452758663103275 0.09586678530366607 0.08 0. 0 0.08"/>
+<site name="rf_12" class="rangefinder" fromto=" 0.01595998950333793 0.09871817834144501 0.08 0. 0 0.08"/>
+<site name="rf_13" class="rangefinder" fromto=" 0.0032051577571655335 0.09994862162006882 0.08 0. 0 0.08"/>
+<site name="rf_14" class="rangefinder" fromto=" -0.009602302590768157 0.09953791129491982 0.08 0. 0 0.08"/>
+<site name="rf_15" class="rangefinder" fromto=" -0.022252093395631438 0.09749279121818238 0.08 0. 0 0.08"/>
+<site name="rf_16" class="rangefinder" fromto=" -0.03453650544213076 0.09384684220497605 0.08 0. 0 0.08"/>
+<site name="rf_17" class="rangefinder" fromto=" -0.04625382902408351 0.08865993063730002 0.08 0. 0 0.08"/>
+<site name="rf_18" class="rangefinder" fromto=" -0.05721166601221694 0.08201722545969561 0.08 0. 0 0.08"/>
+<site name="rf_19" class="rangefinder" fromto=" -0.06723008902613165 0.07402779970753158 0.08 0. 0 0.08"/>
+<site name="rf_20" class="rangefinder" fromto=" -0.07614459583691344 0.06482283953077887 0.08 0. 0 0.08"/>
+<site name="rf_21" class="rangefinder" fromto=" -0.08380881048918404 0.0545534901210549 0.08 0. 0 0.08"/>
+<site name="rf_22" class="rangefinder" fromto=" -0.09009688679024191 0.04338837391175582 0.08 0. 0 0.08"/>
+<site name="rf_23" class="rangefinder" fromto=" -0.09490557470106686 0.03151082180236209 0.08 0. 0 0.08"/>
+<site name="rf_24" class="rangefinder" fromto=" -0.09815591569910655 0.019115862870137255 0.08 0. 0 0.08"/>
+<site name="rf_25" class="rangefinder" fromto=" -0.09979453927503362 0.006407021998071323 0.08 0. 0 0.08"/>
+<site name="rf_26" class="rangefinder" fromto=" -0.09979453927503365 -0.006407021998071256 0.08 0. 0 0.08"/>
+<site name="rf_27" class="rangefinder" fromto=" -0.09815591569910655 -0.019115862870137192 0.08 0. 0 0.08"/>
+<site name="rf_28" class="rangefinder" fromto=" -0.0949055747010669 -0.031510821802362025 0.08 0. 0 0.08"/>
+<site name="rf_29" class="rangefinder" fromto=" -0.09009688679024191 -0.043388373911755804 0.08 0. 0 0.08"/>
+<site name="rf_30" class="rangefinder" fromto=" -0.0838088104891841 -0.05455349012105484 0.08 0. 0 0.08"/>
+<site name="rf_31" class="rangefinder" fromto=" -0.07614459583691348 -0.06482283953077882 0.08 0. 0 0.08"/>
+<site name="rf_32" class="rangefinder" fromto=" -0.06723008902613171 -0.07402779970753154 0.08 0. 0 0.08"/>
+<site name="rf_33" class="rangefinder" fromto=" -0.05721166601221699 -0.08201722545969559 0.08 0. 0 0.08"/>
+<site name="rf_34" class="rangefinder" fromto=" -0.04625382902408353 -0.08865993063729999 0.08 0. 0 0.08"/>
+<site name="rf_35" class="rangefinder" fromto=" -0.03453650544213082 -0.09384684220497602 0.08 0. 0 0.08"/>
+<site name="rf_36" class="rangefinder" fromto=" -0.022252093395631462 -0.09749279121818238 0.08 0. 0 0.08"/>
+<site name="rf_37" class="rangefinder" fromto=" -0.009602302590768247 -0.09953791129491979 0.08 0. 0 0.08"/>
+<site name="rf_38" class="rangefinder" fromto=" 0.0032051577571654867 -0.09994862162006882 0.08 0. 0 0.08"/>
+<site name="rf_39" class="rangefinder" fromto=" 0.01595998950333784 -0.09871817834144503 0.08 0. 0 0.08"/>
+<site name="rf_40" class="rangefinder" fromto=" 0.028452758663103206 -0.0958667853036661 0.08 0. 0 0.08"/>
+<site name="rf_41" class="rangefinder" fromto=" 0.040478334312239295 -0.09144126230158128 0.08 0. 0 0.08"/>
+<site name="rf_42" class="rangefinder" fromto=" 0.05183925683105244 -0.08551427630053465 0.08 0. 0 0.08"/>
+<site name="rf_43" class="rangefinder" fromto=" 0.06234898018587333 -0.078183148246803 0.08 0. 0 0.08"/>
+<site name="rf_44" class="rangefinder" fromto=" 0.07183493500977271 -0.0695682550603487 0.08 0. 0 0.08"/>
+<site name="rf_45" class="rangefinder" fromto=" 0.08014136218679566 -0.05981105304912161 0.08 0. 0 0.08"/>
+<site name="rf_46" class="rangefinder" fromto=" 0.08713187041233889 -0.04907175520039386 0.08 0. 0 0.08"/>
+<site name="rf_47" class="rangefinder" fromto=" 0.09269167573460216 -0.037526700487937464 0.08 0. 0 0.08"/>
+<site name="rf_48" class="rangefinder" fromto=" 0.09672948630390293 -0.025365458390950835 0.08 0. 0 0.08"/>
+<site name="rf_49" class="rangefinder" fromto=" 0.09917900138232459 -0.012787716168450664 0.08 0. 0 0.08"/>
+<site name="rf_50" class="rangefinder" fromto=" 0.1 -2.4492935982947065e-17 0.08 0. 0 0.08"/>
 <!--      <site name="rf_02" class="rangefinder" fromto=".41   0   0.08 0.285  0 0.08"/>-->
 <!--      <site name="rf_03" class="rangefinder" fromto=".41  .01  0.08 0.285  0 0.08"/>-->
 <!--      <site name="rf_04" class="rangefinder" fromto=".41  .02  0.08 0.285  0 0.08"/>-->
@@ -341,7 +341,5 @@
     <motor name="RL_calf" joint="RL_calf_joint" ctrlrange="-35.55 35.55"/>
   </actuator>
 
-<!--  <keyframe>-->
-<!--    <key name="home" qpos="0 0 0.325 1 0 0 0 -0.1 -0.8 1.5 0.1 0.8 -1.5 0.1 -1.0 1.5 -0.1 1.0 -1.5"/>-->
-<!--  </keyframe>-->
+
 </mujoco>

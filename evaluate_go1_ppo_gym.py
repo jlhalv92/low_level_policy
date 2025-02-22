@@ -99,28 +99,15 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 
 
-    velocity_limits=dict(limit_vx=2, limit_vy=1, limit_wz=2)
-    domain_parameters = dict(tangencial_friction=1,
-                             friction_torsional_ground=1,
-                             friction_rolling_ground=1,
-                             friction_torsional_feet=1,
-                             friction_rolling_feet=1,
-                             damping=1,
-                             stiffnes=1,
-                             gravity=9.81,
-                             payload=2)
-    commands = dict(vx=1, vy=0, wz=0)
-    env_parameters =dict(velocity_limits=velocity_limits,
-                         domain_parameters=domain_parameters,
-                         commands=commands)
-    # mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, joystick=True)
+    env_args = dict(vx_limit=4, vy_limit=2, wz_limit=4)
     mdp_eval = GymnasiumGO1(gamma=gamma,
                             n_envs=1,
                             joystick=joystick,
                             domain_randomization=False,
-                            horizon=2000,
-                            env_parameters=env_parameters)
+                            horizon=2000, **env_args)
     mdp_eval.env.eval=True
+    mdp_eval.env.track_velocities = True
+    mdp_eval.env.resampling_command_steps = 100
 
     path = "checkpoint/GO1/PPO/nominal_DR_robust_locomotion_gym/epoch_20"
     path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_JOYSTICK_NR/epoch_135"
@@ -128,15 +115,76 @@ def experiment(alg, n_episodes_test=5, joystick=False):
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization/epoch_70"
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization_vmax_rt2/epoch_last"
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_Priv/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_300M_vc_rt/epoch_30"
+    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_VC/epoch_120"
+    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_VC_MAX_B/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_100M_VC_S_2/epoch_last"
+    # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_90"
+    # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC/epoch_150"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_R/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_500_VC_AGILE_vx=4_vy=2_wz=5_hip/epoch_400"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65_regularization_torques_qvel/epoch_60"
+
+
+
     agent = Agent.load(path)
     agent.set_logger(logger)
 
-    core_eval = Core(agent, mdp_eval)
+    core_eval = Core(agent, mdp_eval, student=False)
 
 
     dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=True)
+    from mushroom_rl.utils.dataset import compute_J, parse_dataset
+    import matplotlib.pyplot as plt
+    s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
+    velocities = np.array(mdp_eval.env.tracking_velocities_array)
+    vx = velocities[:, 0]
+    vy = velocities[:, 1]
+    wz = velocities[:, 2]
 
+    commands = s[:, [50, 51, 52]]
+    cvx = commands[:, 0]
+    cvy = commands[:, 1]
+    cwz = commands[:, 2]
+
+    time = np.arange(len(vx))
+
+    # Create subplots
+    fig, axs = plt.subplots(3, 1, figsize=(10, 15), sharex=True)
+    colors = plt.get_cmap('tab10')
+
+    # Plot Vx and Command Vx
+    axs[0].plot(time, cvx, color=colors(0), linestyle='-', label='Command Vx')
+    axs[0].plot(time, vx, color=colors(0), label='Vx')
+    axs[0].set_title('Vx and Command Vx over Time')
+    axs[0].set_ylabel('Vx')
+    axs[0].grid(True)
+    axs[0].legend()
+
+    # Plot Vy and Command Vy
+    axs[1].plot(time, cvy, color=colors(1), linestyle='-', label='Command Vy')
+    axs[1].plot(time, vy, color=colors(1) ,label='Vy')
+    axs[1].set_title('Vy and Command Vy over Time')
+    axs[1].set_ylabel('Vy')
+    axs[1].grid(True)
+    axs[1].legend()
+
+    # Plot Wz and Command Wz
+    axs[2].plot(time, cwz, color=colors(2), linestyle='-', label='Command Wz')
+    axs[2].plot(time, wz, color=colors(2), label='Wz')
+    axs[2].set_title('Wz and Command Wz over Time')
+    axs[2].set_xlabel('Time')
+    axs[2].set_ylabel('Wz')
+    axs[2].grid(True)
+    axs[2].legend()
+
+    # Adjust layout
+    plt.tight_layout()
+    plt.show()
 
     J = np.mean(compute_J(dataset, mdp_eval.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -149,6 +197,6 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 if __name__ == '__main__':
     experiment(alg=PPO,
-               n_episodes_test=5, joystick=True)
+                   n_episodes_test=1, joystick=True)
 
 

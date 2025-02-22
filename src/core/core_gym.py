@@ -12,7 +12,7 @@ class Core(object):
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
                  preprocessors=None, prior_pretrain_only=False, pretrain_sampling_batch_size=20,
-                 use_data_prior=False, prior_eps=0.0, record_dictionary=None):
+                 use_data_prior=False, prior_eps=0.0, record_dictionary=None, student=False):
         """
         Constructor.
 
@@ -31,6 +31,7 @@ class Core(object):
         """
         self.agent = agent
         self.mdp = mdp
+        self.student = student
         self.callbacks_fit = callbacks_fit if callbacks_fit is not None else list()
         self.callback_step = callback_step if callback_step is not None else lambda x: None
         self._preprocessors = preprocessors if preprocessors is not None else list()
@@ -231,6 +232,8 @@ class Core(object):
             of the reached state and the last step flag.
 
         """
+        if self.student:
+            self._state = self.mdp.env.get_robot_observation()
 
         if learning:
             action = self.agent.draw_noisy_action(self._state)

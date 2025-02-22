@@ -1,11 +1,7 @@
 import numpy as np
 from mushroom_rl.utils.replay_memory import ReplayMemory
-from numpy.core.records import record
 
 from src.networks.nets import ActorParkourNetworkGO1, ActorNetwork,CriticNetwork, CriticParkourNetworkGO1
-
-
-
 
 import matplotlib.pyplot as plt
 import torch
@@ -91,8 +87,8 @@ def experiment():
     cfg_rewards=dict(curriculum_steps=1)
 
 
-    cfg = dict(kp=20,
-               kd=0.5,
+    cfg = dict(kp=40,
+               kd=1,
                antagonist=False,
                max_level=False,
                curriculum=False,
@@ -118,7 +114,7 @@ def experiment():
 
     path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
     path = "src/nominal_models/go1/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_DR_robust_locomotion_retrain/epoch_70"
+    path = "src/nominal_models/go1/epoch_last"
    # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization/epoch_1400"
     #path = "src/nominal_models/GO_1/PPO_low_level/epoch_last"
     # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_1000_epochs/epoch_160"
@@ -134,7 +130,7 @@ def experiment():
     # exit()
     # Algorithm
     core = Core(agent, mdp)
-    dataset = core.evaluate(n_episodes=5, render=True, record=True)
+    dataset = core.evaluate(n_episodes=5, render=True, record=False)
 
 
     s,a,s_1,reward,absorbing,info,last = parse_dataset(dataset)

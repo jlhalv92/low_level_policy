@@ -10,6 +10,33 @@ import json# Function to read the JSON file
 import pygame
 from collections import deque
 
+class PDController:
+    def __init__(self, env, control_frequency_hz=50, p_gain=20, d_gain=0.5, scaling_factor=0.25):
+        self.env = env
+        self.control_frequency_hz = control_frequency_hz
+        self.apply_scale_shoulder = False
+        self.scaling_factor = scaling_factor
+        self.kp_noise_factor = 1.0
+        self.kd_noise_factor = 1.0
+        self.motor_strength_factor = np.ones(12)
+        self.joint_position_offset = np.zeros(12)
+        self.kp = p_gain
+        self.kd = d_gain
+        self.action_scale = scaling_factor
+        self.default_kp = p_gain
+        self.default_kd = d_gain
+        self.default_action_scale = scaling_factor
+
+    def action2torques(self, action):
+        current_qpos = self.env._data.qpos[7:19].copy()
+        current_qvel = self.env._data.qvel[6:18].copy()
+        scaled_action = action * self.action_scale
+
+        target_joint_positions = self.env.default_dof_pos.copy() + scaled_action
+        torques = self.kp * self.kp_noise_factor * (target_joint_positions - current_qpos + self.joint_position_offset)- self.kd * self.kd_noise_factor * current_qvel
+
+        return torques * self.motor_strength_factor
+
 class HistoryStore:
     def __init__(self, max_size=5):
         # Initialize with a maximum size and a deque to store the history
@@ -139,9 +166,9 @@ def keyboard_control(vx, vy, wz):
 
     keys = pygame.key.get_pressed()
 
-    vx = min(vx + 0.1, 1.5) if keys[pygame.K_UP] else max(vx - 0.1, -1.5) if keys[pygame.K_DOWN] else 0
-    vy = min(vy + 0.1, 0.6) if keys[pygame.K_LEFT] else max(vy - 0.1, -0.6) if keys[pygame.K_RIGHT] else 0
-    wz = min(wz + 0.1, 1.5) if keys[pygame.K_w] else max(wz - 0.1, -1.5) if keys[pygame.K_e] else 0
+    vx = min(vx + 0.5, 1.2) if keys[pygame.K_UP] else max(vx - 0.5, -1.2) if keys[pygame.K_DOWN] else 0
+    vy = min(vy + 0.5, 0.8) if keys[pygame.K_LEFT] else max(vy - 0.5, -0.8) if keys[pygame.K_RIGHT] else 0
+    wz = min(wz + 0.5, 1.5) if keys[pygame.K_w] else max(wz - 0.5, -1.5) if keys[pygame.K_e] else 0
 
     return vx, vy, wz
 
@@ -176,7 +203,7 @@ class Go1(MuJoCo):
 
     """
 
-    def __init__(self, horizon, gamma, target_pose=None, task_name="nominal",timestep=0.002, version=0,  cfg=None):
+    def __init__(self, horizon, gamma, target_pose=None, task_name="nominal",timestep=0.005, version=0,  cfg=None):
         """
         Constructor.
 
@@ -200,6 +227,7 @@ class Go1(MuJoCo):
         self.curriculum = cfg["curriculum"]
         self.resample =  cfg["resample"]
         self.joystick =  cfg["joystick"]
+        self.controller_pd = PDController(self)
         if self.joystick:
             pygame.init()
             screen_width, screen_height = 300, 300
@@ -216,11 +244,18 @@ class Go1(MuJoCo):
 
         # self.occupancy_grid = OccupancyGrid(15,15,0.01)
 
+        # self.default_dof_pos = np.array([
+        #     -0.1, -0.8, 1.5,
+        #     0.1, 0.8, -1.5,
+        #     0.1, -1.0, 1.5,
+        #     -0.1, 1.0, -1.5,
+        # ])
+        #TODO
         self.default_dof_pos = np.array([
-            -0.1, -0.8, 1.5,
-            0.1, 0.8, -1.5,
-            0.1, -1.0, 1.5,
-            -0.1, 1.0, -1.5,
+            -0.2, -0.7, 1.25,
+            0.2, 0.7, -1.25,
+            0.2, -1, 1.35,
+            -0.2, 1, -1.35,
         ])
 
         self.total_timesteps = 0
@@ -357,23 +392,15 @@ class Go1(MuJoCo):
             # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
             position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
             velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
+            old_command = [("old_command", "old_command", ObservationType.L_VELOCITY)]
 
-
-            observation_spec = (propioception +
-                                last_actions +
-                                gravity_projection +
-                                angular_velocity +
-                                linear_velocity +
-                                contact +
-                                airtime +
-                                height +
-                                commands +
-                                current_velocity + # (3,)
-                                robot_pos + #(2,)
-                                robot_orientation + # (1,)
-                                position_obstacle + #(2,)
-                                velocity_obstacle + #(2,)
-                                rays ) # (50,)
+            observation_spec = (current_velocity +  # (3,)
+                                old_command +  # (3,)
+                                robot_pos +  #(2,)
+                                robot_orientation +  # (1,)
+                                position_obstacle +  #(2,)
+                                velocity_obstacle +  #(2,)
+                                rays) # (50,)
 
         elif self.task==3:
             rays = [("distance_rays_small", "distance_rays_small", ObservationType.RAYS_SMALL)]
@@ -442,20 +469,25 @@ class Go1(MuJoCo):
             min_a = - self.qpos_offset
 
         else:
-            max_a = 1*np.array([1.5,0.6,1.5])
-            min_a = 1*np.array([-1.5,-0.6,-1.5])
+            # max_a = np.array([1.2,1,1.2])
+            # min_a = np.array([-1.2,-1,-1.2])
+
+            max_a = np.array([1.,1,1.])
+            min_a = np.array([-1.,-1,-1.])
 
 
         super().__init__(self.xml_path, action_spec,
                          observation_spec,
                          gamma, horizon,
                          collision_groups=collision_groups,
-                          n_intermediate_steps=4,
+                          n_intermediate_steps=1,
+                         n_substeps=4,
                          timestep=timestep,
                          max_a=max_a, min_a=min_a)
 
         # self.renderer = mujoco.Renderer(self._model)
-        self.last_action =  np.array(12 * [0])
+        self.last_action =  np.zeros(12)
+        self.old_command = np.zeros(3)
         self.torques = list()
         x,y = self._data.qpos[:2]
         self.p_gains = np.array(12 * [kp]) #60
@@ -491,16 +523,105 @@ class Go1(MuJoCo):
         self.perturbation = DefaultDomainPerturbation(self)
         self.reward_function.init()
 
-        self.use_mujoco_renderer = True
-        self.mujoco_options = mujoco.MjvOption()
-        mujoco.mjv_defaultOption(self.mujoco_options)
-        self.mujoco_options.sitegroup[0] = False
-        self.mujoco_options.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
-        self.renderer_main_camera = None
-        self.renderer_depth = None
+        self.use_mujoco_renderer = False
+        if self.use_mujoco_renderer:
+            self.mujoco_options = mujoco.MjvOption()
+            mujoco.mjv_defaultOption(self.mujoco_options)
+            self.mujoco_options.sitegroup[0] = False
+            self.mujoco_options.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
+            self.renderer_main_camera = None
+            self.renderer_depth = None
+
+
+    def get_robot_observation(self):
+
+        noise_joint_angles = np.random.uniform(low=-0.03, high=0.03, size=12)
+        noise_joint_vel =  np.random.uniform(low=-1.5, high=1.5, size=12)
+        vel_noise =  np.random.uniform(low=-0.1, high=0.1, size=3)
+        ang_vel_noise =  np.random.uniform(low=-0.2, high=0.2, size=3)
+        gravity_noise =  np.random.uniform(low=-0.05, high=0.05, size=3)
+
+        qpos = (self._data.qpos[7:19].copy() + noise_joint_angles) - self.default_dof_pos #(12)
+        qvel = self._data.qvel[6:18] + noise_joint_vel  #(12)
+        previous_action = self.last_action   #(12)
+        robot_linear_vel = self.orientation_quat_inv.apply(self._data.qvel[:3]).copy() + vel_noise#(3)
+        robot_angular_vel = self._data.qvel[3:6].copy() + ang_vel_noise #(3)
+        commands = np.array([self.target_vx, self.target_vy, self.target_yaw]) #(3)
+        projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0])).copy() + gravity_noise #(3)
+
+
+        # Normalize and clip
+        qpos /= 4.6
+        qvel /= 35.0
+        previous_action /= 10.0
+
+        robot_linear_vel = np.clip(robot_linear_vel / 10.0, -1.0, 1.0)
+        robot_angular_vel= np.clip(robot_angular_vel / 50.0, -1.0, 1.0)
+
+        observation = np.concatenate([qpos,
+                                qvel,
+                                projected_gravity,
+                                previous_action,
+                                robot_linear_vel,
+                                robot_angular_vel,
+                                commands])
+        return observation
+
+    def get_all_robot_observation(self):
 
 
 
+        qpos = self._data.qpos[7:19].copy() - self.default_dof_pos.copy() #(12)
+        qvel = self._data.qvel[6:18]   #(12)
+        previous_action = self.last_action   #(12)
+        robot_linear_vel = self.orientation_quat_inv.apply(self._data.qvel[:3]).copy()
+        robot_angular_vel = self.orientation_quat_inv.apply(self._data.qvel[3:6]).copy()
+
+        projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0])).copy()
+        airtime=np.array([self.reward_function.time_since_last_touchdown_fr,
+                       self.reward_function.time_since_last_touchdown_fl,
+                       self.reward_function.time_since_last_touchdown_rr,
+                       self.reward_function.time_since_last_touchdown_rl])
+
+        contact =  np.array([self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        height = np.array([self._data.qpos[2].copy()])
+        commands = np.array([self.target_vx, self.target_vy, self.target_yaw])  # (3)
+        # observation_spec = (propioception +
+        #                     last_actions +
+        #                     gravity_projection +
+        #                     angular_velocity +
+        #                     linear_velocity +
+        #                     contact +
+        #                     airtime +
+        #                     height +
+        #                     commands)
+        #
+        obs = np.concatenate([
+            qpos,
+            qvel,
+            previous_action,
+            projected_gravity,
+            robot_angular_vel,
+            robot_linear_vel,
+            contact,
+            airtime,
+            height,
+            commands
+        ])
+
+        # Norm and clip
+        obs[:12] *= 1  # joint pos
+        obs[12:24] *= 0.05  # joint vel
+        obs[24:36] *= 1  # last action
+        obs[36:39] = projected_gravity  # gravity
+        obs[39:42] *= 0.25
+        obs[42:45] *= 2
+        obs[45:49] = (obs[45:49] / 0.5) - 1.0
+        obs[49:53] = np.clip((obs[49:53] / (5.0 / 2)) - 1.0, -1.0, 1.0)
+        obs[53] = np.clip((self._data.qpos[2] - 0.5), -1.0, 1.0) * 5  # height
+        obs[54:57] *= np.array([2, 2, 0.25])
+
+        return obs
 
     def get_info(self):
         if self.task == 2:
@@ -540,23 +661,37 @@ class Go1(MuJoCo):
     def _modify_observation(self, obs):
         # target yaw
         #
-        diff_pose = self._data.qpos[7:19].copy() - self.default_dof_pos.copy()
-        obs[:12] = diff_pose
-        linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
-        angular_velocity = self.orientation_quat_inv.apply(self._data.qvel[3:6])
-        projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
-        contacts = np.array([self.check_collision("floor", foot_name) for foot_name in self.foot_names])
-        airtime = np.array([self.reward_function.time_since_last_touchdown_fr,
-                               self.reward_function.time_since_last_touchdown_fl,
-                               self.reward_function.time_since_last_touchdown_rr,
-                               self.reward_function.time_since_last_touchdown_rl])
-        obs[24:36]= self.last_action #last action
-        obs = self.obs_helper.modify_obs(obs, "gravity_projection", projected_gravity)
-        obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
-        obs = self.obs_helper.modify_obs(obs, "linear_velocity", linear_velocity)
-        obs = self.obs_helper.modify_obs(obs, "feet_contact", contacts)
-        obs = self.obs_helper.modify_obs(obs, "feet_airtime", airtime)
-        obs = self.obs_helper.modify_obs(obs, "height", self._data.qpos[2])
+        if self.task == 0:
+            diff_pose = self._data.qpos[7:19].copy() - self.default_dof_pos.copy()
+            obs[:12] = diff_pose
+            linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+            angular_velocity = self.orientation_quat_inv.apply(self._data.qvel[3:6])
+            projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
+            contacts = np.array([self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+            airtime = np.array([self.reward_function.time_since_last_touchdown_fr,
+                                   self.reward_function.time_since_last_touchdown_fl,
+                                   self.reward_function.time_since_last_touchdown_rr,
+                                   self.reward_function.time_since_last_touchdown_rl])
+            obs[24:36]= self.last_action #last action
+            obs = self.obs_helper.modify_obs(obs, "gravity_projection", projected_gravity)
+            obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
+            obs = self.obs_helper.modify_obs(obs, "linear_velocity", linear_velocity)
+            obs = self.obs_helper.modify_obs(obs, "feet_contact", contacts)
+            obs = self.obs_helper.modify_obs(obs, "feet_airtime", airtime)
+            obs = self.obs_helper.modify_obs(obs, "height", self._data.qpos[2])
+
+
+            # Norm and clip
+            obs[:12] *= 1  # joint pos
+            obs[12:24] *= 0.05  # joint vel
+            obs[24:36] *= 1  # last action
+            obs[36:39] = projected_gravity  # gravity
+            obs[39:42] *= 0.25
+            obs[42:45] *= 2
+            obs[45:49] = (obs[45:49] / 0.5) - 1.0
+            obs[49:53] = np.clip((obs[49:53] / (5.0 / 2)) - 1.0, -1.0, 1.0)
+            obs[53] = np.clip((self._data.qpos[2] - 0.5), -1.0, 1.0) * 5  # height
+            obs[54:57] *= np.array([2, 2, 0.25])
 
 
         if self.task == 0:
@@ -567,8 +702,8 @@ class Go1(MuJoCo):
            self.target_vx, self.target_vy, self.target_yaw = obs[54:57]
 
         if self.task == 2:
-            commands =  np.array([self.target_vx, self.target_vy, self.target_yaw])
-            obs = self.obs_helper.modify_obs(obs, "commands", commands)
+            # commands =  np.array([self.target_vx, self.target_vy, self.target_yaw])
+            # obs = self.obs_helper.modify_obs(obs, "commands", commands)
 
             linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
             vx = linear_velocity[0]
@@ -579,6 +714,8 @@ class Go1(MuJoCo):
 
             obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
             obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
+            # TODO
+            obs = self.obs_helper.modify_obs(obs, "old_command", self.old_command)
             pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
             relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
             vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
@@ -611,17 +748,6 @@ class Go1(MuJoCo):
             obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
             obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
 
-        # Norm and clip
-        obs[:12]  *= 1 #joint pos
-        obs[12:24] *= 0.05 #joint vel
-        obs[24:36] *= 1 # last action
-        obs[36:39] = projected_gravity  # gravity
-        obs[39:42] *= 0.25
-        obs[42:45] *= 2
-        obs[45:49] = (obs[45:49] / 0.5) - 1.0
-        obs[49:53] = np.clip((obs[49:53] / (5.0 / 2)) - 1.0, -1.0, 1.0)
-        obs[53] = np.clip((self._data.qpos[2] -0.5), -1.0, 1.0)*5 #height
-        obs[54:57] *= np.array([2,2,0.25])
 
 
         return obs
@@ -642,11 +768,12 @@ class Go1(MuJoCo):
 
         """
 
-        torques = self.controller(action)
-        torques_f = np.clip(torques,-self.torques_limits, self.torques_limits)
-        self.torques.append(torques_f.copy())
+        torques = self.controller_pd.action2torques(action)
+        # torques = self.controller(action)
+        # torques_f = np.clip(torques,-self.torques_limits, self.torques_limits)
+        # self.torques.append(torques_f.copy())
         return torques
-
+    #
     def _preprocess_action(self, action):
         """
         Compute a transformation of the action provided to the
@@ -659,18 +786,12 @@ class Go1(MuJoCo):
         Returns:
             The action to be used for the current step
         """
-
-        action = np.clip(action, -100,100)
-        action *=0.25
-        action[[0,3,6,9]] *= 0.5
-
-
-        action_full =self.default_dof_pos.copy() + action
-
-
-
-
-        return action_full
+        #
+        # action = np.clip(action, -100,100)
+        # action *=0.25
+        # action[[0,3,6,9]] *= 0.5
+        # action += self.default_dof_pos.copy()
+        return action
 
     def check_collision(self, groups1, groups2):
         if isinstance(groups1, list):
@@ -856,9 +977,12 @@ class Go1(MuJoCo):
             else:
                 proximity_penalty = (distance_to_obstacle < soft_hit_condition) * np.exp(1 / distance_to_obstacle)
 
+            current_command = np.array([self.target_vx, self.target_vy, self.target_yaw] )
+            last_command = self.old_command.copy()
+            penalty_action = 0.5*np.sum(np.square((current_command - last_command)))
 
             penalties = (np.abs(y_pos) + yaw_deviation_penalty)*(distance < -0.35) + proximity_penalty*(not self.narrow_passage and not self.no_walls)
-            reward = 1.5*np.clip(min(1, global_vel[0]), 0,1) - penalties
+            reward = 1.5*np.clip(min(1, global_vel[0]), 0,1) - penalties - penalty_action
             return reward + penalty
 
 
@@ -877,6 +1001,7 @@ class Go1(MuJoCo):
 
     def update_variables(self, action, cur_obs):
         self.last_action = action
+        self.old_command = np.array([self.target_vx, self.target_vy, self.target_yaw])
 
 
     def get_student_rays(self):
@@ -888,31 +1013,31 @@ class Go1(MuJoCo):
         obs = rf_readings_f
         return obs
 
-    def render(self,record=False, depth=False):
-
-        if self.use_mujoco_renderer:
-
-            self.renderer_main_camera.update_scene(self._data, "backview")
-            img = self.renderer_main_camera.render()
-
-            if depth:
-                self.renderer_depth.update_scene(self._data, "head", self.mujoco_options)
-                depth_image = self.renderer_depth.render()
-
-                depth_image = np.clip(depth_image, 0, 5)
-                min_val = depth_image.min()
-                max_val = depth_image.max()
-                norm_depth_image = 255 * ((depth_image - min_val) / (max_val - min_val))
-                # # Shift nearest values to the origin.
-                # depth_image -= depth_image.min()
-                # # Scale by 2 mean distances of near rays.
-                # depth_image /= 2 * depth_image[depth_image <= 1].mean()
-                # # Scale to [0, 255]
-                # depth_image = 255 * np.clip(depth_image, 0, 1)
-
-                return img, norm_depth_image
-            else:
-                return img
+    # def render(self,record=False, depth=False):
+    #
+    #     if self.use_mujoco_renderer:
+    #
+    #         self.renderer_main_camera.update_scene(self._data, "backview")
+    #         img = self.renderer_main_camera.render()
+    #
+    #         if depth:
+    #             self.renderer_depth.update_scene(self._data, "head", self.mujoco_options)
+    #             depth_image = self.renderer_depth.render()
+    #
+    #             depth_image = np.clip(depth_image, 0, 5)
+    #             min_val = depth_image.min()
+    #             max_val = depth_image.max()
+    #             norm_depth_image = 255 * ((depth_image - min_val) / (max_val - min_val))
+    #             # # Shift nearest values to the origin.
+    #             # depth_image -= depth_image.min()
+    #             # # Scale by 2 mean distances of near rays.
+    #             # depth_image /= 2 * depth_image[depth_image <= 1].mean()
+    #             # # Scale to [0, 255]
+    #             # depth_image = 255 * np.clip(depth_image, 0, 1)
+    #
+    #             return img, norm_depth_image
+    #         else:
+    #             return img
 
 
 
@@ -1080,7 +1205,7 @@ class Go1(MuJoCo):
         self._ts = 0
         self.episode_steps = 0
         self._data.qpos[7:19] = self.default_dof_pos.copy()
-        self._data.qpos[0:3] = [-3, 0, 0.36]
+        self._data.qpos[0:3] = [-3, 0, 0.325]
 
         if self._reset_state is None:
             if self.task==2 or self.task==3 or self.task==4:
@@ -1088,8 +1213,10 @@ class Go1(MuJoCo):
 
             for i in range(0, 10):
 
-                a = self.default_dof_pos.copy() + np.zeros(12)
-                torques = self.controller(a)
+                action = self.default_dof_pos.copy() + np.zeros(12)
+                torques = self.controller_pd.action2torques(action)
+                # torques = self.controller(action)
+
                 for i in range(4):
                     self._data.ctrl[:12] = torques
                     mujoco.mj_step(self._model, self._data)
@@ -1208,7 +1335,7 @@ class Go1(MuJoCo):
                 self.renderer_main_camera = None
                 self.renderer_depth = None
                 self.renderer_main_camera = mujoco.Renderer(self._model, width=1024, height=720)
-                self.renderer_depth = mujoco.Renderer(self._model, width=106, height=60)
+                self.renderer_depth = mujoco.Renderer(self._model, width=106, height=72)
                 self.renderer_depth.enable_depth_rendering()
 
             if self.task == 2:
