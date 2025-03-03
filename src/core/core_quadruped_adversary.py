@@ -360,8 +360,6 @@ class Core(object):
         # Reward Antagonist
 
         pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-        l_antagonist = self.mdp._model.geom("obstacle_1").size[0]
-
         pos_robot = self.mdp._data.body("trunk").xpos[:2]
 
         reward_collision = 100 * self.mdp.obstacle_robot_collision

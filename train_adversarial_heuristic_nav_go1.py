@@ -8,9 +8,10 @@ from src.algorithm.deep_actor_critic.sac import  SAC
 
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
-from src.core.core_quadruped_navigation_old_policy import Core
+from src.core.core_quadruped_navigation import Core
 # from src.envs.go1_env_obstacles_rays import Go1
-from src.envs.go1_env_obstacles_rays_old_policy import Go1
+# from src.envs.go1_env_obstacles_rays_old_policy import Go1
+from src.envs.nav_environment import Go1
 
 from src.networks.nets import  CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork
 import wandb
@@ -86,8 +87,8 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
     log = True
     joystick = False
-    cfg = dict(kp=40,
-               kd=1,
+    cfg = dict(kp=20,
+               kd=0.5,
                antagonist=False,
                max_level=True,
                curriculum=False,
@@ -95,7 +96,9 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
                resample=False,
                domain_randomization=False,
                rewards=cfg_rewards,
-               static_obstacles=True)
+               static_obstacles=True,
+               activate_arrow=False)
+
     vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
     mdp = Go1(horizon,
               gamma,
@@ -111,26 +114,26 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
-            project="test_rewards",
-            group=task_name,
+            project="REWARDS COMPARISON STATIC OBSTACLES",
+            group=task_name + "_dense_reward_",
             job_type=method_name,
             name="seed_{}".format(run_id)
         )
     actor_input_shape = mdp.info.observation_space.shape
 
-    actor_input_shape = (60,)
+    actor_input_shape = actor_input_shape
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=4,
+                           size_propioception=9,
                            use_cuda=True)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=4,
+                              size_propioception=9,
                               use_cuda=True)
 
 
@@ -172,7 +175,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 
 
-    dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
+    dataset = core.evaluate(n_episodes=n_episodes_test, render=True)
 
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
@@ -230,14 +233,14 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
             wandb.log(logs_dict, step=it)
 
         if it % 10 == 0:
-            agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1',method_name, agent_task, it))
+            agent.save("checkpoint/{}/{}/{}/epoch_{}_{}".format('GO1',method_name, agent_task, it, run_id))
 
 
         logger.epoch_info(it + 1, J=J , R=R, entropy=E,
                           success_rate=success_rate,
                           success_rate_adversarial=success_rate_adversarial, critic_loss =loss_mean, Q=Q)
 
-    agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1', method_name, agent_task, "last"))
+    agent.save("checkpoint/{}/{}/{}/epoch_{}_{}".format('GO1', method_name, agent_task, "last", run_id))
 
 
     core.evaluate(n_episodes=n_episodes_test, render=False)
@@ -246,9 +249,9 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 if __name__ == '__main__':
 
-    path = "src/nominal_models/go1/epoch_last"
+    # path = "src/nominal_models/go1/epoch_last"
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_50"
-    # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
 
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_70"
 

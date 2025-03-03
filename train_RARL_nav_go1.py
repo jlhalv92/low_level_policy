@@ -10,7 +10,7 @@ import wandb
 
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
-from src.envs.go1_env_privilege_rays import Go1
+from src.envs.nav_environment import Go1
 from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork
 from mushroom_rl.utils.dataset import compute_J, parse_dataset
 
@@ -49,7 +49,7 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    obs_size = 60
+
 
     cfg_rewards=dict()
 
@@ -82,7 +82,8 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
               cfg=cfg,
               task_name=task_name)
 
-    actor_input_shape = (obs_size,)
+    actor_input_shape  = mdp.info.observation_space.shape
+
 
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
@@ -170,9 +171,9 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
 
     for it in trange(n_epochs, leave=False):
         logger.info("Training Antagonist")
-        core.learn(n_episodes=5, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
+        core.learn(n_steps=5000, n_steps_per_fit=1,  id_agent=1)
         logger.info("Training Protagonist")
-        core.learn(n_episodes=5, n_steps_per_fit=n_steps_per_fit, id_agent=0)
+        core.learn(n_steps=5000, n_steps_per_fit=1, id_agent=0)
 
         if it % 10==0 and view:
             render=False

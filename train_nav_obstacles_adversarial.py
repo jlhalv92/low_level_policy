@@ -91,7 +91,7 @@ def experiment_qarl(
     cfg_rewards=dict()
 
     log = log
-    joystick = False
+    joystick = True
     cfg = dict(kp=20,
                kd=0.5,
                antagonist=True,
@@ -217,33 +217,33 @@ def experiment_qarl(
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
     # evaluation_temp = teacher.teacher.temp_dist.mean()
-    #
-    # if method_name == "DORAEMON":
-    #     temps = teacher.sample_n_temperatures(n=10)/2
-    # else:
-    #     evaluation_temp = teacher.teacher.temp_dist.mean()
-    #     temps = evaluation_temp * np.ones(10)
-    #
-    # core.set_variables_for_training(temps)
-    # core.callback_step.clean()
-    # dataset_online = core.evaluate(
-    #     n_episodes=10, render=True, id_agent=0, return_antagonist_state=True
-    # )
-    #
-    # s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
-    # J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
-    # R_online = np.mean(compute_J(dataset_online))
-    # success_rate_online = calculate_success_rate(info, last)
-    # E_online = antagonist.policy.entropy(s)
-    #
-    # logger.epoch_info(
-    #     0,
-    #     J_online=J_online,
-    #     R_online=R_online,
-    #     entropy=E_online,
-    #     success_rate_online=success_rate_online,
-    #     alfa=np.mean(temps)
-    # )
+
+    if method_name == "DORAEMON":
+        temps = teacher.sample_n_temperatures(n=10)/2
+    else:
+        evaluation_temp = teacher.teacher.temp_dist.mean()
+        temps = evaluation_temp * np.ones(10)
+
+    core.set_variables_for_training(temps)
+    core.callback_step.clean()
+    dataset_online = core.evaluate(
+        n_episodes=10, render=True, id_agent=0, return_antagonist_state=True
+    )
+
+    s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
+    J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
+    R_online = np.mean(compute_J(dataset_online))
+    success_rate_online = calculate_success_rate(info, last)
+    E_online = antagonist.policy.entropy(s)
+
+    logger.epoch_info(
+        0,
+        J_online=J_online,
+        R_online=R_online,
+        entropy=E_online,
+        success_rate_online=success_rate_online,
+        alfa=np.mean(temps)
+    )
 
     sampled_temperatures = teacher.sample_n_temperatures(n=50)/2
     core.set_variables_for_training(sampled_temperatures)
@@ -418,7 +418,7 @@ if __name__ == "__main__":
             n_episodes_test=10,
             control_agent=control_agent,
             run_id=i,
-            log=True,
+            log=False,
             Teacher=Teacher,
             alfa=alfa * 1000,
             use_cuda=True,

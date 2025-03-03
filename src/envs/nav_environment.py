@@ -1,4 +1,4 @@
-
+from numpy.ma.core import arctan2
 
 from src.envs.mujoco_env import MuJoCo, ObservationType, mujoco
 import numpy as np
@@ -212,6 +212,7 @@ class Go1(MuJoCo):
         Constructor.
 
         """
+        self.activate_arrow = cfg["activate_arrow"]
         self.controller_pd = PDController(self)
         self.narrow_passage = False
         self.no_walls = False
@@ -688,6 +689,20 @@ class Go1(MuJoCo):
         return False
 
     def _step_init(self, obs, action):
+        if self.activate_arrow:
+            module = np.sqrt(self.target_vx**2 + self.target_vy**2)
+            angle = arctan2(self.target_vy, self.target_vx)
+            angle_rate = self.target_yaw*self.dt
+            scaled_module = module*0.1
+            yaw = angle + angle_rate
+            euler_angles = [0, np.pi/2, yaw]
+            quaternion = R.from_euler('xyz', euler_angles).as_quat()
+            quat = quaternion[[3,0,1,2]].copy()
+            module_arrow = scaled_module + 0.01
+            self._model.site("velocity_arrow").pos = [module_arrow*np.cos(yaw), module_arrow*np.sin(yaw), 0.1]
+            self._model.site("velocity_arrow").size[1] = scaled_module + 0.01
+            self._model.site("velocity_arrow").quat = quat
+        # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
             self._data.ctrl[-1] = self.obstacle_velocity
@@ -801,8 +816,8 @@ class Go1(MuJoCo):
         trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
         feet_collision_obstacles = self._check_collision("feet", "obstacles")
 
-        collision_obstacle = legs_collision_obstacles + trunk_collision_obstacles + feet_collision_obstacles
-        collision_wall = legs_collision_walls + trunk_collision_walls + feet_collision_walls
+        collision_obstacle = (legs_collision_obstacles or trunk_collision_obstacles or feet_collision_obstacles)
+        collision_wall = (legs_collision_walls or trunk_collision_walls or feet_collision_walls)
         penalty = 20 * (collision_obstacle) + 10 * (collision_wall)
         return penalty
 
@@ -1049,15 +1064,13 @@ class Go1(MuJoCo):
         height = self._data.qpos[2]
         fall = self.check_collision("floor", "trunk_t") or height <= 0.1
 
-        if self.task > 1:
-            legs_collision_obstacles = self._check_collision("legs", "obstacles")
-            trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
-            #self.robot_collisions += (
-             #           self._check_collision("robot", "obstacles") + self._check_collision("robot", "walls"))
-            # collision = self._check_collision("robot", "obstacles") or self._check_collision("robot", "walls")
-            self.obstacle_robot_collision = legs_collision_obstacles + trunk_collision_obstacles
-            collision_robot_wall = self._check_collision("robot", "walls")
-            collision_robot = legs_collision_obstacles or trunk_collision_obstacles or collision_robot_wall
+        # if self.task > 1:
+        legs_collision_obstacles = self._check_collision("legs", "obstacles")
+        trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
+
+        self.obstacle_robot_collision = legs_collision_obstacles + trunk_collision_obstacles
+        collision_robot_wall = self._check_collision("robot", "walls")
+        collision_robot = legs_collision_obstacles or trunk_collision_obstacles or collision_robot_wall
 
         if fall | collision_robot:
             self.terminates = True
@@ -1156,15 +1169,20 @@ class Go1(MuJoCo):
 
             geoms = spec.worldbody.geoms
             walls = ["wall_3", "wall_4"]
-            self._room_width = np.random.uniform(low=1.2, high=6)
-            if self._room_width > 2.0:
-                self.narrow_passage = False
-                self._obstacle_l = np.random.uniform(0.1, 0.6)
-                self._obstacle_w = np.random.uniform(0.1, 0.6)
-            else:
-                self.narrow_passage = True
-                self._obstacle_l = np.random.uniform(0.05, 0.25)
-                self._obstacle_w = np.random.uniform(0.05, 0.25)
+            # self._room_width = np.random.uniform(low=1.2, high=6)
+            self._room_width = 3
+            self._obstacle_l = 0.5
+            self._obstacle_w = 0.5
+
+            # if self._room_width > 2.0:
+            #     self.narrow_passage = False
+            #
+            #     self._room_width= np.random.uniform(0.1, 0.6)
+            #     self._obstacle_w = np.random.uniform(0.1, 0.6)
+            # else:
+            #     self.narrow_passage = True
+            #     self._obstacle_l = np.random.uniform(0.05, 0.25)
+            #     self._obstacle_w = np.random.uniform(0.05, 0.25)
 
             self.wall_pos = self._room_width / 2
 
@@ -1186,6 +1204,20 @@ class Go1(MuJoCo):
             obstacle = spec.find_body("obstacle_1")
             obstacle_height = np.random.uniform(low=0.25, high=0.8)
             obstacle.first_geom().size = [self._obstacle_l, self._obstacle_w, obstacle_height]
+            if self.activate_arrow:
+                trunk = spec.find_body("trunk")
+                trunk.add_site(name="velocity_arrow",
+                type = mujoco.mjtGeom.mjGEOM_CAPSULE,
+                size =  [0.01, 0.1, 0],
+                euler =[0, np.pi/2, 0],
+                pos = [0.1, 0, 0.1],
+                rgba = [1, 0, 0, 1])
+                trunk.add_site(name="velocity_base",
+                type = mujoco.mjtGeom.mjGEOM_SPHERE,
+                size =  [0.02, 0, 0],
+                euler =[0, 0, 0],
+                pos = [0., 0, 0.1],
+                rgba = [1, 0, 0, 1])
             # target_heading = np.random.uniform(-np.pi / 4, np.pi / 4)
             # goal_position_x = np.random.uniform(6, 20)
             # if self.no_walls:
@@ -1211,7 +1243,7 @@ class Go1(MuJoCo):
             self._data.qpos[7:19] = self.default_dof_pos.copy()
             x = np.random.uniform(-1.5, 1.5)
             self._data.qpos[0:3] = [x, y_robot, 0.36]
-            self.obstacle_pose_x = x + np.random.uniform(1, 3.5)
+            self.obstacle_pose_x = x + np.random.uniform(2, 3.5)
 
 
 
