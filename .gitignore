@@ -1,6 +1,13 @@
 .idea/
+mushroom_recordings
+result_visualizations
+checkouts
+configs
+Logging
 outputs
 wandb
+.idea
+runs
 checkpoint
 # dotenv
 .env
@@ -9,6 +16,9 @@ checkpoint
 .venv
 venv/
 ENV/
+logs
+Logging
+optimization_errors
 notebooks/
 .ipynb_checkpoints
 
