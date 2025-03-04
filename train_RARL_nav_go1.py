@@ -14,7 +14,7 @@ from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
 from src.envs.nav_environment import Go1
 from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
-from mushroom_rl.utils.dataset import compute_J, parse_dataset
+from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
 from tqdm import trange
 
