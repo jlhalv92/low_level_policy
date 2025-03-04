@@ -207,9 +207,11 @@ def experiment(method_name,
         logger.epoch_info(it+1, J=J, R=R, entropy=E, succes_rate=success_rate, alfa=alfa, r_antagonist=R_antagonist, entropy_antagonist=E_a)
 
 
+
         if log:
-            logs_dict = {"RETURN": J, "REWARD": R, "succes_rate":success_rate, "alfa":alfa, "REWARD_antagonist":R_antagonist}
-            wandb.log(logs_dict, step=it)
+            log_dict = dict(J=J, R=R, entropy=E, succes_rate=success_rate, alfa=alfa, r_antagonist=R_antagonist,
+                            entropy_antagonist=E_a)
+            wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
             agent.save("checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1',agent_task,method_name,run_id,'Protagonist', it))
@@ -232,7 +234,7 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--runs", type=int, default=5, help="Run ID")
-    parser.add_argument("--log", action="store_true",default=False,  help="Enable logging")
+    parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
 
