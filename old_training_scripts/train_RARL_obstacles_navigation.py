@@ -216,7 +216,7 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
 if __name__ == '__main__':
 
     #path = "src/nominal_models/go1/epoch_last"
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "../checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
 
 
     control_agent = Agent.load(path)

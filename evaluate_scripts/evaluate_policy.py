@@ -36,7 +36,7 @@ def experiment(
     )
     mdp = Go1(horizon, gamma, timestep=0.005, cfg=cfg, task_name=task_name)
 
-    path_c = "src/nominal_models/GO_1/epoch_last"
+    path_c = "../src/nominal_models/GO_1/epoch_last"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path_agent)
     adversary = Agent.load(path_adversary)

@@ -160,12 +160,12 @@ def experiment(task_name="obstacles_navigation", version=0):
 
 
     # Low_level_Policy, same for all
-    path_c ="checkouts/locomotion_policy"
+    path_c = "../checkouts/locomotion_policy"
 
 
     # RARL
-    path ="checkouts/agent_last_rarl"
-    path_adversary = "checkouts/antagonist_last"
+    path = "../checkouts/agent_last_rarl"
+    path_adversary = "../checkouts/antagonist_last"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     preprocessor = StateVariableConcatenation()
@@ -180,8 +180,8 @@ def experiment(task_name="obstacles_navigation", version=0):
                 obs_dim=18)
 
     # QARL
-    path ="checkouts/agent_last_qarl"
-    path_adversary = "checkouts/antagonist_last"
+    path = "../checkouts/agent_last_qarl"
+    path_adversary = "../checkouts/antagonist_last"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     adversary = Agent.load(path_adversary)
@@ -194,14 +194,14 @@ def experiment(task_name="obstacles_navigation", version=0):
 
 
     # RANDOM
-    path ="checkouts/agent_last_random"
+    path = "../checkouts/agent_last_random"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     core_random = Core_na(agent, mdp, low_level_agent=control_agent, obs_dim=18)
 
 
     # STATIC
-    path ="checkouts/agent_last_static"
+    path = "../checkouts/agent_last_static"
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)
     core_static = Core_na(agent, mdp, low_level_agent=control_agent, obs_dim=18)

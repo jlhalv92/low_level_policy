@@ -171,7 +171,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
 if __name__ == '__main__':
 
-    path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
     control_agent = Agent.load(path)
     for i in range(1):
         experiment(method_name="Curriculum_SAC",

@@ -158,7 +158,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
                 max_replay_size, warmup_transitions, tau, lr_alpha,
                 critic_fit_params=None, range=[min_a, max_a])
     if retrain:
-        path = "checkpoint/GO1/SAC/obstacles_navigation_50_rays_new_privilege_state_network/epoch_last"
+        path = "../checkpoint/GO1/SAC/obstacles_navigation_50_rays_new_privilege_state_network/epoch_last"
         agent = Agent.load(path)
         agent.reset_replay_memory(initial_replay_size,
                 max_replay_size)
@@ -249,7 +249,7 @@ if __name__ == '__main__':
 
     # path = "src/nominal_models/go1/epoch_last"
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_50"
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "../checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
 
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_70"
     #

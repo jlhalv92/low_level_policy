@@ -112,9 +112,9 @@ def experiment_qarl(
 
 
 if __name__ == "__main__":
-    path = "src/nominal_models/go1/epoch_last"
-    path_protagonist = "checkpoint/temperature_comparison/Uniform_adversary_1/agent_last_0"
-    path_antagonist =  "checkpoint/temperature_comparison/Uniform_adversary_1/antagonist_last_0"
+    path = "../src/nominal_models/go1/epoch_last"
+    path_protagonist = "../checkpoint/temperature_comparison/Uniform_adversary_1/agent_last_0"
+    path_antagonist = "../checkpoint/temperature_comparison/Uniform_adversary_1/antagonist_last_0"
     control_agent = Agent.load(path)
     protagonist_agent = Agent.load(path_protagonist)
     antagonist_agent = Agent.load(path_antagonist)

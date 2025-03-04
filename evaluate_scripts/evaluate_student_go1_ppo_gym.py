@@ -142,7 +142,7 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student_v2/epoch_last"
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "../checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
 
 
     agent = Agent.load(path)

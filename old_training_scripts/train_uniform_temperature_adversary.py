@@ -322,7 +322,7 @@ def experiment_qarl(
 
 
 if __name__ == "__main__":
-    path = "src/nominal_models/go1/epoch_last"
+    path = "../src/nominal_models/go1/epoch_last"
     control_agent = Agent.load(path)
     alfa = 1
     for i in range(4):

@@ -109,25 +109,25 @@ def experiment(alg, n_episodes_test=5, joystick=False):
     mdp_eval.env.track_velocities = True
     mdp_eval.env.resampling_command_steps = 100
 
-    path = "checkpoint/GO1/PPO/nominal_DR_robust_locomotion_gym/epoch_20"
-    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_JOYSTICK_NR/epoch_135"
+    path = "../checkpoint/GO1/PPO/nominal_DR_robust_locomotion_gym/epoch_20"
+    path = "../checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_JOYSTICK_NR/epoch_135"
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization/epoch_100"
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization/epoch_70"
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_domain_randomization_vmax_rt2/epoch_last"
     # path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_150M_Priv/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_VC/epoch_120"
-    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_VC_MAX_B/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_100M_VC_S_2/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_VC/epoch_120"
+    path = "../checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_200M_VC_MAX_B/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_RAPID_LOCOMOTION_100M_VC_S_2/epoch_last"
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_90"
     # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC/epoch_150"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_R/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_500_VC_AGILE_vx=4_vy=2_wz=5_hip/epoch_400"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65_regularization_torques_qvel/epoch_60"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_R/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_500_VC_AGILE_vx=4_vy=2_wz=5_hip/epoch_400"
+    path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65_regularization_torques_qvel/epoch_60"
 
 
 

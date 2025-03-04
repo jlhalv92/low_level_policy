@@ -119,13 +119,13 @@ def experiment_qarl(
 
 if __name__ == "__main__":
 
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "../checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
     control_agent = Agent.load(path)
 
-    path = "checkpoint/temperature_comparison/DORAEMON/agent_epoch_10_0"
+    path = "../checkpoint/temperature_comparison/DORAEMON/agent_epoch_10_0"
     protagonist_agent = Agent.load(path)
 
-    path = "checkpoint/temperature_comparison/DORAEMON/antagonist_epoch_10_0"
+    path = "../checkpoint/temperature_comparison/DORAEMON/antagonist_epoch_10_0"
     antagonist_agent = Agent.load(path)
 
     for i in range(4):

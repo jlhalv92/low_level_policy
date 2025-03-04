@@ -165,7 +165,7 @@ def experiment():
 
 
 
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_50"
+    path = "../checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_50"
 
 
     agent = Agent.load(path)

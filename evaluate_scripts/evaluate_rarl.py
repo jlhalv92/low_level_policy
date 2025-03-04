@@ -104,13 +104,13 @@ def experiment(
 
 
 if __name__ == "__main__":
-    path = "src/nominal_models/go1/epoch_last"
+    path = "../src/nominal_models/go1/epoch_last"
     # path_protagonist = "checkpoint/temperature_comparison/Uniform_adversary_1/agent_last_0"
     # path_antagonist =  "checkpoint/temperature_comparison/Uniform_adversary_1/antagonist_last_0"
     # path_protagonist = "checkpoint/GO1/obstacles_navigation/RARL/0/Protagonist/epoch_190"
     # path_antagonist = "checkpoint/GO1/obstacles_navigation/RARL/0/ANTAGONIST/epoch_190"
-    path_antagonist = "src/nominal_models/GO1/obstacles_navigation/RARL/0/ANTAGONIST/epoch_last"
-    path_protagonist = "checkpoint/temperature_comparison/QARL_1/agent_last_0"
+    path_antagonist = "../src/nominal_models/GO1/obstacles_navigation/RARL/0/ANTAGONIST/epoch_last"
+    path_protagonist = "../checkpoint/temperature_comparison/QARL_1/agent_last_0"
     # path_antagonist = "checkpoint/temperature_comparison/QARL_1/antagonist_last_0"
 
     control_agent = Agent.load(path)

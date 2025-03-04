@@ -47,14 +47,14 @@ def experiment(method_name=None, task_name="obstacles_navigation"):
 
 
 
-    path_c ="checkouts/locomotion_policy"
+    path_c = "../checkouts/locomotion_policy"
     if method_name == "MIN_MAX":
-        path ="src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
-        path_adversary = "src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"
+        path = "../src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/Protagonist/epoch_last"
+        path_adversary = "../src/nominal_models/GO1/obstacles_navigation/Adversarial_SAC/0/ANTAGONIST/epoch_last"
 
     if method_name == "QARL":
-        path ="src/nominal_models/GO1/obstacles_navigation/QARL/0/Protagonist/epoch_last"
-        path_adversary = "src/nominal_models/GO1/obstacles_navigation/QARL/0/ANTAGONIST/epoch_last"
+        path = "../src/nominal_models/GO1/obstacles_navigation/QARL/0/Protagonist/epoch_last"
+        path_adversary = "../src/nominal_models/GO1/obstacles_navigation/QARL/0/ANTAGONIST/epoch_last"
 
     control_agent = Agent.load(path_c)
     agent = Agent.load(path)

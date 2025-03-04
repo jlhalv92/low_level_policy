@@ -100,7 +100,7 @@ def experiment(method_name ,alg, n_episodes_test, control_agent=None):
     # Agent
 
 
-    path = "checkpoint/GO1/SAC/obstacles_navigation_adversarial_static/epoch_last"
+    path = "../checkpoint/GO1/SAC/obstacles_navigation_adversarial_static/epoch_last"
     agent = Agent.load(path)
     agent.reset_replay_memory(initial_replay_size,
             max_replay_size)
@@ -122,7 +122,7 @@ def experiment(method_name ,alg, n_episodes_test, control_agent=None):
 
 if __name__ == '__main__':
 
-    path = "src/nominal_models/nominal_student_ppo/policy"
+    path = "../src/nominal_models/nominal_student_ppo/policy"
     control_agent = Agent.load(path)
     experiment(method_name="SAC",
                alg=SAC,

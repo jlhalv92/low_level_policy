@@ -291,7 +291,6 @@ class Core(object):
             of the reached state and the last step flag.
 
         """
-        obs_dim = self.nav_obs_dim
 
         nav_state = self._preprocess( self._state.copy())
         robot_state = self.mdp.get_robot_observation()
@@ -358,18 +357,7 @@ class Core(object):
         self._adversary_state = next_state_antagonist
 
         # Reward Antagonist
-
-        pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-        pos_robot = self.mdp._data.body("trunk").xpos[:2]
-
-        reward_collision = 100 * self.mdp.obstacle_robot_collision
-        reward_distance = np.exp(-np.abs(pos_robot[1] - pos_antagonist[1]))
-        reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])
-        distance = self.mdp._data.site("target").xpos[0] - self.mdp._data.qpos[0]
-        pass_finish_line = distance < -0.35
-
-        reward_antagonist = (reward_collision + reward_distance + reward_velocity) * ( not pass_finish_line)
-
+        reward_antagonist = self.mdp.reward_antagonist()
         if return_antagonist_state and self.agent_id == 0:
 
             tr_protagonist =(state_antagonist, self.action, reward, next_state_antagonist, absorbing, info, last)

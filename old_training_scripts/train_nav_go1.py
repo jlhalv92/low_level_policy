@@ -242,8 +242,8 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control
 
 if __name__ == '__main__':
 
-    path ="checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
-    path = "src/nominal_models/go1/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_robust_locomotion/epoch_last"
+    path = "../src/nominal_models/go1/epoch_last"
 
     control_agent = Agent.load(path)
     experiment(alg=SAC,

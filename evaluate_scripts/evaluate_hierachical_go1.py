@@ -103,15 +103,15 @@ def experiment():
               task_name="obstacles_navigation") # multi_obstacles_navigation
 
 
-    path ="checkpoint/GO1/SAC/obstacles_navigation_random_move/epoch_70"
-    path = "checkpoint/GO1/SAC/obstacles_navigation_history_rays/epoch_last"
-    path = "checkpoint/GO1/SAC/obstacles_navigation_50_rays/epoch_last"
-    path = "checkpoint/GO1/Dagger/obstacles_navigation/epoch_last"
-    path = "checkpoint/GO1/SAC/obstacles_navigation_50_rays/epoch_last"
-    path = "checkpoint/GO1/SAC/obstacles_navigation_50_rays_new_privilege_state_network_no_walls_retrain/epoch_150"
+    path = "../checkpoint/GO1/SAC/obstacles_navigation_random_move/epoch_70"
+    path = "../checkpoint/GO1/SAC/obstacles_navigation_history_rays/epoch_last"
+    path = "../checkpoint/GO1/SAC/obstacles_navigation_50_rays/epoch_last"
+    path = "../checkpoint/GO1/Dagger/obstacles_navigation/epoch_last"
+    path = "../checkpoint/GO1/SAC/obstacles_navigation_50_rays/epoch_last"
+    path = "../checkpoint/GO1/SAC/obstacles_navigation_50_rays_new_privilege_state_network_no_walls_retrain/epoch_150"
 
 
-    path_c = "src/nominal_models/go1/epoch_last"
+    path_c = "../src/nominal_models/go1/epoch_last"
 
 
     control_agent = Agent.load(path_c)

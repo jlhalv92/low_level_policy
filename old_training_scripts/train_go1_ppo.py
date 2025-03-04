@@ -155,7 +155,7 @@ def experiment(alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test):
     alg_params['critic_params'] = critic_params
 
     if retrain:
-        path = "src/nominal_models/go1/epoch_last"
+        path = "../src/nominal_models/go1/epoch_last"
 
         agent = Agent.load(path)
     else:

@@ -240,7 +240,7 @@ if __name__ == '__main__':
     n_epochs = 40 # 150
 
     # teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
-    teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+    teacher_path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
 
 
 

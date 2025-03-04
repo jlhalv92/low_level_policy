@@ -112,9 +112,9 @@ def experiment():
     # path = "checkpoint/GO1/PPO/nominal_joystick_tuning/epoch_last"
 
 
-    path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
-    path = "src/nominal_models/go1/epoch_last"
-    path = "src/nominal_models/go1/epoch_last"
+    path = "../checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization_new/epoch_450"
+    path = "../src/nominal_models/go1/epoch_last"
+    path = "../src/nominal_models/go1/epoch_last"
    # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_domain_randomization/epoch_1400"
     #path = "src/nominal_models/GO_1/PPO_low_level/epoch_last"
     # path = "checkpoint/GO1/PPO/nominal_robust_locomotion_1000_epochs/epoch_160"

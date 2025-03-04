@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.fix_temp_sac import fixTempSAC
 
 from mushroom_rl.core import Agent
 import wandb
@@ -11,7 +12,7 @@ import wandb
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
 from src.envs.nav_environment import Go1
-from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork
+from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
 from mushroom_rl.utils.dataset import compute_J, parse_dataset
 
 from tqdm import trange
@@ -26,7 +27,17 @@ def calculate_success_rate(info, last):
     return success_rate
 
 
-def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_test, control_agent=None, run_id=0, log=False, use_cuda=False):
+def experiment(method_name,
+               alg,
+               n_epochs,
+               n_steps,
+               n_steps_per_fit,
+               n_episodes_test,
+               control_agent=None,
+               run_id=0,
+               log=False,
+               use_cuda=False,
+               alpha=1.):
 
     np.random.seed()
 
@@ -62,17 +73,17 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
             job_type=method_name,
             name="seed_{}".format(run_id)
         )
-
-    cfg = dict(kp=40,
-               kd=1,
+    joystick = False
+    cfg = dict(kp=20,
+               kd=0.5,
                antagonist=True,
                max_level=False,
                curriculum=False,
-               joystick=False,
+               joystick=joystick,
                resample=False,
                domain_randomization=False,
                rewards=cfg_rewards,
-               static_obstacles=False)
+               static_obstacles=False, activate_arrow=False)
 
 
 
@@ -89,14 +100,14 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=6,
+                           size_propioception=9,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=6,
+                              size_propioception=9,
                               use_cuda=use_cuda)
 
 
@@ -114,7 +125,7 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
                          use_cuda=use_cuda)
 
     # Agent
-    antagonist_input_shape = (4,)
+    antagonist_input_shape = (6,)
     agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
                 actor_optimizer, critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
@@ -145,16 +156,15 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[-1, 1])
+                critic_fit_params=None, range=[-1, 1], alpha=alpha)
 
 
     core = Core([agent, antagonist],
                 mdp,
-                low_level_agent=control_agent,
-                obs_dim=obs_size)
+                low_level_agent=control_agent, joystick=joystick)
 
 
-    dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
+    dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
 
     s,a, r, s1, absorbing, info, last = parse_dataset(dataset)
 
@@ -171,12 +181,12 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
 
     for it in trange(n_epochs, leave=False):
         logger.info("Training Antagonist")
-        core.learn(n_steps=5000, n_steps_per_fit=1,  id_agent=1)
+        core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
         logger.info("Training Protagonist")
-        core.learn(n_steps=5000, n_steps_per_fit=1, id_agent=0)
+        core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
 
         if it % 10==0 and view:
-            render=False
+            render=True
         else:
             render=False
 
@@ -189,9 +199,11 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
         success_rate = calculate_success_rate(info, last)
 
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=1)
+        s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-        alfa = antagonist._alpha_np
-        logger.epoch_info(it+1, J=J, R=R, entropy=E, succes_rate=success_rate, alfa=alfa, r_antagonis=R_antagonist)
+        alfa = antagonist._alpha.cpu().numpy()
+        E_a=antagonist.policy.entropy(s)
+        logger.epoch_info(it+1, J=J, R=R, entropy=E, succes_rate=success_rate, alfa=alfa, r_antagonist=R_antagonist, entropy_antagonist=E_a)
 
 
         if log:
@@ -212,20 +224,20 @@ def experiment(method_name, alg, n_epochs,n_steps, n_steps_per_fit, n_episodes_t
 
 if __name__ == '__main__':
 
-    path = "src/nominal_models/go1/epoch_last"
-
+    path = "src/nominal_models/low_level/policy"
+    i = 0
     control_agent = Agent.load(path)
-    for i in range(5):
-        experiment(method_name="RARL",
-                   alg=[SAC, SAC],
-                   n_epochs=200,
-                   n_steps=5000,
-                   n_steps_per_fit=1,
-                   n_episodes_test=10,
-                   control_agent=control_agent,
-                   run_id=i,
-                   log=True,
-                   use_cuda=False)
+    experiment(method_name="RARL",
+               alg=[SAC, fixTempSAC],
+               n_epochs=50,
+               n_steps=5000,
+               n_steps_per_fit=1,
+               n_episodes_test=10,
+               control_agent=control_agent,
+               run_id=i,
+               log=False,
+               use_cuda=True,
+               alpha=0.5)
 
 
 
