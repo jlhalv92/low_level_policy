@@ -17,7 +17,7 @@ from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
-from src.envs.nav_environment import Go1
+from src.envs.go1_nav_environment import Go1
 
 from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
 import wandb
@@ -26,6 +26,41 @@ from mushroom_rl.utils.dataset import compute_J, parse_dataset
 from tqdm import trange
 
 
+class Teacher:
+    def __init__(
+            self,
+            initial_conc: np.ndarray = np.array([int(50)]),
+            target_conc: np.ndarray = np.array([0.1]),
+            fixed_rate: np.ndarray = np.array([1000]),
+            conc_lower_bound: float = 1e-8,
+            max_kl: float = 0.5,
+            performance_lower_bound: int = 0.6,
+            target_kl_threshold: float = 0.01,
+            temperature_bounds: list = [-np.inf, np.inf],
+            doraemon: bool = False,
+    ):
+        self.teacher = SelfPaced(
+            initial_conc,
+            target_conc,
+            fixed_rate,
+            max_kl,
+            performance_lower_bound,
+            conc_lower_bound,
+            target_kl_threshold,
+            temperature_bounds,
+            doraemon,
+        )
+        self.temperature_list = []
+
+    def provide_teacher(self):
+        return self.teacher
+
+    def sample_n_temperatures(self, n):
+        sampled_temperatures = np.zeros(n)
+        for i in range(n):
+            sampled_temperatures[i] = self.teacher.sample()
+
+        return sampled_temperatures
 
 def calculate_success_rate(info, last):
     info_array = np.array([d["success"] for d in info])
@@ -261,7 +296,7 @@ def experiment_qarl(
 
     for it in trange(n_epochs, leave=False):
 
-        sampled_temperatures = teacher.sample_n_temperatures(n=5)
+        sampled_temperatures = teacher.sample_n_temperatures(n=100)
         if method_name == "DORAEMON":
             sampled_temperatures /= 2
 
@@ -269,10 +304,10 @@ def experiment_qarl(
         # teacher.temperature_list.append(sampled_temperatures)
 
         logger.info("Training Antagonist")
-        core.learn(n_episodes=episode, n_steps_per_fit=n_steps_per_fit, id_agent=1)
+        core.learn(n_steps=5000, n_steps_per_fit=1, id_agent=1)
 
         logger.info("Training Protagonist")
-        core.learn(n_episodes=episode, n_steps_per_fit=n_steps_per_fit, id_agent=0)
+        core.learn(n_steps=5000, n_steps_per_fit=1, id_agent=0)
 
         ##################EVALUATION#########################################
 
@@ -361,45 +396,11 @@ def experiment_qarl(
 
 if __name__ == "__main__":
 
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
     alfa = 0.5
-    class Teacher:
-        def __init__(
-                self,
-                initial_conc: np.ndarray = np.array([int(50)]),
-                target_conc: np.ndarray = np.array([0.1]),
-                fixed_rate: np.ndarray = np.array([1000]),
-                conc_lower_bound: float = 1e-8,
-                max_kl: float = 0.5,
-                performance_lower_bound: int = 0.6,
-                target_kl_threshold: float = 0.01,
-                temperature_bounds: list = [-np.inf, np.inf],
-                doraemon: bool = False,
-        ):
-            self.teacher = SelfPaced(
-                initial_conc,
-                target_conc,
-                fixed_rate,
-                max_kl,
-                performance_lower_bound,
-                conc_lower_bound,
-                target_kl_threshold,
-                temperature_bounds,
-                doraemon,
-            )
-            self.temperature_list = []
 
-        def provide_teacher(self):
-            return self.teacher
-
-        def sample_n_temperatures(self, n):
-            sampled_temperatures = np.zeros(n)
-            for i in range(n):
-                sampled_temperatures[i] = self.teacher.sample()
-
-            return sampled_temperatures
 
     for i in range(5):
 

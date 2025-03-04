@@ -9,7 +9,7 @@ from src.algorithm.deep_actor_critic.sac import  SAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
-from src.envs.nav_environment import Go1
+from src.envs.go1_nav_environment import Go1
 
 from src.networks.nets import  CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork
 import wandb

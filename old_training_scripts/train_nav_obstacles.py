@@ -12,7 +12,7 @@ from src.core.core_quadruped_navigation import Core
 # from src.core.core_quadruped_navigation_old_policy import Core
 # from src.envs.go1_env_obstacles_rays import Go1
 # from src.envs.go1_env_obstacles_rays_old_policy import Go1
-from src.envs.nav_environment import Go1
+from src.envs.go1_nav_environment import Go1
 
 from src.networks.nets import  CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork
 import wandb

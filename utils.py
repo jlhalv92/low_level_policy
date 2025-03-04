@@ -1,4 +1,4 @@
-from src.envs.mujoco_gym_env import UnitreeGo1
+from src.envs.go1_low_level_locomotion_env import UnitreeGo1
 from torch.distributions.normal import Normal
 import torch
 import torch.nn as nn

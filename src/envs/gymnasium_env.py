@@ -2,7 +2,7 @@ import warnings
 
 import gymnasium as gym
 from gymnasium import spaces as gym_spaces
-from src.envs.mujoco_gym_env import UnitreeGo1
+from src.envs.go1_low_level_locomotion_env import UnitreeGo1
 from mushroom_rl.core import Environment, MDPInfo
 from mushroom_rl.utils.spaces import Box, Discrete
 import numpy as np

@@ -14,7 +14,7 @@ from src.core.core_quadruped_adversary import Core as Core_adversary
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
-from src.envs.nav_environment import Go1
+from src.envs.go1_nav_environment import Go1
 
 from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
 import wandb

@@ -12,7 +12,7 @@ import wandb
 
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
-from src.envs.nav_environment import Go1
+from src.envs.go1_nav_environment import Go1
 from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
@@ -228,7 +228,6 @@ def experiment(method_name,
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-
     parser.add_argument("--n_epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
