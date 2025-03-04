@@ -2,6 +2,7 @@ import numpy as np
 
 import torch.optim as optim
 import torch.nn.functional as F
+import argparse
 
 from src.algorithm.deep_actor_critic.sac import  SAC
 from src.algorithm.deep_actor_critic.fix_temp_sac import fixTempSAC
@@ -164,7 +165,7 @@ def experiment(method_name,
                 low_level_agent=control_agent, joystick=joystick)
 
 
-    dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
+    dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
 
     s,a, r, s1, absorbing, info, last = parse_dataset(dataset)
 
@@ -222,22 +223,37 @@ def experiment(method_name,
     if log:
         wandb.finish()
 
-if __name__ == '__main__':
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
+
+    parser.add_argument("--n_epochs", type=int, default=50, help="Number of training epochs")
+    parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
+    parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
+    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--run_id", type=int, default=0, help="Run ID")
+    parser.add_argument("--log", action="store_true",default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
+    parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
+
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    args = parse_args()
+    print(args)
     path = "src/nominal_models/low_level/policy"
-    i = 0
     control_agent = Agent.load(path)
     experiment(method_name="RARL",
                alg=[SAC, fixTempSAC],
-               n_epochs=50,
-               n_steps=5000,
-               n_steps_per_fit=1,
-               n_episodes_test=10,
+               n_epochs=args.n_epochs,
+               n_steps=args.n_steps,
+               n_steps_per_fit=args.n_steps_per_fit,
+               n_episodes_test=args.n_episodes_test,
                control_agent=control_agent,
-               run_id=i,
-               log=False,
-               use_cuda=True,
-               alpha=0.5)
+               run_id=args.run_id,
+               log=args.log,
+               use_cuda=args.use_cuda,
+               alpha=args.alpha)
 
 
 
