@@ -89,6 +89,7 @@ class VDeepAC(VAgent):
         raise NotImplementedError('DeepAC is an abstract class. Subclasses need'
                                   'to implement the `_post_load` method.')
 
+
 class DeepAC(Agent):
     """
     Base class for algorithms that uses the reparametrization trick, such as
@@ -175,3 +176,4 @@ class DeepAC(Agent):
     def _post_load(self):
         raise NotImplementedError('DeepAC is an abstract class. Subclasses need'
                                   'to implement the `_post_load` method.')
+

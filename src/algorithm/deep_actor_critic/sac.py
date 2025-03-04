@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from mushroom_rl.algorithms.actor_critic.deep_actor_critic import DeepAC
+from src.mushroom.deep_actor_critic.deep_actor_critic import DeepAC
 from mushroom_rl.policy import Policy
 from mushroom_rl.approximators import Regressor
 from mushroom_rl.approximators.parametric import TorchApproximator
