@@ -71,8 +71,8 @@ def experiment(method_name,
         wandb.init(
             project="RATIONALITY_COMPARISON",
             group=task_name,
-            job_type=method_name,
-            name="seed_{}_alpha_{}".format(run_id, alpha)
+            job_type=method_name + f"_alpha_{alpha}",
+            name="seed_{}".format(run_id)
         )
     joystick = False
     cfg = dict(kp=20,
