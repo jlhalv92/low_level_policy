@@ -38,7 +38,10 @@ def experiment(method_name,
                run_id=0,
                log=False,
                use_cuda=False,
-               alpha=1.):
+               alpha=1.,
+               uniform=False,
+               handmade_curriculum=False
+               ):
 
     np.random.seed()
 
@@ -63,8 +66,6 @@ def experiment(method_name,
     lr_alpha = 3e-4
 
 
-    cfg_rewards=dict()
-
 
 
     if log:
@@ -75,16 +76,11 @@ def experiment(method_name,
             name="seed_{}".format(run_id)
         )
     joystick = False
-    cfg = dict(kp=20,
-               kd=0.5,
-               antagonist=True,
+    cfg = dict(antagonist=True,
                max_level=False,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
-               rewards=cfg_rewards,
-               static_obstacles=False, activate_arrow=False)
+               static_obstacles=False,
+               activate_arrow=False)
 
 
 
@@ -236,6 +232,10 @@ def parse_args():
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--uniform",default=False,  help="Enable uniform")
+    parser.add_argument("--curriculum",default=False,  help="Enable curriculum")
+
+
 
     return parser.parse_args()
 
@@ -255,7 +255,9 @@ if __name__ == '__main__':
                    run_id=run_id,
                    log=args.log,
                    use_cuda=args.use_cuda,
-                   alpha=args.alpha)
+                   alpha=args.alpha,
+                   uniform=False,
+                   handmade_curriculum=False)
 
 
 

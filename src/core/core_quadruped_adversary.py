@@ -27,7 +27,7 @@ class Core(object):
 
     """
     def __init__(self, agents, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None, obs_dim=18, record_dictionary=None, joystick=False):
+                 preprocessors=None, low_level_agent=None, obs_dim=18, record_dictionary=None, joystick=False, aware_rationality=False):
         """
         Constructor.
 
@@ -44,6 +44,7 @@ class Core(object):
             use_data_prior (bool): tells us whether to use a prior from mdp for biasing data collection
 
         """
+        self.aware_rationality = aware_rationality
         self.agent_id = 0
         self.joystick=joystick
         self.history = HistoryStore(5)
@@ -292,7 +293,7 @@ class Core(object):
 
         """
 
-        nav_state = self._preprocess( self._state.copy())
+        nav_state = self._state.copy()
         robot_state = self.mdp.get_robot_observation()
 
 
@@ -352,8 +353,13 @@ class Core(object):
 
         next_state_antagonist = self._preprocess(next_state_antagonist.copy())
 
+        if self.aware_rationality:
+            next_nav_state = self._preprocess(next_state.copy())
+        else:
+            next_nav_state = next_state.copy()
 
-        self._state = next_state
+        self._state = next_nav_state
+
         self._adversary_state = next_state_antagonist
 
         # Reward Antagonist
@@ -366,7 +372,7 @@ class Core(object):
 
 
         if self.agent_id == 0:
-            next_nav_state = self._preprocess(next_state.copy())
+
 
             return nav_state,  self.action, reward, next_nav_state, absorbing, info, last
 
@@ -396,7 +402,10 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        self._state =self.mdp.reset(initial_state, initial_condition).copy()
+        if self.aware_rationality:
+            self._state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
+        else:
+            self._state = self.mdp.reset(initial_state, initial_condition).copy()
         #
         #
         # pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
@@ -405,7 +414,8 @@ class Core(object):
 
         adversary_state = self.mdp.obs_antagonist()
 
-        self._adversary_state = self._preprocess(adversary_state.copy())
+        self._adversary_state =self._preprocess(adversary_state.copy())
+
 
 
         self.agents[self.agent_id].episode_start()

@@ -64,8 +64,8 @@ class SelfPaced:
 
         self.iteration = 0
 
-        self._logger = Logger("self-paced")
-        # self._logger = None
+        # self._logger = Logger("self-paced")
+        self._logger = None
 
         if not doraemon:
             # Data collection
