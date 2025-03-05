@@ -256,7 +256,7 @@ def experiment_qarl(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality)
+        aware_rationality=aware_rationality, rationality_antagonist=True)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
