@@ -39,9 +39,7 @@ def experiment(method_name,
                log=False,
                use_cuda=False,
                alpha=1.,
-               uniform=False,
-               handmade_curriculum=False
-               ):
+               wandb_project=""):
 
     np.random.seed()
 
@@ -67,12 +65,12 @@ def experiment(method_name,
 
 
 
-
+    job_name = method_name + f"_alpha_{alpha}"
     if log:
         wandb.init(
-            project="RATIONALITY_COMPARISON",
+            project=wandb_project,
             group=task_name,
-            job_type=method_name + f"_alpha_{alpha}",
+            job_type=job_name,
             name="seed_{}".format(run_id)
         )
     joystick = False
@@ -200,23 +198,25 @@ def experiment(method_name,
         R_antagonist = np.mean(compute_J(dataset_antagonist))
         alfa = antagonist._alpha.cpu().numpy()
         E_a=antagonist.policy.entropy(s)
-        logger.epoch_info(it+1, J=J, R=R, entropy=E, succes_rate=success_rate, alfa=alfa, r_antagonist=R_antagonist, entropy_antagonist=E_a)
+        logger.epoch_info(it+1, J=J, R=R, entropy=E,
+                          success_rate=success_rate, alfa=alfa,
+                          r_antagonist=R_antagonist, entropy_antagonist=E_a)
 
 
 
         if log:
-            log_dict = dict(J=J, R=R, entropy=E, succes_rate=success_rate, alfa=alfa, r_antagonist=R_antagonist,
+            log_dict = dict(J=J, R=R, entropy=E,
+                            success_rate=success_rate,
+                            alfa=alfa, r_antagonist=R_antagonist,
                             entropy_antagonist=E_a)
             wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
-            agent.save("checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1',agent_task,method_name,run_id,'Protagonist', it))
-            antagonist.save("checkpoint/{}/{}/{}/{}/{}/epoch_{}".format('GO1',agent_task,method_name,run_id,"ANTAGONIST", it))
+            agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-
-
-    agent.save("src/nominal_models/{}/{}/{}/{}/{}/epoch_{}".format('GO1',agent_task,method_name,run_id, 'Protagonist', "last"))
-    antagonist.save("src/nominal_models/{}/{}/{}/{}/{}/epoch_{}".format('GO1',agent_task,method_name,run_id, "ANTAGONIST", "last"))
+    agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -230,10 +230,10 @@ def parse_args():
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--runs", type=int, default=5, help="Run ID")
     parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
+    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--uniform",default=False,  help="Enable uniform")
-    parser.add_argument("--curriculum",default=False,  help="Enable curriculum")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+
 
 
 
@@ -256,8 +256,7 @@ if __name__ == '__main__':
                    log=args.log,
                    use_cuda=args.use_cuda,
                    alpha=args.alpha,
-                   uniform=False,
-                   handmade_curriculum=False)
+                   wandb_project=args.wandb_project)
 
 
 

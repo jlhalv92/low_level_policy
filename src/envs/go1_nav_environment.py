@@ -211,6 +211,10 @@ class Go1(MuJoCo):
         Constructor.
 
         """
+        if "max_antagonist_v" in cfg.keys():
+            self.max_antagonist_v = cfg["max_antagonist_v"]
+        else:
+            self.max_antagonist_v = 1
         self.activate_arrow = cfg["activate_arrow"]
         self.controller_pd = PDController(self)
         self.narrow_passage = False
@@ -592,7 +596,13 @@ class Go1(MuJoCo):
 
         return False
 
+    def update_velocity_commands(self,v):
+        self.target_vx = v[0]
+        self.target_vy = v[1]
+        self.target_wz = v[2]
+
     def _step_init(self, obs, action):
+
         if self.activate_arrow:
             module = np.sqrt(self.target_vx**2 + self.target_vy**2)
             angle = arctan2(self.target_vy, self.target_vx)
@@ -606,10 +616,11 @@ class Go1(MuJoCo):
             self._model.site("velocity_arrow").pos = [module_arrow*np.cos(yaw), module_arrow*np.sin(yaw), 0.1]
             self._model.site("velocity_arrow").size[1] = scaled_module + 0.01
             self._model.site("velocity_arrow").quat = quat
+
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
-            self._data.ctrl[-1] = self.obstacle_velocity
+            self._data.ctrl[-1] = np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
 
             self._data.ctrl[-2] = 0
             self._data.ctrl[-3] = self.obstacle_pose_x
@@ -1084,9 +1095,6 @@ class Go1(MuJoCo):
             x = np.random.uniform(-1.5, 1.5)
             self._data.qpos[0:3] = [x, y_robot, 0.36]
             self.obstacle_pose_x = x + np.random.uniform(2, 3.5)
-
-
-
 
             self._data.joint("obstacle").qpos[:3] = [self.obstacle_pose_x, y_obstacle, obstacle_height]
             self._model.site("target").pos[0] = self.obstacle_pose_x + 1

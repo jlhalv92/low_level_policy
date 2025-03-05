@@ -27,7 +27,10 @@ class Core(object):
 
     """
     def __init__(self, agents, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, low_level_agent=None, obs_dim=18, record_dictionary=None, joystick=False, aware_rationality=False):
+                 preprocessors=None, low_level_agent=None,
+                 record_dictionary=None, joystick=False,
+                 aware_rationality=False,
+                 rationality_antagonist=False):
         """
         Constructor.
 
@@ -44,6 +47,7 @@ class Core(object):
             use_data_prior (bool): tells us whether to use a prior from mdp for biasing data collection
 
         """
+        self.rationality_antagonist =rationality_antagonist
         self.aware_rationality = aware_rationality
         self.agent_id = 0
         self.joystick=joystick
@@ -52,7 +56,6 @@ class Core(object):
 
         self.use_antagonist = True
 
-        self.nav_obs_dim = obs_dim
         self.agents = agents
 
         self.action = None
@@ -308,6 +311,7 @@ class Core(object):
 
             if not self.joystick:
                 robot_state[-3:] =  action
+                self.mdp.update_velocity_commands(action)
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
@@ -324,6 +328,8 @@ class Core(object):
 
             if not self.joystick:
                 robot_state[-3:] =  action
+                self.mdp.update_velocity_commands(action)
+
 
             control_action = self.low_level_agent.draw_action(robot_state)
             next_state, reward, absorbing, info = self.mdp.step(control_action)
@@ -351,7 +357,10 @@ class Core(object):
 
         state_antagonist = self._adversary_state
 
-        next_state_antagonist = self._preprocess(next_state_antagonist.copy())
+        if self.rationality_antagonist:
+            next_state_antagonist = self._preprocess(next_state_antagonist.copy())
+
+
 
         if self.aware_rationality:
             next_nav_state = self._preprocess(next_state.copy())
@@ -414,7 +423,11 @@ class Core(object):
 
         adversary_state = self.mdp.obs_antagonist()
 
-        self._adversary_state =self._preprocess(adversary_state.copy())
+        if self.rationality_antagonist:
+            self._adversary_state =self._preprocess(adversary_state.copy())
+
+        else:
+            self._adversary_state = adversary_state.copy()
 
 
 

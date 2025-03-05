@@ -93,7 +93,8 @@ def experiment_qarl(
         update=10,
         kl=0.5, curriculum_type="", conc_lower_bound=1e-8,
         aware_rationality=False,
-        view=False):
+        view=False,
+        wandb_project=""):
 
     np.random.seed()
 
@@ -114,7 +115,16 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    results_dir = f"temperature_comparison/{method_name}"
+    job_name = method_name + f"_aware_rationality_{aware_rationality}"
+    print(job_name)
+    if log:
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=wandb_project,
+            group=task_name,
+            job_type=job_name,
+            name="seed_{}".format(run_id)
+        )
 
     if curriculum_type == "DORAEMON":
         teacher = Teacher(performance_lower_bound=0.5, max_kl=kl, doraemon=True, conc_lower_bound=conc_lower_bound)
@@ -122,6 +132,7 @@ def experiment_qarl(
         teacher = Teacher(performance_lower_bound=0.5, max_kl=kl, initial_conc=np.array([int(alfa)]))
 
     n_samples_for_dist_update = update
+
 
     cfg_rewards=dict()
 
@@ -144,16 +155,7 @@ def experiment_qarl(
               timestep=0.005,
               cfg=cfg,
               task_name=task_name, **vel_controller)
-    job_type = method_name + f"_aware_rationality_{aware_rationality}"
-    print(job_type)
-    if log:
-        wandb.init(
-            # set the wandb project where this run will be logged
-            project="RATIONALITY_COMPARISON",
-            group=task_name,
-            job_type=job_type,
-            name="seed_{}".format(run_id)
-        )
+
     actor_input_shape = mdp.info.observation_space.shape
 
     if aware_rationality:
@@ -382,21 +384,24 @@ def experiment_qarl(
         )
 
         if log:
+            entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
+            a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
             log_dict = dict(J=J_online,
                             R=R_online,
                             success_rate=success_rate,
                             alfa=np.mean(temps),
                             r_antagonist=R_antagonist,
-                            entropy_antagonist=E_online)
+                            entropy_antagonist=E_online,
+                            entropy_distribution=entropy_distribution, a_dist=a_dist)
 
             wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
-            agent.save(f"checkpoint/{results_dir}/agent_epoch_{it}_{run_id}")
-            antagonist.save(f"checkpoint/{results_dir}/antagonist_epoch_{it}_{run_id}")
+            agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-    agent.save(f"checkpoint/{results_dir}/agent_last_{run_id}")
-    antagonist.save(f"checkpoint/{results_dir}/antagonist_last_{run_id}")
+    agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -415,6 +420,8 @@ def parse_args():
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.05,  help="kl_max")
     parser.add_argument("--aware_rationality", default=False,  help="Enable logging")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+
 
 
     return parser.parse_args()
@@ -450,8 +457,7 @@ if __name__ == "__main__":
         conc_lower_bound = 1e-8,
         aware_rationality=args.aware_rationality,
         view=False,
-
-    )
+        wandb_project=args.wandb_project)
 
 
 
