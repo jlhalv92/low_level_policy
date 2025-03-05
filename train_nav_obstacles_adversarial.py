@@ -155,6 +155,7 @@ def experiment_qarl(
             name="seed_{}".format(run_id)
         )
     actor_input_shape = mdp.info.observation_space.shape
+
     if aware_rationality:
         actor_input_shape = (actor_input_shape[0] +1,)
     else:
@@ -320,7 +321,12 @@ def experiment_qarl(
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
 
         ##################EVALUATION#########################################
+        if it % 10 == 0 and view:
+            render = True
+        else:
+            render = False
 
+        logger.info("Evaluate Protagonist")
         if method_name=="DORAEMON":
             temps = teacher.sample_n_temperatures(n=n_episodes_test)
             temps /=2
@@ -330,12 +336,6 @@ def experiment_qarl(
         core.set_variables_for_training(temps)
         core.callback_step.clean()
 
-        if it % 10 == 0 and view:
-            render = True
-        else:
-            render = False
-
-        logger.info("Evaluate Protagonist")
         dataset_online = core.evaluate(
             n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True
         )
@@ -351,24 +351,23 @@ def experiment_qarl(
             core.callback_step.get(), core.mdp.info.gamma
         )
 
-        if method_name == "DORAEMON":
-            temp_perf_buffer.update_buffer([(2*np.array(temperatures)).tolist(), (success_rate*np.ones(n_episodes_test)).tolist()])
-
-        else:
-            temp_perf_buffer.update_buffer([temperatures, (success_rate*np.ones(n_episodes_test)).tolist()])
 
         ##################UPDATE distribution#########################################
-        if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
-            temps_perfs = temp_perf_buffer.read_buffer(reset=True)
+        if method_name=="DORAEMON":
+            temp_perf_buffer.update_buffer([(2*np.array(temperatures)).tolist(), (success_rate*np.ones(n_episodes_test)).tolist()])
 
-            logger.info("Update Teacher Distribution")
-            teacher.teacher.update_temperature_distribution(
-                temps_perfs[0], temps_perfs[1], it
-            )
+            if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
+                temps_perfs = temp_perf_buffer.read_buffer(reset=True)
+
+                logger.info("Update Teacher Distribution")
+                teacher.teacher.update_temperature_distribution(
+                    temps_perfs[0], temps_perfs[1], it
+                )
         ##################Evaluation 2#########################################
+
+        logger.info("Evaluate Antagonist")
         core.set_variables_for_training(temps)
         core.callback_step.clean()
-        logger.info("Evaluate Antagonist")
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
 
@@ -415,7 +414,7 @@ def parse_args():
     parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.05,  help="kl_max")
-    parser.add_argument("--aware_rationality",type=bool, default=False,  help="Enable logging")
+    parser.add_argument("--aware_rationality", default=False,  help="Enable logging")
 
 
     return parser.parse_args()
