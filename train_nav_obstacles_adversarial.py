@@ -23,7 +23,7 @@ from src.envs.go1_nav_environment import Go1
 
 from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
 import wandb
-from mushroom_rl.utils.dataset import compute_J, parse_dataset
+from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
 from tqdm import trange
 
