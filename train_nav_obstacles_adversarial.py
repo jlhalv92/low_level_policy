@@ -384,8 +384,15 @@ def experiment_qarl(
         )
 
         if log:
-            entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
-            a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+            if method_name == "DORAEMON":
+
+                entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
+                a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+            else:
+                entropy_distribution  = np.log(0.5)  # Natural logarithm
+
+                a_dist = 1
+
             log_dict = dict(J=J_online,
                             R=R_online,
                             success_rate=success_rate,
