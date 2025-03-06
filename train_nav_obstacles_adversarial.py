@@ -168,14 +168,14 @@ def experiment_qarl(
                            input_shape=actor_input_shape,
                            output_shape=(3,),
                            size_propioception=9,
-                           use_cuda=True)
+                           use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
                               size_propioception=9,
-                              use_cuda=True)
+                              use_cuda=use_cuda)
 
 
     actor_optimizer = {'class': optim.Adam,
@@ -189,7 +189,7 @@ def experiment_qarl(
                          n_features=n_features,
                          input_shape=critic_input_shape,
                          output_shape=(1,),
-                         use_cuda=True)
+                         use_cuda=use_cuda)
 
     # Agent
 
@@ -256,7 +256,8 @@ def experiment_qarl(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality, rationality_antagonist=True)
+        aware_rationality=aware_rationality,
+        rationality_antagonist=True)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
@@ -403,7 +404,7 @@ def experiment_qarl(
 
             wandb.log(log_dict, step=it)
 
-        if it % 10 == 0:
+        if it % 1 == 0:
             agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
             antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
@@ -422,8 +423,8 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
-    parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
+    parser.add_argument("--log", default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.05,  help="kl_max")
     parser.add_argument("--aware_rationality", default=False,  help="Enable logging")
@@ -435,7 +436,15 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    print(args)
+    if args.aware_rationality=="False":
+        args.aware_rationality = False
+    if args.aware_rationality=="True":
+        args.aware_rationality = True
+    if args.log=="False":
+        args.log = False
+    if args.log=="True":
+        args.log = True
+
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
