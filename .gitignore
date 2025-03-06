@@ -21,7 +21,7 @@ Logging
 optimization_errors
 notebooks/
 .ipynb_checkpoints
-
+experiments_server
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
