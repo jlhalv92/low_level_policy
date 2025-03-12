@@ -278,7 +278,7 @@ def experiment_qarl(
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=10, render=True, id_agent=0, return_antagonist_state=True
+        n_episodes=10, render=view, id_agent=0, return_antagonist_state=True
     )
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
