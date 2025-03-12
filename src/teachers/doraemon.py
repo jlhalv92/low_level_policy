@@ -139,7 +139,6 @@ class Doraemon:
             perf = self.compute_expected_performance(
                 dist, temps_t, old_temp_log_prob_t, temp_value_t
             )
-
             return perf.detach().cpu().numpy()
 
         def perf_constraint_grad_func(x0):
@@ -155,25 +154,19 @@ class Doraemon:
 
             parameters_grad_numpy = np.array([g.detach().cpu().numpy() for g in parameters_grad_t]).astype(np.float64)
 
-
             return parameters_grad_numpy
 
         perf_constraint = NonlinearConstraint(
-            perf_constraint_func,
-            self.perf_lb,
-            np.inf,
+            fun=perf_constraint_func,
+            lb=self.perf_lb,
+            ub=1,
             jac=perf_constraint_grad_func,
             keep_feasible=True,
         )
 
         if self.compute_target_temp_kl() > self.target_kl_threshold:
-            # Define the conc constraint as bounds
-            # cones = np.ones_like(self.temp_dist.get_weights()[:1])
-            # # lb = cones.copy()
-            # lb = self.alpha_lb
-            # ub = 5. * cones.copy()
             lb = np.array([0.1, 0.1])
-            ub = np.array([5., 1])
+            ub = np.array([5., 5.])
             bounds = Bounds(lb, ub, keep_feasible=True)
 
             # If the bounds are active, clip the standard deviation to be in bounds (because we may re-introduce
@@ -187,12 +180,13 @@ class Doraemon:
 
 
             bounds = None
+
         x0 = np.array([alpha_0[0], beta_0[0]])
 
-        doit = True
-        if doit:
+        try:
             if kl_constraint_func(x0) >= self.max_kl:
                 print("Warning! KL-Bound of x0 violates constraint already")
+
             if perf_constraint_func(x0) >= self.perf_lb:
                 print("Optimizing KL divergence")
                 self.above_perf_lb = True
@@ -200,7 +194,6 @@ class Doraemon:
 
                 # Define the objective plus Jacobian
                 def objective(x0):
-
                     dist = BetaTorchDistribution.from_weights(
                         [x0[0], x0[1]], dtype=torch.float64
                     )
@@ -219,7 +212,6 @@ class Doraemon:
                     x0,
                     method="trust-constr",
                     jac=True,
-                    bounds=bounds,
                     constraints=constraints,
                     options={"gtol": G_TOL, "xtol": X_TOL},
                 )
@@ -230,48 +222,22 @@ class Doraemon:
                 print("Distribution frozen")
                 res = None
 
-                # print("Optimizing performance")
-                # constraints = [kl_constraint]
-
-                # # Define the objective plus Jacobian
-                # def objective(x_conc):
-                #     dist = GammaTorchDistribution.from_weights(
-                #         [x_conc, self.rate], dtype=torch.float64
-                #     )
-                #     perf = self.compute_expected_performance(
-                #         dist, temps_t, old_temp_log_prob_t, temp_value_t
-                #     )
-                #     conc_grad = torch.autograd.grad(perf, dist.parameters()[:1])
-
-                #     return -perf.detach().cpu().numpy(), -np.array(
-                #         conc_grad[0].detach().cpu().numpy()
-                #     ).astype(np.float64)
-
-                # res = minimize(
-                #     objective,
-                #     x0_conc,
-                #     method="trust-constr",
-                #     jac=True,
-                #     bounds=bounds,
-                #     constraints=constraints,
-                #     options={"gtol": G_TOL, "xtol": X_TOL},
-                # )
             else:
                 print("Error in the optimization")
                 res = None
 
-        # except Exception as e:
-        #
-        #     os.makedirs("optimization_errors", exist_ok=True)
-        #     with open(
-        #         os.path.join("optimization_errors", "error_" + str(time.time())), "wb"
-        #     ) as f:
-        #         pickle.dump((self.temp_dist.get_weights(), temperatures, values), f)
-        #     print(
-        #         "Exception occurred during optimization! Storing state and keeping old values!"
-        #     )
-        #     # raise e
-        #     res = None
+        except Exception as e:
+
+            os.makedirs("optimization_errors", exist_ok=True)
+            with open(
+                os.path.join("optimization_errors", "error_" + str(time.time())), "wb"
+            ) as f:
+                pickle.dump((self.temp_dist.get_weights(), temperatures, values), f)
+            print(
+                "Exception occurred during optimization! Storing state and keeping old values!"
+            )
+            # raise e
+            res = None
 
         if res is not None and res.success:
 
@@ -280,17 +246,20 @@ class Doraemon:
         elif res is not None:
             # If it was not a success, but the objective value was improved and the bounds are still valid, we still
             # use the result
-            print("Optimization failed!")
-            old_f = objective(self.temp_dist.get_weights()[:1])
+            print(f"Optimization failed!: optimizer messge {res.message}")
+            alpha_0 = self.temp_dist.get_weights()[:1].copy()
+            beta_0 = self.temp_dist.get_weights()[-1:].copy()
+            x0_0 = np.array([alpha_0[0], beta_0[0]])
+            old_f,_gradients = objective(x0_0)
             cons_ok = True
             for constraint in constraints:
                 cons_ok = (
                     cons_ok and constraint.lb <= constraint.fun(res.x) <= constraint.ub
                 )
-
             rate_ok = bounds is None or (
                 np.all(bounds.lb <= res.x) and np.all(res.x <= bounds.ub)
             )
+
             if cons_ok and rate_ok and res.fun < old_f:
 
                 self.temp_dist.set_weights([res.x[0], res.x[1]])
@@ -300,9 +269,7 @@ class Doraemon:
                     % res.message
                 )
 
-        # Collect data
-        # 30.000 steps until temperature update but 3 steps per SAC update
-        # UPDATE: now done on a per-update basis
+
         self.alfa_temperature_data.extend(
             [self.alfa_temperature_data[-1]]
             * (training_iteration - len(self.alfa_temperature_data))
@@ -341,6 +308,7 @@ class Doraemon:
             self.compute_temp_kl(old_temp_dist),
             self.compute_target_temp_kl(),
         )
+        self.above_perf_lb = False
 
     def sample(self, shape):
         sample = self.temp_dist.sample(shape)

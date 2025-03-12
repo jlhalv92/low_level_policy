@@ -11,6 +11,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary import Core
+import json
 
 
 from src.algorithm.deep_actor_critic.sac import  SAC
@@ -50,11 +51,15 @@ def benchmark(
         antagonist=None,
         control_agent=None,
         aware_rationality=False,
-        max_v_antagonist=1,
+        max_v_antagonist=1.,
         view=False,
         n_episodes_test=10,
         alpha=0.5,
-        use_cuda=True):
+        use_cuda=True,
+        protagonist_id = "model",
+        seed=0,
+        level_antagonist=0,
+        file_path="data.json"):
 
     np.random.seed()
 
@@ -85,7 +90,7 @@ def benchmark(
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=True,
-                max_antagonist_v=0.5)
+                max_antagonist_v=max_v_antagonist)
 
     vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
 
@@ -115,7 +120,7 @@ def benchmark(
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=n_episodes_test, render=True, id_agent=0, return_antagonist_state=True
+        n_episodes=n_episodes_test, render=False, id_agent=0, return_antagonist_state=True
     )
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
@@ -132,6 +137,20 @@ def benchmark(
         success_rate=success_rate,
         alfa=np.mean(temps)
     )
+
+    results_dict = dict(
+        protagonist_id=protagonist_id,
+        J_online=J_online,
+        R_online=R_online,
+        success_rate=success_rate,
+        alfa=np.mean(temps),
+        antagonist_velocity=max_v_antagonist,
+        seed=seed,
+        level_antagonist=level_antagonist)
+
+    print("writing results...")
+    with open(file_path, 'w') as f:
+        json.dump(results_dict, f, indent=4)
 
 
 def parse_args():
@@ -154,28 +173,79 @@ def parse_args():
 if __name__ == "__main__":
     # args = parse_args()
     # print(args)
+    # path = "src/nominal_models/low_level/policy"
+    # control_agent = Agent.load(path)
+    # alphas = [0.5, 0.4, 0.3,0.2,0.1, 0.0]
+    # runs = [0, 1, 2, 3, 4]
+    # antagonist_level = [0.5] # [0.5 , 0.2, 0.0]
+    # velocity = 0.
+    # model_id = "RARL_alpha"
+    # for level_a, alpha_antagonist in enumerate(antagonist_level):
+    #     for alpha in alphas:
+    #         for run in runs:
+    #
+    #             path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{alpha}/run_{run}/PROTAGONIST/epoch_last"
+    #             protagonist = Agent.load(path_protagonist)
+    #
+    #             path_antagonist = f"experiments_server/GO1/obstacles_navigation/RARL_alpha_{alpha_antagonist}/run_0/ANTAGONIST/epoch_last"
+    #             antagonist = Agent.load(path_antagonist)
+    #
+    #             protagonist_id =f"{model_id}_{alpha}"
+    #             msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist level {level_a} max velocity {velocity}"
+    #             print(f"-----------------------------------------{msg}--------------------------------------------")
+    #             file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{level_a}_velocity_{velocity}.json"
+    #             benchmark(
+    #                 protagonist=protagonist,
+    #                 antagonist=antagonist,
+    #                 control_agent=control_agent,
+    #                 aware_rationality=False,
+    #                 max_v_antagonist=velocity,
+    #                 n_episodes_test=50,
+    #                 alpha=0.5,
+    #                 use_cuda=True,
+    #                 protagonist_id = protagonist_id,
+    #                 seed=run,
+    #                 level_antagonist=level_a,
+    #                 file_path=file_path
+    #
+    #             )
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
+    rationalities = [False]
+    runs = [0, 1, 2, 3, 4]
+    antagonist_level = [0.5 , 0.2, 0.0] # [0.5 , 0.2, 0.0]
+    velocity = 0.5
+    model_id = "UNIFORM_aware_rationality"
+    for level_a, alpha_antagonist in enumerate(antagonist_level):
+        for rationality in rationalities:
+            for run in runs:
 
-    path_protagonist = "checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/PROTAGONIST/epoch_20"
-    protagonist = Agent.load(path_protagonist)
-
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/ANTAGONIST/epoch_20"
-    antagonist = Agent.load(path_antagonist)
+                path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{rationality}/run_{run+1}/PROTAGONIST/epoch_last"
+                protagonist = Agent.load(path_protagonist)
 
 
+                path_antagonist = f"experiments_server/GO1/obstacles_navigation/RARL_alpha_{alpha_antagonist}/run_0/ANTAGONIST/epoch_last"
+                antagonist = Agent.load(path_antagonist)
 
-    benchmark(
-        protagonist=protagonist,
-        antagonist=antagonist,
-        control_agent=control_agent,
-        aware_rationality=False,
-        max_v_antagonist=1,
-        n_episodes_test=50,
-        alpha=0.5,
-        use_cuda=True,
+                protagonist_id =f"{model_id}_{rationality}"
+                msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist level {level_a} max velocity {velocity}"
+                print(f"-----------------------------------------{msg}--------------------------------------------")
+                file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{level_a}_velocity_{velocity}.json"
+                benchmark(
+                    protagonist=protagonist,
+                    antagonist=antagonist,
+                    control_agent=control_agent,
+                    aware_rationality=rationality,
+                    max_v_antagonist=velocity,
+                    n_episodes_test=50,
+                    alpha=alpha_antagonist,
+                    use_cuda=True,
+                    protagonist_id = protagonist_id,
+                    seed=run,
+                    level_antagonist=level_a,
+                    file_path=file_path
 
-    )
+                )
 
 
 

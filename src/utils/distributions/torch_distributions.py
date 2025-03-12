@@ -268,7 +268,9 @@ class BetaTorchDistribution(TorchDistribution):
         return self.distribution_t.log_prob(x)
 
     def sample(self, *args, **kwargs):
-        return self.distribution_t.rsample(*args, **kwargs)
+
+
+        return self.distribution_t.rsample(*args, **kwargs).squeeze()
 
     @staticmethod
     def from_weights(weights, use_cuda=False, dtype=torch.float32):

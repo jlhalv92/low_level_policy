@@ -762,8 +762,9 @@ class Go1(MuJoCo):
 
         if self.task == 2 or self.task == 3 or self.task == 4:
             yaw = self.orientation_euler[2]
-            global_vel = self._data.qvel[:2]
+            global_vel = self._data.qvel[:2].copy()
             y_pos = self._data.body("trunk").xpos[1]
+            robot_pos = self._data.qpos[:2].copy()
             desired_yaw = 0  # Assuming 0 is the forward direction
             yaw_deviation_penalty = np.abs(yaw - desired_yaw)
             distance = self._data.site("target").xpos[0] - self._data.qpos[0]
@@ -772,30 +773,17 @@ class Go1(MuJoCo):
 
             soft_hit_condition = self._model.site("obstacle_1").size[0] + self._model.site("robot_contact_limit").size[
                 0]
-            if self.narrow_passage:
-                proximity_penalty = 0
-            else:
-                proximity_penalty = (distance_to_obstacle < soft_hit_condition) * np.exp(1 / distance_to_obstacle)
+
+            proximity_penalty = (distance_to_obstacle < soft_hit_condition) * np.exp(1 / distance_to_obstacle)
 
             penalties = 1.*yaw_deviation_penalty + (np.abs(y_pos)) * (distance < -0.35) + proximity_penalty * (
                         not self.narrow_passage and not self.no_walls) + self.collision_penalty()
+            y_bounders = 5*(np.abs(y_pos) >= self._room_width/2)
 
+            target_vel = 1
+            reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
 
-            reward = 2.5 * np.clip(min(1, global_vel[0]), 0, 1)
-
-
-            local_vel = self.orientation_quat_inv.apply(self._data.qvel[:3].copy())[:2]
-            local_accelation = (local_vel - self.previous_vel[:2])/self.dt
-            angular_velocity = self._data.qvel[5]
-            angular_aceleration = (angular_velocity- self.previous_angular_vel)/self.dt
-            local_vel_rate = 0.*np.sum(np.square(local_vel))
-            local_accelation_rate = 0.01*np.sum(np.square(local_accelation))
-            angular_aceleration_rate = 0.005*(angular_aceleration**2)
-            regularization = local_vel_rate + local_accelation_rate + angular_aceleration_rate
-
-            # print(local_vel_rate, local_accelation_rate, angular_aceleration_rate)
-
-            return reward - penalties
+            return reward - penalties - y_bounders
 
     def reward(self, state, action, next_state, absorbing):
 
@@ -888,6 +876,8 @@ class Go1(MuJoCo):
         # print(self._data.sensor("collision_distance").data)
         self._ts += 1
         self.update_orientation_attributes()
+        y_pos = self._data.body("trunk").xpos[1]
+        out_of_limit = 5 * (np.abs(y_pos) >= self._room_width / 2)
 
         if self.task == 2:
             if not self.static_obstacles:
@@ -905,7 +895,7 @@ class Go1(MuJoCo):
             self.pass_finish_line = norm_distance <= 0.1
 
             if self._ts >= self.horizon:
-                self.success = self.robot_collisions == 0 and self.pass_finish_line
+                self.success = self.robot_collisions == 0 and self.pass_finish_line and not out_of_limit
 
         if self.joystick:
             vx, vy, wz = keyboard_control(self.target_vx, self.target_vy, self.target_yaw)
@@ -928,7 +918,9 @@ class Go1(MuJoCo):
         self.obstacle_robot_collision = legs_collision_obstacles + trunk_collision_obstacles
         collision_robot_wall = self._check_collision("robot", "walls")
         collision_robot = legs_collision_obstacles or trunk_collision_obstacles or collision_robot_wall
-        if fall | collision_robot:
+
+
+        if fall | collision_robot |out_of_limit :
             self.terminates = True
 
     def reward_antagonist(self):
@@ -1036,14 +1028,27 @@ class Go1(MuJoCo):
             #     self._obstacle_w = np.random.uniform(0.05, 0.25)
 
             self.wall_pos = self._room_width / 2
-
-
-            self.no_walls = np.random.uniform() < 0.5
-            self.no_walls = False
-            if self.no_walls:
-                z_wall = -2
-            else:
-                z_wall = 0.8
+            worldbody = spec.worldbody
+            z_wall = -2
+            worldbody.add_site(
+                type=mujoco.mjtGeom.mjGEOM_BOX,
+                size=[5, self._room_width/2, 0.05],
+                pos=[3,0,0],
+                rgba=[0,1,0,0.1]
+            )
+            worldbody.add_site(
+                name="finish_line",
+                type=mujoco.mjtGeom.mjGEOM_BOX,
+                size=[1, self._room_width/2, 0.05],
+                pos=[7,0,0],
+                rgba=[1,0,0,0.1]
+            )
+            # self.no_walls = np.random.uniform() < 0.5
+            # self.no_walls = False
+            # if self.no_walls:
+            #     z_wall = -2
+            # else:
+            #     z_wall = 0.8
             for geom in geoms:
                 if geom.name in walls:
                     if geom.pos[1] < 0:
@@ -1092,9 +1097,10 @@ class Go1(MuJoCo):
             self._model.opt.timestep = 0.005
             self._data = mujoco.MjData(model)
             self._data.qpos[7:19] = self.default_dof_pos.copy()
-            x = np.random.uniform(-1.5, 1.5)
+            # x = np.random.uniform(-1.5, 1.5)
+            x = 0
             self._data.qpos[0:3] = [x, y_robot, 0.36]
-            self.obstacle_pose_x = x + np.random.uniform(2, 3.5)
+            self.obstacle_pose_x = x + np.random.uniform(2.5, 3.5)
 
             self._data.joint("obstacle").qpos[:3] = [self.obstacle_pose_x, y_obstacle, obstacle_height]
             self._model.site("target").pos[0] = self.obstacle_pose_x + 1

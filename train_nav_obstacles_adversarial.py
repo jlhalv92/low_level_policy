@@ -1,9 +1,10 @@
 import argparse
 
 import numpy as np
-from src.teachers.self_paced_gamma_teacher_fixed_beta import (
-    SelfPaced,
-)
+# from src.teachers.self_paced_gamma_teacher_fixed_beta import (
+#     SelfPaced,
+# )
+from src.teachers.doraemon import Doraemon
 from src.utils.buffer import Buffer
 from src.utils.state_preprocessor import StateVariableConcatenation
 import torch
@@ -30,38 +31,41 @@ from tqdm import trange
 class Teacher:
     def __init__(
             self,
-            initial_conc: np.ndarray = np.array([int(50)]),
-            target_conc: np.ndarray = np.array([0.1]),
-            fixed_rate: np.ndarray = np.array([1000]),
-            conc_lower_bound: float = 1e-8,
-            max_kl: float = 0.5,
-            performance_lower_bound: int = 0.6,
+            initial_alpha: np.ndarray = 5,
+            initial_beta: np.ndarray = 0.10,
+            target_alpha: np.ndarray = 1,
+            target_beta: np.ndarray = 1,
+            alpha_lower_bound: float = 1e-8,
+            max_kl: float = 0.05,
+            performance_lower_bound: int = 0.1,
             target_kl_threshold: float = 0.01,
-            temperature_bounds: list = [-np.inf, np.inf],
-            doraemon: bool = False,
+            temperature_bounds: list = [0., 1.],
+            temperature:float = 1,
     ):
-        self.teacher = SelfPaced(
-            initial_conc,
-            target_conc,
-            fixed_rate,
-            max_kl,
-            performance_lower_bound,
-            conc_lower_bound,
-            target_kl_threshold,
-            temperature_bounds,
-            doraemon,
+        self.teacher = Doraemon(
+            initia_alpha=initial_alpha,
+            initia_beta=initial_beta,
+            target_alpha=target_alpha,
+            target_beta=target_beta,
+            max_kl=max_kl,
+        performance_lower_bound=performance_lower_bound,
+        alpha_lower_bound=alpha_lower_bound,
+        target_kl_threshold=target_kl_threshold,
+        temperature_bounds=temperature_bounds
         )
+        self.temperature = temperature
         self.temperature_list = []
 
     def provide_teacher(self):
         return self.teacher
 
     def sample_n_temperatures(self, n):
-        sampled_temperatures = np.zeros(n)
-        for i in range(n):
-            sampled_temperatures[i] = self.teacher.sample()[0]
+        samples = self.teacher.sample((n,))
+        a = 0
+        b = self.temperature
+        transformed_samples = a + (b - a) * samples
 
-        return sampled_temperatures
+        return  transformed_samples
 
 def calculate_success_rate(info, last):
     info_array = np.array([d["success"] for d in info])
@@ -70,11 +74,11 @@ def calculate_success_rate(info, last):
     success_rate = success_cnt / last_cnt
     return success_rate
 
-def extract_temp_and_sample_return(data, gamma):
+def extract_temp_and_sample_return(data, gamma, temperature_support_a=0, temperature_support_b=1):
     temperatures = list()
     for i in range(len(data)):
         if data[i][-1] or i == len(data) - 1:
-            temperatures.append(data[i][0][-1])
+            temperatures.append((data[i][0][-1]-temperature_support_a)/(temperature_support_b-temperature_support_a))
 
     sample_returns = compute_J(data, gamma)
 
@@ -89,12 +93,16 @@ def experiment_qarl(
         n_episodes_test=10,
         control_agent=None,
         run_id=0,
-        log=False, Teacher=None, alfa=1000, use_cuda=False,
+        log=False,
+        Teacher=None,
+        temperature_support=1,
+        use_cuda=False,
         update=10,
-        kl=0.5, curriculum_type="", conc_lower_bound=1e-8,
+        kl=0.5,
         aware_rationality=False,
         view=False,
-        wandb_project=""):
+        wandb_project="",
+        checkpoint_dir=""):
 
     np.random.seed()
 
@@ -115,7 +123,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_aware_rationality_{aware_rationality}"
+    job_name = method_name + f"_aware_rationality_{aware_rationality}_temperature_support_0_{temperature_support}"
     print(job_name)
     if log:
         wandb.init(
@@ -126,17 +134,17 @@ def experiment_qarl(
             name="seed_{}".format(run_id)
         )
 
-    if curriculum_type == "DORAEMON":
-        teacher = Teacher(performance_lower_bound=0.5, max_kl=kl, doraemon=True, conc_lower_bound=conc_lower_bound)
-    else:
-        teacher = Teacher(performance_lower_bound=0.5, max_kl=kl, initial_conc=np.array([int(alfa)]))
+
+    teacher = Teacher(max_kl= kl,
+            performance_lower_bound= 0.6,
+            temperature = temperature_support)
+
 
     n_samples_for_dist_update = update
 
 
     cfg_rewards=dict()
 
-    log = log
     joystick = False
     cfg = dict(
                antagonist=True,
@@ -261,17 +269,17 @@ def experiment_qarl(
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
-    if method_name == "DORAEMON":
-        evaluation_temp = teacher.teacher.temp_dist.mean()
-        temps = evaluation_temp * np.ones(100)
+    # evaluation_temp = teacher.teacher.temp_dist.mean()
+    if method_name=="DORAEMON":
+        temps = teacher.sample_n_temperatures(n=100)
     else:
-        temps = np.random.uniform(0, 0.5, 100)
+        temps = np.random.uniform(0, temperature_support, 100)
+
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=10, render=False, id_agent=0, return_antagonist_state=True
+        n_episodes=10, render=True, id_agent=0, return_antagonist_state=True
     )
-
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
     R_online = np.mean(compute_J(dataset_online))
@@ -289,7 +297,7 @@ def experiment_qarl(
     if method_name=="DORAEMON":
         sampled_temperatures = teacher.sample_n_temperatures(n=100)
     else:
-        sampled_temperatures = np.random.uniform(0, 0.5, 100)
+        sampled_temperatures = np.random.uniform(0, temperature_support, 100)
 
 
     core.set_variables_for_training(sampled_temperatures)
@@ -309,9 +317,8 @@ def experiment_qarl(
 
         if method_name == "DORAEMON":
             sampled_temperatures = teacher.sample_n_temperatures(n=100)
-            sampled_temperatures /= 2
         else:
-            sampled_temperatures = np.random.uniform(0, 0.5, 100)
+            sampled_temperatures = np.random.uniform(0, temperature_support, 100)
 
         core.set_variables_for_training(sampled_temperatures)
 
@@ -332,9 +339,10 @@ def experiment_qarl(
         logger.info("Evaluate Protagonist")
         if method_name=="DORAEMON":
             temps = teacher.sample_n_temperatures(n=n_episodes_test)
-            temps /=2
+
         else:
-            temps = np.random.uniform(0, 0.5, n_episodes_test)
+            temps = np.random.uniform(0, temperature_support, n_episodes_test)
+
 
         core.set_variables_for_training(temps)
         core.callback_step.clean()
@@ -350,22 +358,22 @@ def experiment_qarl(
         E_online = antagonist.policy.entropy(s)
 
         # Update temperature distribution
-        temperatures, _ = extract_temp_and_sample_return(
-            core.callback_step.get(), core.mdp.info.gamma
-        )
+        temperatures, _ = extract_temp_and_sample_return(core.callback_step.get(),
+                                                         core.mdp.info.gamma,
+                                                         temperature_support_b=temperature_support)
 
 
         ##################UPDATE distribution#########################################
         if method_name=="DORAEMON":
-            temp_perf_buffer.update_buffer([(2*np.array(temperatures)).tolist(), (success_rate*np.ones(n_episodes_test)).tolist()])
+            temp_perf_buffer.update_buffer([temperatures, (success_rate*np.ones(n_episodes_test)).tolist()])
 
-            if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
-                temps_perfs = temp_perf_buffer.read_buffer(reset=True)
+        if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
+            temps_perfs = temp_perf_buffer.read_buffer(reset=True)
 
-                logger.info("Update Teacher Distribution")
-                teacher.teacher.update_temperature_distribution(
-                    temps_perfs[0], temps_perfs[1], it
-                )
+            logger.info("Update Teacher Distribution")
+            teacher.teacher.update_temperature_distribution(
+                temps_perfs[0], temps_perfs[1], it
+            )
         ##################Evaluation 2#########################################
 
         logger.info("Evaluate Antagonist")
@@ -405,11 +413,11 @@ def experiment_qarl(
             wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
-            agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
-            antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+            agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-    agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
-    antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -419,18 +427,17 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--method", type=str, default="DORAEMON",choices=["DORAEMON", "UNIFORM"],help="DORAEMON or UNIFORM")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=50, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--kl_max",type=float,  default=0.05,  help="kl_max")
-    parser.add_argument("--aware_rationality", default=False,  help="Enable logging")
+    parser.add_argument("--temperature", type=float, default=0.4, help="Alpha value")
+    parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
+    parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
-
-
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint_doraemon")
 
     return parser.parse_args()
 
@@ -448,7 +455,7 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    alfa = args.alpha
+    temperature = args.temperature
     run_id = args.run_id
     method = args.method
     kl_max = args.kl_max
@@ -465,15 +472,14 @@ if __name__ == "__main__":
         run_id=run_id,
         log=args.log,
         Teacher=Teacher,
-        alfa=alfa * 1000,
+        temperature_support=temperature,
         use_cuda=True,
         update=10,
         kl=kl_max,
-        curriculum_type=method,
-        conc_lower_bound = 1e-8,
         aware_rationality=args.aware_rationality,
         view=False,
-        wandb_project=args.wandb_project)
+        wandb_project=args.wandb_project,
+        checkpoint_dir = args.checkpoint_dir)
 
 
 
