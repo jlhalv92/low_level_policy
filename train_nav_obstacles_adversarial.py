@@ -397,10 +397,12 @@ def experiment_qarl(
 
                 entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
                 a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+                b_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
             else:
                 entropy_distribution  = np.log(0.5)  # Natural logarithm
 
                 a_dist = 1
+                b_dist = 1
 
             log_dict = dict(J=J_online,
                             R=R_online,
@@ -408,7 +410,9 @@ def experiment_qarl(
                             alfa=np.mean(temps),
                             r_antagonist=R_antagonist,
                             entropy_antagonist=E_online,
-                            entropy_distribution=entropy_distribution, a_dist=a_dist)
+                            entropy_distribution=entropy_distribution,
+                            a_dist=a_dist,
+                            b_dist = b_dist)
 
             wandb.log(log_dict, step=it)
 
