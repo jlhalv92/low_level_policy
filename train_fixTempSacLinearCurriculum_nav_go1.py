@@ -250,6 +250,7 @@ def parse_args():
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=1., help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--run_id", type=int, default=0)
 
 
 
@@ -261,19 +262,18 @@ if __name__ == '__main__':
     print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-    for run_id in range(args.runs):
-        experiment(method_name="FIX_Temp_linear_curriculum",
-                   alg=[SAC, fixTempSAC],
-                   n_epochs=args.n_epochs,
-                   n_steps=args.n_steps,
-                   n_steps_per_fit=args.n_steps_per_fit,
-                   n_episodes_test=args.n_episodes_test,
-                   control_agent=control_agent,
-                   run_id=run_id,
-                   log=args.log,
-                   use_cuda=args.use_cuda,
-                   alpha=args.alpha,
-                   wandb_project=args.wandb_project)
+    experiment(method_name="FIX_Temp_linear_curriculum",
+               alg=[SAC, fixTempSAC],
+               n_epochs=args.n_epochs,
+               n_steps=args.n_steps,
+               n_steps_per_fit=args.n_steps_per_fit,
+               n_episodes_test=args.n_episodes_test,
+               control_agent=control_agent,
+               run_id=args.run_id,
+               log=args.log,
+               use_cuda=args.use_cuda,
+               alpha=args.alpha,
+               wandb_project=args.wandb_project)
 
 
 
