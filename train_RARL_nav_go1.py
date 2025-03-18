@@ -246,6 +246,7 @@ def parse_args():
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--velocity", type=float, default=1.5, help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
 
 
@@ -271,7 +272,7 @@ if __name__ == '__main__':
                use_cuda=args.use_cuda,
                alpha=args.alpha,
                wandb_project=args.wandb_project,
-               antagonist_velocity = 1.5)
+               antagonist_velocity = args.velocity)
 
 
 

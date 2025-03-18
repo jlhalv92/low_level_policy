@@ -637,7 +637,7 @@ class Go1(MuJoCo):
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
-            self._data.ctrl[-1] = np.clip(self.max_antagonist_v*self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
+            self._data.ctrl[-1] = self.obstacle_velocity
 
             self._data.ctrl[-2] = 0
             self._data.ctrl[-3] = self.obstacle_pose_x
