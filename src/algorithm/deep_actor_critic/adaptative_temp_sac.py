@@ -53,6 +53,18 @@ class AdaptiveTempSAC(SAC):
         self._log_alpha = torch.tensor(np.zeros(batch_size), dtype=torch.float32)
         self._fit_iteration = 0
 
+    def _loss(self, state, action_new, log_prob):
+        q_0 = self._critic_approximator(state, action_new,
+                                        output_tensor=True, idx=0)
+        q_1 = self._critic_approximator(state, action_new,
+                                        output_tensor=True, idx=1)
+
+        q = torch.min(q_0, q_1)
+        # q_log =q.clone().detach().cpu().numpy().mean()
+        # entropy_loss = (self._alpha *log_prob).clone().detach().cpu().numpy().mean()
+        # print(f"INFO ACTOR LOSS, entropy {entropy_loss} and q {q_log}")
+        return (self._alpha * log_prob - q).mean()
+
     def fit(self, dataset):
         own_dataset = dataset
         self._replay_memory.add(own_dataset)

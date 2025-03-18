@@ -115,10 +115,6 @@ def experiment(alg, n_epochs,
     ent_coeff = 0.01 # 0.01
 
 
-    retrain = retrain
-
-
-
 
     policy_params = dict(
         std_0=1.,
@@ -137,8 +133,7 @@ def experiment(alg, n_epochs,
 
     actor = PolicyNetwork
     critic = ValueNetwork
-    # env_args = dict(vx_limit=1.2, wz_limit=1.5)
-    env_args = dict(vx_limit=3, vy_limit=2, wz_limit=3)
+    env_args = dict(vx_limit=2, vy_limit=1, wz_limit=2)
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, **env_args)
     mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
 
@@ -164,16 +159,19 @@ def experiment(alg, n_epochs,
     alg_params['critic_params'] = critic_params
 
     if retrain:
-        #BASE POLICY
-        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_120"
+        # #BASE POLICY
+        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_120"
+        #
+        # #SAFE POLICY
+        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
+        #
+        # #AGILE POLICY
+        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+        # # AGILE SAFE
+        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65/epoch_220"
 
-        #SAFE POLICY
-        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
-
-        #AGILE POLICY
-        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
-        # AGILE SAFE
-        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65/epoch_220"
+        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_STABLE/epoch_last"
 
         agent = Agent.load(path)
     else:
@@ -223,20 +221,20 @@ def experiment(alg, n_epochs,
 
 if __name__ == '__main__':
 
-    n_envs= 100 #100
-    n_steps = 10
-    n_steps_per_fit= 2000 #1000
-    n_epochs = 100 # 150
+    n_envs= 250 #100
+    n_steps = 4000
+    n_steps_per_fit= 400 #1000
+    n_epochs = 400 # 150
     total_data = n_epochs*n_steps*n_steps_per_fit
     print('Total number of steps per env: {}'.format(total_data), "total number of steps: {}".format(total_data*n_envs))
     experiment(alg=PPO,
                n_epochs=n_epochs,
-               n_steps=int(20_000),
+               n_steps=int(n_steps),
                n_steps_per_fit=n_steps_per_fit,
                n_episodes_test=10,
                n_envs=n_envs,
-               n_minibatches=20,
+               n_minibatches=4,
                retrain=False,
-               name_exp=f"LOCOMOTION_{n_epochs}_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65_regularization_torques_qvel")
+               name_exp=f"LOCOMOTION_{n_epochs}_STABLE")
 
 

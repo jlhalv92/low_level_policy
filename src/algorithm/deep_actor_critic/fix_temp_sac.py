@@ -401,6 +401,8 @@ class fixTempSAC(DeepAC):
 
         self._update_optimizer_parameters(self.policy.parameters())
 
+    def update_alpha(self, alpha):
+        self._alpha = torch.tensor(alpha, dtype=torch.float32)
     # @property
     # def _alpha(self):
     #     return self._log_alpha.exp()

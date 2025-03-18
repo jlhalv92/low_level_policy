@@ -52,17 +52,17 @@ def benchmark(
         control_agent=None,
         aware_rationality=False,
         max_v_antagonist=1,
-        view=False,
         n_episodes_test=10,
         alpha=0.5,
-        use_cuda=True,
         protagonist_id = "model",
         seed=0,
         level_antagonist=0,
         file_path="data.json",
         render=True,
         record=True,
-        save_file=False
+        save_file=False,
+    joystick=False,
+horizon=500
 ):
 
     np.random.seed()
@@ -75,7 +75,7 @@ def benchmark(
     logger.info('Experiment Algorithm: ' +"BENCHMARK"+ " task " + agent_task )
 
     # MDP
-    horizon = 500
+
     gamma = 0.99
 
 
@@ -83,7 +83,7 @@ def benchmark(
 
     cfg_rewards=dict()
 
-    joystick = False
+
     cfg = dict(
                antagonist=True,
                max_level=True,
@@ -96,13 +96,12 @@ def benchmark(
                 activate_arrow=True,
                 max_antagonist_v=max_v_antagonist)
 
-    vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
 
     mdp = Go1(horizon,
               gamma,
               timestep=0.005,
               cfg=cfg,
-              task_name=task_name, **vel_controller)
+              task_name=task_name)
 
 
     # Algorithm
@@ -124,7 +123,7 @@ def benchmark(
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=n_episodes_test, render=True, id_agent=0, return_antagonist_state=True, record=True
+        n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True, record=False
     )
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
@@ -158,42 +157,29 @@ def benchmark(
             json.dump(results_dict, f, indent=4)
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--method", type=str, default="DORAEMON",choices=["DORAEMON", "UNIFORM"],help="DORAEMON or UNIFORM")
-    parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=1, help="Number of steps")
-    parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
-    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
-    parser.add_argument("--run_id", type=int, default=0, help="Run ID")
-    parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", type=bool, default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--kl_max",type=float,  default=0.05,  help="kl_max")
-    parser.add_argument("--aware_rationality", default=False,  help="Enable logging")
 
-
-    return parser.parse_args()
 
 if __name__ == "__main__":
     # args = parse_args()
     # print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-    alphas = [0.5, 0.4, 0.3,0.2,0.1, 0.0]
-    runs = [0, 1, 2, 3, 4]
-    antagonist_level = [0.5 , 0.2, 0.0]
-    velocity = 0.
+
+    velocity = 1
     model_id = "RARL_alpha"
-    alpha = 0.5
+    alpha = 0.
     level_a =0
     run = 4
     alpha_antagonist = 0.
     # path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{alpha}/run_{run}/PROTAGONIST/epoch_last"
-    path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_False/run_0/PROTAGONIST/epoch_0"
+    # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_1/PROTAGONIST/epoch_last"
+    path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/PROTAGONIST/epoch_160"
     protagonist = Agent.load(path_protagonist)
 
-    path_antagonist = f"experiments_server/GO1/obstacles_navigation/RARL_alpha_{alpha_antagonist}/run_0/ANTAGONIST/epoch_last"
+    # path_antagonist = 'checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_0/ANTAGONIST/epoch_last'
+    # path_antagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/ANTAGONIST/epoch_160"
+    path_antagonist = 'checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/ANTAGONIST/epoch_20'
+
     antagonist = Agent.load(path_antagonist)
 
     protagonist_id =f"{model_id}_{alpha}"
@@ -204,17 +190,18 @@ if __name__ == "__main__":
         protagonist=protagonist,
         antagonist=antagonist,
         control_agent=control_agent,
-        aware_rationality=False,
+        aware_rationality=True,
         max_v_antagonist=velocity,
         n_episodes_test=1,
-        alpha=0.5,
-        use_cuda=True,
+        alpha=alpha,
         protagonist_id = protagonist_id,
         seed=run,
         level_antagonist=level_a,
         file_path=file_path,
         render=True,
-        record=False
+        record=False,
+        joystick=True,
+        horizon=500,
 
     )
 

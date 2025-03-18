@@ -40,8 +40,7 @@ def keyboard_control(env, vx, vy, wz):
 
     keys = pygame.key.get_pressed()
 
-    if keys[pygame.K_UP]==True:
-        vx = min(vx + 1,env.x_limit)
+
     if keys[pygame.K_UP]==False and keys[pygame.K_DOWN]==False:
         vx = 0
     if keys[pygame.K_LEFT]==False and keys[pygame.K_RIGHT]==False:
@@ -49,18 +48,21 @@ def keyboard_control(env, vx, vy, wz):
     if keys[pygame.K_w]==False and keys[pygame.K_e]==False:
         wz = 0
 
+    if keys[pygame.K_UP]==True:
+        vx = min(vx + 0.5,env.x_limit)
+
     if keys[pygame.K_DOWN]:
-        vx = max(vx - 1,-env.x_limit)
+        vx = max(vx - 0.5,-env.x_limit)
 
     if keys[pygame.K_LEFT]:
-        vy = min(vy + 1,env.y_limit)
+        vy = min(vy + 0.5,env.y_limit)
     if keys[pygame.K_RIGHT]:
-        vy = max(vy - 1,-env.y_limit)
+        vy = max(vy - 0.5,-env.y_limit)
     if keys[pygame.K_w]:
-        wz = min(wz + 1,env.wz_limit)
+        wz = min(wz + 0.5,env.wz_limit)
 
     if keys[pygame.K_e]:
-        wz = max(wz - 1,-env.wz_limit)
+        wz = max(wz - 0.5,-env.wz_limit)
 
     return vx,vy,wz
 
@@ -81,7 +83,7 @@ class Airtime:
         self.last_contact = contact
 
 class PDController:
-    def __init__(self, env, control_frequency_hz=50, p_gain=30, d_gain=0.65, scaling_factor=0.25):
+    def __init__(self, env, control_frequency_hz=50, p_gain=20, d_gain=0.5, scaling_factor=0.25):
         self.env = env #20, 0.5
         self.control_frequency_hz = control_frequency_hz
         self.apply_scale_shoulder = True
@@ -154,11 +156,12 @@ class UnitreeGo1(gym.Env):
         self.wz_limit =  env_args["wz_limit"] #1.5, 5.5
         self.vel_curriculum = RewardThresholdCurriculum(100,
                                                         x=(-self.x_limit, self.x_limit, 51),
-                                                        y=(-self.y_limit , self.y_limit ,51),
+                                                        y=(-self.y_limit , self.y_limit ,21),
                                                         z=(-self.wz_limit, self.wz_limit,51))
 
-        #low, high = np.array([-1.2, -1, -1.5]), np.array([1.2, 1, 1.5])
-        low, high = np.array([-2, -2, -2]), np.array([2, 2, 2])
+        # low, high = np.array([-1, -0.6, -1]), np.array([1, 0.6, 1])
+        low, high = np.array([-1, -0.6, -1]), np.array([1, 0.6, 1])
+
 
         self.vel_curriculum.set_to(low, high, value=1.0)
         _, old_batch = self.vel_curriculum.sample(1)
@@ -267,8 +270,8 @@ class UnitreeGo1(gym.Env):
         self.add_center_mass_off_max = 0.05
         self.default_gravity = -self.model.opt.gravity[2].copy()
 
-        self.friction_tangential_min = 0.2
-        self.friction_tangential_max = 2.0
+        self.friction_tangential_min = 0.4
+        self.friction_tangential_max = 1.5
 
         self.friction_torsional_ground_min = 0.0001
         self.friction_torsional_ground_max = 0.01
@@ -476,8 +479,10 @@ class UnitreeGo1(gym.Env):
             self.old_batch = old_batch
 
         # v_command[:2] =0
-        v_command[:2] *= (np.linalg.norm(v_command[:2]) > 0.2)
+      #  v_command[:2] *= (np.linalg.norm(v_command[:2]) > 0.2)
 
+        v_command[0] = 0 if np.abs(v_command[0]) < 0.1 else v_command[0]
+        v_command[1] = 0 if np.abs(v_command[1]) < 0.1 else v_command[1]
 
 
         return v_command
@@ -498,6 +503,7 @@ class UnitreeGo1(gym.Env):
 
 
     def step(self, action):
+
         if self.track_velocities:
             vx,vy,vz = self.orientation_quat_inv.apply(self.data.qvel[:3]).copy()
             wx,wy,wz=self.data.qvel[3:6].copy()
@@ -557,28 +563,27 @@ class UnitreeGo1(gym.Env):
                 stiffness = self.stiffness_min + (self.stiffness_max - self.stiffness_min)*factor
                 gravity = self.default_gravity +  np.random.uniform(-1, 1)
 
-                self.model.geom_friction[0] = [tangential_friction,
-                                               torsional_friction_ground,
-                                               rolling_friction_ground]
+                # self.model.geom_friction[0] = [tangential_friction,
+                #                                torsional_friction_ground,
+                #                                rolling_friction_ground]
+                #
+                # self.model.geom_friction[self.feet_ids] = [tangential_friction,
+                #                                               rolling_friction_feet,
+                #                                               torsional_friction_feet]
 
-                self.model.geom_friction[self.feet_ids] = [tangential_friction,
-                                                              rolling_friction_feet,
-                                                              torsional_friction_feet]
+                # self.model.geom_friction[self.feet_ids] =tangential_friction
+                self.model.geom_friction[0] = tangential_friction
                 self.model.geom_solref[:, 0] = -stiffness
                 self.model.geom_solref[:, 1] = -damping
                 self.model.opt.gravity[2] = -gravity
 
-                # joint_damping_noise_factor =  np.random.uniform(0.5,1.5)
-                # joint_armature_noise_factor =  np.random.uniform(0.5,1.5)
-                # joint_stiffness_noise_factor = np.random.uniform(0.5, 1.5)
-                # joint_friction_loss_noise_factor = np.random.uniform(0.5, 1.5)
-                # center_mass_off_noise_factor =  np.random.uniform(0.75,1.25)
+
 
                 joint_damping_noise_factor =  np.random.uniform(0.9,1.1)
                 joint_armature_noise_factor =  np.random.uniform(0.9,1.1)
                 joint_stiffness_noise_factor = np.random.uniform(0.9, 1.1)
                 joint_friction_loss_noise_factor = np.random.uniform(0.9, 1.1)
-                center_mass_off_noise_factor =  np.random.uniform(0.9,1.1)
+                # center_mass_off_noise_factor =  np.random.uniform(0.9,1.1)
 
                 joint_damping = self.default_joint_damping.copy()
                 joint_armature = self.default_joint_armature.copy()

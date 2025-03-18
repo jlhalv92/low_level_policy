@@ -20,6 +20,6 @@
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
-    <geom name="target" type="sphere" pos="4 0 0.5" size=".1" rgba=".6 .3 .3 1"  />
+    <site name="target" type="box" pos="4 0 0.3" size="0.4 0.2 0.3" rgba=".6 .3 .3 0.2" euler="0. 0. 3.14"  />
   </worldbody>
 </mujoco>

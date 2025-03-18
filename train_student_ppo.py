@@ -173,7 +173,7 @@ def experiment(alg, n_epochs,
     )
 
     actor = PolicyNetworkStudent
-    env_args = dict(vx_limit=2, wz_limit=2)
+    env_args = dict(vx_limit=2, wz_limit=2, vy_limit=1)
 
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=1, domain_randomization=True,  **env_args)
     mdp.env.eval =True
@@ -201,7 +201,7 @@ def experiment(alg, n_epochs,
 
     core = Core(agent, mdp, expert_agent=teacher)
 
-    dataset = core.evaluate(n_episodes=5, render=False)
+    dataset = core.evaluate(n_episodes=5, render=True)
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -214,8 +214,8 @@ def experiment(alg, n_epochs,
     for it in trange(n_epochs, leave=False):
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit)
         render = False
-        if it % 10==0:
-            render = False
+        if it % 5==0:
+            render = True
         dataset = core.evaluate(n_episodes=10, render=render)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     n_epochs = 40 # 150
 
     # teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
-    teacher_path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+    teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
 
 
 
@@ -249,7 +249,7 @@ if __name__ == '__main__':
                n_epochs=n_epochs,
                n_steps=20_000,
                n_steps_per_fit=20_000,
-               name_exp="RAPID_LOCOMOTION_STUDENT_vx=2_wz=2",
+               name_exp="RAPID_LOCOMOTION_",
                teacher=teacher)
 
 

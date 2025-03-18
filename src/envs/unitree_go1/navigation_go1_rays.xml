@@ -42,7 +42,8 @@
     <actuator>
         <position name="position_x" site="obstacle_1" refsite="reference" gear="1 0 0 0 0 0" kp="200" dampratio="1" />
         <position name="rotation_z" site="obstacle_1" refsite="reference" gear="0 0 0 0 0 1" kp="200" dampratio="1" ctrlrange="-1.571 1.571"/>
-        <velocity name="thrust2" site="obstacle_1" gear="0 1 0 0 0 0" ctrlrange="-1 1" kv="50" />
+        <velocity name="thrust2" site="obstacle_1" gear="0 1 0 0 0 0" kv="50" />
+<!--        <velocity name="thrust1" site="obstacle_1" gear="1 0 0 0 0 0" kv="50" />-->
     </actuator>
 
 </mujoco>

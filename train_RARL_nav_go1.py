@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import argparse
 
 from src.algorithm.deep_actor_critic.sac import  SAC
-from src.algorithm.deep_actor_critic.fix_temp_sac import fixTempSAC
 
 from mushroom_rl.core import Agent
 import wandb
@@ -65,7 +64,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"_alpha_{alpha}"
+    job_name = method_name
     if log:
         wandb.init(
             project=wandb_project,
@@ -151,12 +150,14 @@ def experiment(method_name,
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[-1, 1], alpha=alpha)
+                critic_fit_params=None, range=[-1, 1])
+
 
 
     core = Core([agent, antagonist],
                 mdp,
-                low_level_agent=control_agent, joystick=joystick)
+                low_level_agent=control_agent,
+                joystick=joystick)
 
 
     dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
@@ -170,20 +171,27 @@ def experiment(method_name,
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
 
+
+
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=0)
 
 
     for it in trange(n_epochs, leave=False):
+        temps = alpha * np.array(100)
+        core.set_variables_for_training(temps)
+
         logger.info("Training Antagonist")
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
         logger.info("Training Protagonist")
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
 
-        if it % 10==0 and view:
+        if it % 2==0 and view:
             render=True
         else:
             render=False
+
+
 
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=0)
 
@@ -193,21 +201,26 @@ def experiment(method_name,
         E = agent.policy.entropy(s)
         success_rate = calculate_success_rate(info, last)
 
-        dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=1)
+        dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, id_agent=1)
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-        alfa = antagonist._alpha.cpu().numpy()
+        alfa = antagonist._alpha_np
         E_a=antagonist.policy.entropy(s)
-        logger.epoch_info(it+1, J=J, R=R, entropy=E,
-                          success_rate=success_rate, alfa=alfa,
-                          r_antagonist=R_antagonist, entropy_antagonist=E_a)
+        logger.epoch_info(it+1,
+                          J=J,
+                          R=R,
+                          entropy=E,
+                          success_rate=success_rate,
+                          antagonist_temperature=alfa,
+                          r_antagonist=R_antagonist,
+                          entropy_antagonist=E_a)
 
 
 
         if log:
             log_dict = dict(J=J, R=R, entropy=E,
                             success_rate=success_rate,
-                            alfa=alfa, r_antagonist=R_antagonist,
+                            antagonist_temperature=alfa, r_antagonist=R_antagonist,
                             entropy_antagonist=E_a)
             wandb.log(log_dict, step=it)
 
@@ -224,7 +237,7 @@ def experiment(method_name,
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--n_epochs", type=int, default=50, help="Number of training epochs")
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
@@ -246,7 +259,7 @@ if __name__ == '__main__':
     control_agent = Agent.load(path)
     for run_id in range(args.runs):
         experiment(method_name="RARL",
-                   alg=[SAC, fixTempSAC],
+                   alg=[SAC, SAC],
                    n_epochs=args.n_epochs,
                    n_steps=args.n_steps,
                    n_steps_per_fit=args.n_steps_per_fit,

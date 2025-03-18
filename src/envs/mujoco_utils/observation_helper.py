@@ -303,10 +303,8 @@ class ObservationHelper:
             obs = np.zeros(3)
 
         elif o_type== ObservationType.TARGET_POSE:
-            target_pos = data.site(name).pos.copy()
-            robot_pos = data.body("trunk").xpos.copy()
-            norm = np.linalg.norm(target_pos - robot_pos)
-            obs = (target_pos - robot_pos)/(norm + 1e-5)
+            target_pos = data.site(name).xpos[:2].copy()
+            obs = target_pos
 
         elif o_type== ObservationType.PRIVILEGE_OBS:
             obs = np.zeros(137)

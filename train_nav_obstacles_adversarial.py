@@ -123,7 +123,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_aware_rationality_{aware_rationality}_temperature_support_0_{temperature_support}"
+    job_name = method_name + f"_aware_rationality_{aware_rationality}_temperature_support_0_{temperature_support}_partial_obs"
     print(job_name)
     if log:
         wandb.init(
@@ -397,7 +397,7 @@ def experiment_qarl(
 
                 entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
                 a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
-                b_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+                b_dist = teacher.teacher.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
             else:
                 entropy_distribution  = np.log(0.5)  # Natural logarithm
 
@@ -411,7 +411,7 @@ def experiment_qarl(
                             r_antagonist=R_antagonist,
                             entropy_antagonist=E_online,
                             entropy_distribution=entropy_distribution,
-                            a_dist=a_dist,
+                            a_dist= a_dist,
                             b_dist = b_dist)
 
             wandb.log(log_dict, step=it)
@@ -441,7 +441,7 @@ def parse_args():
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint_doraemon")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
 
     return parser.parse_args()
 

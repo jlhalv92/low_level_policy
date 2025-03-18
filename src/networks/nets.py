@@ -20,7 +20,7 @@ class PolicyNetwork(nn.Module):
         nn.init.constant_(self._h1.bias, 0.0)
         nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
         nn.init.constant_(self._h2.bias, 0.0)
-        nn.init.orthogonal_(self._h3.weight, 0.01)
+        nn.init.orthogonal_(self._h3.weight, np.sqrt(2))
         nn.init.constant_(self._h3.bias, 0.0)
 
     def forward(self, state, **kwargs):

@@ -3,22 +3,22 @@ import numpy as np
 
 class Reward:
     def __init__(self, env,
-                 curriculum_steps= 5_000_000,
-                 tracking_xy_velocity_command_coeff= 1.,
-                 tracking_yaw_velocity_command_coeff= .5,
+                 curriculum_steps=0,
+                 tracking_xy_velocity_command_coeff= 1,
+                 tracking_yaw_velocity_command_coeff= 0.5,
                  pose_coeff= 0.25, #0.
-                 z_velocity_coeff= -2,
+                 z_velocity_coeff= -4,
                  pitch_roll_vel_coeff= -0.05,
-                 pitch_roll_pos_coeff= -20, # 0.2
-                 joint_position_limit_coeff= -20.0, #10
-                 joint_torque_coeff= -1e-5,
-                 joint_acceleration_coeff= -2.5e-07,
-                 joint_velocity_coeff = -0.0005, # 0
+                 pitch_roll_pos_coeff= -1, # 0.2
+                 joint_position_limit_coeff= -10.0, #10
+                 joint_torque_coeff= -0.001,
+                 joint_acceleration_coeff= -2.5e-7,
+                 joint_velocity_coeff = -0.001, # 0
                  action_rate_coeff= -0.1, # 0.02
                  collision_coeff= -1,
                  base_height_coeff= -0, #30
-                 air_time_coeff= 0., # 0.1
-                 stand_still_coeff= 0,
+                 air_time_coeff= 0.1, # 0.1
+                 stand_still_coeff= 0.5,
                  xy_tracking_temperature= 0.25,
                  yaw_tracking_temperature= 0.25,
                  # nominal_trunk_z=0.28, #0.325
@@ -74,13 +74,13 @@ class Reward:
         cmd_norm = np.linalg.norm(commands)
 
 
-        total_timesteps = self.env.total_timesteps * self.env.nr_envs_per_type
-        #
-        curriculum_coeff = min(total_timesteps / self.curriculum_steps, 1.0)
-        if self.env.eval:
-            curriculum_coeff = 1.0
+        # total_timesteps = self.env.total_timesteps * self.env.nr_envs_per_type
+        # #
+        # curriculum_coeff = min(total_timesteps / self.curriculum_steps, 1.0)
+        # if self.env.eval:
+        #     curriculum_coeff = 1.0
 
-        # curriculum_coeff = 1
+        curriculum_coeff = 1
         # Tracking velocity command reward
         current_global_linear_velocity = self.env.data.qvel[:3]
         current_local_linear_velocity = self.env.orientation_quat_inv.apply(current_global_linear_velocity)
@@ -190,7 +190,7 @@ class Reward:
         # Stand still
         qpos = np.array(self.env.data.qpos[7:]).copy()
         default_pose = self.env.nominal_joint_positions
-        stand_still =  np.sum(np.abs(qpos - default_pose)) * (cmd_norm < 0.05)
+        stand_still =  np.sum(np.abs(qpos - default_pose)) * (cmd_norm < 0.1)
 
         stand_still_penalty = curriculum_coeff*self.stand_still_coeff *stand_still
 
@@ -218,7 +218,7 @@ class Reward:
                           torque_penalty +
                           action_rate_penalty +
                          collision_penalty +
-                          base_height_penalty + joint_vel_limit_penalty + joint_torques_limits)
+                          base_height_penalty + joint_vel_limit_penalty + joint_torques_limits + stand_still_penalty)
 
 
 

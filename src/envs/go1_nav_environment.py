@@ -163,19 +163,40 @@ def read_control_values(file_path):
 
 
 def keyboard_control(vx, vy, wz):
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            print("running off")
-            return 0, 0, 0  # Stop motion on quit
+    pygame.event.pump()
+    # for event in pygame.event.get():
+    #     if event.type == pygame.QUIT:
+    #         running = False
+    #         print("running off")
 
     keys = pygame.key.get_pressed()
 
-    vx = min(vx + 0.1, 1.5) if keys[pygame.K_UP] else max(vx - 0.1, -1.5) if keys[pygame.K_DOWN] else 0
-    vy = min(vy + 0.1, 0.6) if keys[pygame.K_LEFT] else max(vy - 0.1, -0.6) if keys[pygame.K_RIGHT] else 0
-    wz = min(wz + 0.1, 1.5) if keys[pygame.K_w] else max(wz - 0.1, -1.5) if keys[pygame.K_e] else 0
 
-    return vx, vy, wz
+    if keys[pygame.K_UP]==False and keys[pygame.K_DOWN]==False:
+        vx = 0
+    if keys[pygame.K_a]==False and keys[pygame.K_d]==False:
+        vy = 0
+    if keys[pygame.K_LEFT]==False and keys[pygame.K_RIGHT]==False:
 
+        wz = 0
+
+    if keys[pygame.K_UP]==True:
+        vx = min(vx + 0.5, 1.5)
+
+    if keys[pygame.K_DOWN]:
+        vx = max(vx - 0.5,-1.5)
+
+    if keys[pygame.K_a]:
+        vy = min(vy + 0.5, 1.5)
+    if keys[pygame.K_d]:
+        vy = max(vy - 0.5,-1.5)
+    if keys[pygame.K_LEFT]:
+        wz = min(wz + 0.5,1.5)
+
+    if keys[pygame.K_RIGHT]:
+        wz = max(wz - 0.5,-1.5)
+
+    return vx,vy,wz
 
 task_map = dict(nominal=0,
                 navigation=1,
@@ -211,6 +232,7 @@ class Go1(MuJoCo):
         Constructor.
 
         """
+
         if "max_antagonist_v" in cfg.keys():
             self.max_antagonist_v = cfg["max_antagonist_v"]
         else:
@@ -352,24 +374,18 @@ class Go1(MuJoCo):
                                 height +
                                 commands)
         elif self.task == 1:
-            target_pos = [("target_pose", "target", ObservationType.SITE_POS)]
-            robot_pos = [("robot_pose", "trunk", ObservationType.BODY_POS)]
+            target_pos = [("target_pose", "target", ObservationType.POS)]
+            robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
             robot_orientation = [("orientation", "orientation_sensor", ObservationType.ORIENTATION)]
-            distance_to_target = [("distance_target", "target", ObservationType.DISTANCE)]
+            current_velocity = [("current_velocity", "a_velocity", ObservationType.L_VELOCITY)]
+            angular_velocity = [("angular_velocity", "a_velocity", ObservationType.L_VELOCITY)]
 
-            observation_spec = (propioception +
-                                last_actions +
-                                gravity_projection +
-                                angular_velocity +
-                                linear_velocity +
-                                contact +
-                                airtime +
-                                height +
-                                commands +
-                                target_pos +
-                                robot_pos +
-                                robot_orientation +
-                                distance_to_target)
+
+            observation_spec = (current_velocity +  # (3,)
+                                angular_velocity +  # (3,)
+                                robot_orientation +  # (3,)
+                                robot_pos +  # (2,)
+                                target_pos)  # (50,)
 
         elif self.task == 2:
             target_pos = [("target_pose", "target", ObservationType.POS)]
@@ -388,8 +404,8 @@ class Go1(MuJoCo):
                                 angular_velocity + #(3,)
                                 robot_orientation +  # (3,)
                                 robot_pos +  # (2,)
-                                position_obstacle +  # (2,)
-                                velocity_obstacle +  # (2,)
+                               #  position_obstacle +  # (2,)
+                               # velocity_obstacle +  # (2,)
                                 rays)  # (50,)
 
         elif self.task == 3:
@@ -540,13 +556,14 @@ class Go1(MuJoCo):
         obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
         angular_velocity = self._data.qvel[3:6]
         obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
-        pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
-        relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
-        vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
-        relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
+        # pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
+        # relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
+        # vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
+        # relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
+        #
+        # obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
+        # obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
 
-        obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
-        obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
 
 
 
@@ -620,7 +637,7 @@ class Go1(MuJoCo):
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
-            self._data.ctrl[-1] = np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
+            self._data.ctrl[-1] = np.clip(self.max_antagonist_v*self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
 
             self._data.ctrl[-2] = 0
             self._data.ctrl[-3] = self.obstacle_pose_x
@@ -656,25 +673,6 @@ class Go1(MuJoCo):
 
         return any_collision
 
-    def resample_targets(self):
-
-        # commands, bins = self.curriculum.sample(1)
-        # self.bin_id = bins
-
-        self.target_vx = np.random.uniform(-1.5, 1.5)
-        self.target_vy = np.random.uniform(-1, 1)
-        self.target_yaw = np.random.uniform(-1.5, 1.5)
-
-        self.target_vx = np.random.normal(self.target_vx, 0.1, 1)[0]
-        self.target_vy = np.random.normal(self.target_vy, 0.1, 1)[0]
-        self.target_yaw = np.random.normal(self.target_yaw, 0.1, 1)[0]
-
-        if np.abs(self.target_vx) <= 0.2:
-            self.target_vx = 0
-        if np.abs(self.target_vy) <= 0.2:
-            self.target_vy = 0
-        if np.abs(self.target_yaw) <= 0.2:
-            self.target_yaw = 0
 
     def calculate_velocity_distance_reward(self, current_velocity, current_pos, target_pos):
         vect = target_pos - current_pos
@@ -916,8 +914,8 @@ class Go1(MuJoCo):
         trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
 
         self.obstacle_robot_collision = legs_collision_obstacles + trunk_collision_obstacles
-        collision_robot_wall = self._check_collision("robot", "walls")
-        collision_robot = legs_collision_obstacles or trunk_collision_obstacles or collision_robot_wall
+        # collision_robot_wall = self._check_collision("robot", "walls")
+        collision_robot = legs_collision_obstacles or trunk_collision_obstacles
 
 
         if fall | collision_robot |out_of_limit :
@@ -936,7 +934,8 @@ class Go1(MuJoCo):
         reward_collision = 10 * self.obstacle_robot_collision
         reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])
         # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
-        reward_antagonist = (reward_collision + reward_distance) * ( not pass_finish_line) +  -1*(pass_finish_line)
+        reward_antagonist = (reward_collision + reward_distance)
+
         return reward_antagonist
 
     def is_absorbing(self, state):
@@ -1029,7 +1028,8 @@ class Go1(MuJoCo):
 
             self.wall_pos = self._room_width / 2
             worldbody = spec.worldbody
-            z_wall = -2
+            # z_wall = -2
+            z_wall = 0.8
             worldbody.add_site(
                 type=mujoco.mjtGeom.mjGEOM_BOX,
                 size=[5, self._room_width/2, 0.05],
@@ -1052,10 +1052,17 @@ class Go1(MuJoCo):
             for geom in geoms:
                 if geom.name in walls:
                     if geom.pos[1] < 0:
-                        geom.pos[1] = -self.wall_pos - geom.size[1] / 2
+                        geom.pos[1] = -2 - geom.size[1] / 2
                     else:
-                        geom.pos[1] = self.wall_pos + geom.size[1] / 2
+                        geom.pos[1] = 2 + geom.size[1] / 2
                     geom.pos[2] = z_wall
+            # for geom in geoms:
+            #     if geom.name in walls:
+            #         if geom.pos[1] < 0:
+            #             geom.pos[1] = -self.wall_pos - geom.size[1] / 2
+            #         else:
+            #             geom.pos[1] = self.wall_pos + geom.size[1] / 2
+            #         geom.pos[2] = z_wall
 
             obstacle = spec.find_body("obstacle_1")
             obstacle_height = np.random.uniform(low=0.25, high=0.8)
