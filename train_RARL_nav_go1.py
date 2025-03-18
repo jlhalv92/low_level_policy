@@ -38,7 +38,8 @@ def experiment(method_name,
                log=False,
                use_cuda=False,
                alpha=1.,
-               wandb_project=""):
+               wandb_project="",
+               antagonist_velocity=1.5):
 
     np.random.seed()
 
@@ -64,7 +65,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name
+    job_name = method_name + f"antagonist_velocity={antagonist_velocity}"
     if log:
         wandb.init(
             project=wandb_project,
@@ -150,7 +151,7 @@ def experiment(method_name,
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[-1, 1])
+                critic_fit_params=None, range=[-antagonist_velocity, antagonist_velocity])
 
 
 
@@ -269,7 +270,8 @@ if __name__ == '__main__':
                log=args.log,
                use_cuda=args.use_cuda,
                alpha=args.alpha,
-               wandb_project=args.wandb_project)
+               wandb_project=args.wandb_project,
+               antagonist_velocity = 1.5)
 
 
 
