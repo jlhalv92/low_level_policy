@@ -241,7 +241,7 @@ def parse_args():
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
-    parser.add_argument("--runs", type=int, default=5, help="Run ID")
+    parser.add_argument("--run_id", type=int, default=5, help="Run ID")
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
@@ -257,19 +257,19 @@ if __name__ == '__main__':
     print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-    for run_id in range(args.runs):
-        experiment(method_name="RARL",
-                   alg=[SAC, SAC],
-                   n_epochs=args.n_epochs,
-                   n_steps=args.n_steps,
-                   n_steps_per_fit=args.n_steps_per_fit,
-                   n_episodes_test=args.n_episodes_test,
-                   control_agent=control_agent,
-                   run_id=run_id,
-                   log=args.log,
-                   use_cuda=args.use_cuda,
-                   alpha=args.alpha,
-                   wandb_project=args.wandb_project)
+
+    experiment(method_name="RARL",
+               alg=[SAC, SAC],
+               n_epochs=args.n_epochs,
+               n_steps=args.n_steps,
+               n_steps_per_fit=args.n_steps_per_fit,
+               n_episodes_test=args.n_episodes_test,
+               control_agent=control_agent,
+               run_id=args.run_id,
+               log=args.log,
+               use_cuda=args.use_cuda,
+               alpha=args.alpha,
+               wandb_project=args.wandb_project)
 
 
 
