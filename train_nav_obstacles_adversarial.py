@@ -251,7 +251,7 @@ def experiment_qarl(
         tau,
         lr_alpha,
         critic_fit_params=None,
-        range=[-1, 1],
+        range=[-1.5, 1.5],
     )
 
     # Algorithm
@@ -437,7 +437,7 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=0.4, help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
