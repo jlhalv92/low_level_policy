@@ -179,8 +179,7 @@ def experiment(method_name,
 
 
     for it in trange(n_epochs, leave=False):
-        temps = alpha * np.array(100)
-        core.set_variables_for_training(temps)
+
 
         logger.info("Training Antagonist")
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
@@ -207,6 +206,7 @@ def experiment(method_name,
         R_antagonist = np.mean(compute_J(dataset_antagonist))
         alfa = antagonist._alpha_np
         E_a=antagonist.policy.entropy(s)
+
         logger.epoch_info(it+1,
                           J=J,
                           R=R,
@@ -246,7 +246,7 @@ def parse_args():
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--velocity", type=float, default=1.5, help="Alpha value")
+    parser.add_argument("--velocity", type=float, default=1., help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
 
 
