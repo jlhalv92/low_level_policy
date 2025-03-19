@@ -123,7 +123,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_aware_rationality_{aware_rationality}_temperature_support_0_{temperature_support}_partial_obs"
+    job_name = method_name + f"_rationality_{aware_rationality}_temp_support_0_{temperature_support}_max_vel=1.5"
     print(job_name)
     if log:
         wandb.init(
