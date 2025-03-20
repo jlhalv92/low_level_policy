@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 
 import torch
@@ -14,9 +16,9 @@ from src.envs.gymnasium_env import GymnasiumGO1
 import torch.nn as nn
 from mushroom_rl.core import Agent
 
-from mushroom_rl.utils.dataset import compute_J
-
+from src.mushroom.dataset.dataset import compute_J
 from tqdm import trange
+import wandb
 
 
 class PolicyNetwork(nn.Module):
@@ -91,7 +93,13 @@ def calculate_success_rate(info, last):
 
 def experiment(alg, n_epochs,
                n_steps, n_steps_per_fit,
-               n_episodes_test, n_envs = 10, n_minibatches=4, retrain=False, name_exp =""):
+               n_episodes_test, n_envs = 10,
+               n_minibatches=4,
+               retrain=False,
+               name_exp ="",
+               log=False,
+                wandb_project="LocomotionPolicy",
+               config=None):
 
     np.random.seed()
 
@@ -103,17 +111,25 @@ def experiment(alg, n_epochs,
 
     # MDP
 
-    gamma = 0.99
-    n_features = 256
+    gamma = config.gamma
+    n_features = config.n_features
 
     mini_batch_size = int((n_envs*n_steps_per_fit)/n_minibatches) #1000 rollout 32000
 
-    lr = 1e-3
-    n_epochs_policy = 5
-    eps_ppo = 0.2
-    lam = .95
-    ent_coeff = 0.01 # 0.01
+    lr = config.lr
+    n_epochs_policy =config.n_epochs_policy
+    eps_ppo = config.eps_ppo
+    lam = config.lam
+    ent_coeff = config.ent_coeff # 0.01
 
+    if log:
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=wandb_project,
+            group=task_name,
+            job_type="Locomotion_policy_ppo",
+            name="seed_{}".format(0)
+        )
 
 
     policy_params = dict(
@@ -208,33 +224,63 @@ def experiment(alg, n_epochs,
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy()
+        if log:
+            log_dict = dict(J=J,
+                            R=R,
+                            entropy=E)
+
+            wandb.log(log_dict, step=it)
 
         if (it+1) % 10 == 0:
             agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1',alg.__name__, agent_task, it+1))
 
         logger.epoch_info(it + 1, J=J, R=R, entropy=E)
     agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1', alg.__name__, agent_task, "last"))
-    logger.info('Press a button to visualize')
-    input()
-    core_eval.evaluate(n_episodes=n_episodes_test, render=True)
+
+    if log:
+        wandb.finish()
+
+def parse_args():
+
+    parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
+    parser.add_argument("--n_envs", type=int, default=100, help="Number of steps")
+    parser.add_argument("--n_steps", type=int, default=10_000, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=400, help="Number of steps")
+    parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
+    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--n_minibatches", type=int, default=4, help="Number of test episodes")
+    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_{}_STABLE")
+    parser.add_argument("--log", default=False,  help="Enable logging")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--eps_ppo", type=float, default=0.2)
+    parser.add_argument("--n_epochs_policy", type=int, default=5)
+    parser.add_argument("--lam", type=float, default=.95)
+    parser.add_argument("--ent_coeff", type=float, default= 0.01)
+    parser.add_argument("--n_features", type=int, default= 256)
+    parser.add_argument("--gamma", type=float, default= 0.99)
+
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
-
-    n_envs= 250 #100
-    n_steps = 4000
-    n_steps_per_fit= 400 #1000
-    n_epochs = 400 # 150
+    args = parse_args()
+    n_envs= args.n_envs #100
+    n_steps = args.n_steps
+    n_steps_per_fit= args.n_steps_per_fit #1000
+    n_epochs = args.n_epochs # 150
     total_data = n_epochs*n_steps*n_steps_per_fit
     print('Total number of steps per env: {}'.format(total_data), "total number of steps: {}".format(total_data*n_envs))
     experiment(alg=PPO,
                n_epochs=n_epochs,
                n_steps=int(n_steps),
                n_steps_per_fit=n_steps_per_fit,
-               n_episodes_test=10,
+               n_episodes_test=args.n_episodes_test,
                n_envs=n_envs,
-               n_minibatches=4,
+               n_minibatches=args.n_minibatches,
                retrain=False,
-               name_exp=f"LOCOMOTION_{n_epochs}_STABLE")
+               name_exp=args.name_exp.format(n_epochs),
+               log=args.log,
+               config=args)
 
 

@@ -8,7 +8,8 @@ from mushroom_rl.approximators import Regressor
 from mushroom_rl.approximators.parametric import TorchApproximator
 from mushroom_rl.utils.torch import to_float_tensor, update_optimizer_parameters
 from mushroom_rl.utils.minibatches import minibatch_generator
-from mushroom_rl.utils.dataset import parse_dataset, compute_J
+# from mushroom_rl.utils.dataset import parse_dataset, compute_J
+from src.mushroom.dataset.dataset import parse_dataset
 from mushroom_rl.utils.value_functions import compute_gae
 from mushroom_rl.utils.parameters import to_parameter
 
