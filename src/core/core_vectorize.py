@@ -225,7 +225,6 @@ class Core(object):
 
         infos_l = []
         datasets = [[] for _ in range(self.mdp.env.num_envs)]
-
         while move_condition():
 
             self._total_steps_counter += 1
@@ -236,7 +235,6 @@ class Core(object):
 
             next_state, reward, terminated, truncated, info = self.mdp.step(actions)
             done = terminated | truncated
-            next_state = next_state
             actual_next_state = next_state.copy()
 
             for i, single_done in enumerate(done):
@@ -252,7 +250,7 @@ class Core(object):
                                 terminated[env],
                                 {"env_id": "env_{}".format(env)},
                                     done[env]])
-            self._state = next_state
+            self._state = actual_next_state
 
 
             if fit_condition():

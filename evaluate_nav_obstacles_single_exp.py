@@ -56,7 +56,6 @@ def benchmark(
         alpha=0.5,
         protagonist_id = "model",
         seed=0,
-        level_antagonist=0,
         file_path="data.json",
         render=True,
         record=True,
@@ -115,7 +114,7 @@ horizon=500
         preprocessors=[preprocessor],
         joystick=joystick,
         aware_rationality=aware_rationality,
-        rationality_antagonist=False)
+        rationality_antagonist=True)
 
 
 
@@ -141,22 +140,22 @@ horizon=500
         alfa=np.mean(temps)
     )
 
-    results_dict = dict(
-        protagonist_id=protagonist_id,
-        J_online=J_online,
-        R_online=R_online,
-        success_rate=success_rate,
-        alfa=np.mean(temps),
-        antagonist_velocity=max_v_antagonist,
-        seed=seed,
-        level_antagonist=level_antagonist)
+    # results_dict = dict(
+    #     protagonist_id=protagonist_id,
+    #     J_online=J_online,
+    #     R_online=R_online,
+    #     success_rate=success_rate,
+    #     alfa=np.mean(temps),
+    #     antagonist_velocity=max_v_antagonist,
+    #     seed=seed,
+    #     level_antagonist=level_antagonist)
+    #
+    # if save_file:
+    #     print("writing results...")
+    #     with open(file_path, 'w') as f:
+    #         json.dump(results_dict, f, indent=4)
 
-    if save_file:
-        print("writing results...")
-        with open(file_path, 'w') as f:
-            json.dump(results_dict, f, indent=4)
-
-
+    return success_rate
 
 
 if __name__ == "__main__":
@@ -165,45 +164,69 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    velocity = 1
+    velocity = 1.
     model_id = "RARL_alpha"
-    alpha = 0.
-    level_a =0
+    temperatures = np.linspace(0.5, 0, num=11)
+    # level_a =0.4
     run = 4
     alpha_antagonist = 0.
     # path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{alpha}/run_{run}/PROTAGONIST/epoch_last"
     # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_1/PROTAGONIST/epoch_last"
-    path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/PROTAGONIST/epoch_160"
-    protagonist = Agent.load(path_protagonist)
+    # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/PROTAGONIST/epoch_160"
 
     # path_antagonist = 'checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_0/ANTAGONIST/epoch_last'
     # path_antagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/ANTAGONIST/epoch_160"
-    path_antagonist = 'checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/ANTAGONIST/epoch_20'
+    # path_antagonist = 'checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/ANTAGONIST/epoch_20'
+    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
 
     antagonist = Agent.load(path_antagonist)
 
-    protagonist_id =f"{model_id}_{alpha}"
-    msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist level {level_a} max velocity {velocity}"
-    print(f"-----------------------------------------{msg}--------------------------------------------")
-    file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{level_a}_velocity_{velocity}.json"
-    benchmark(
-        protagonist=protagonist,
-        antagonist=antagonist,
-        control_agent=control_agent,
-        aware_rationality=True,
-        max_v_antagonist=velocity,
-        n_episodes_test=1,
-        alpha=alpha,
-        protagonist_id = protagonist_id,
-        seed=run,
-        level_antagonist=level_a,
-        file_path=file_path,
-        render=True,
-        record=False,
-        joystick=True,
-        horizon=500,
+    # protagonist_id =f"{model_id}_{temperature}"
+    # msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist temperature {temperature} max velocity {velocity}"
+    # print(f"-----------------------------------------{msg}--------------------------------------------")
+    performance = []
+    # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
 
-    )
+    for temperature in temperatures:
+        success_rates = []
+        for i in range(5):
+            path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
+            protagonist = Agent.load(path_protagonist)
+            success_rate = benchmark(
+                protagonist=protagonist,
+                antagonist=antagonist,
+                control_agent=control_agent,
+                aware_rationality=False,
+                max_v_antagonist=velocity,
+                n_episodes_test=50,
+                alpha=temperature,
+                protagonist_id = str(i),
+                seed=run,
+                # file_path=file_path,
+                render=False,
+                record=False,
+                joystick=False,
+                horizon=500,
+
+            )
+            success_rates.append(success_rate)
+        mean_success_rate = np.mean(success_rates)
+        performance.append(mean_success_rate)
+
+
+    import matplotlib.pyplot as plt
+
+    plt.figure(figsize=(12, 6))
+    plt.bar(temperatures, performance, width=0.008, color='blue', alpha=0.7)
+
+    # Labels and title
+    plt.xlabel("Temperature")
+    plt.ylabel("Success Rate")
+    plt.title(f"Obstacle Navigation Performance, Antagonist max velocity = {velocity}")
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+
+    # Show the plot
+    plt.show()
 
 
 

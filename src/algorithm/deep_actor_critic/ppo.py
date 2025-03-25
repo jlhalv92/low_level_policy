@@ -123,7 +123,7 @@ class PPO(Agent):
 
         # Print fit information
         self._log_info(dataset, x, v_target, old_pol_dist)
-
+        print()
         new_pol_dist = self.policy.distribution(x)
         kl_mean = torch.mean(torch.distributions.kl.kl_divergence(
             new_pol_dist, old_pol_dist))

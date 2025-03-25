@@ -237,6 +237,7 @@ class Go1(MuJoCo):
             self.max_antagonist_v = cfg["max_antagonist_v"]
         else:
             self.max_antagonist_v = 1
+
         self.activate_arrow = cfg["activate_arrow"]
         self.controller_pd = PDController(self)
         self.narrow_passage = False
@@ -637,7 +638,7 @@ class Go1(MuJoCo):
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
-            self._data.ctrl[-1] = self.obstacle_velocity
+            self._data.ctrl[-1] = np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
 
             self._data.ctrl[-2] = 0
             self._data.ctrl[-3] = self.obstacle_pose_x
@@ -937,6 +938,22 @@ class Go1(MuJoCo):
         reward_antagonist = (reward_collision + reward_distance)
 
         return reward_antagonist
+
+    # def reward_antagonist(self):
+    #
+    #     # Reward Antagonist
+    #     distance = self._data.site("target").xpos[0] - self._data.qpos[0]
+    #     pass_finish_line = distance < -0.35
+    #
+    #     pos_antagonist = self._data.body("obstacle_1").xpos[:2]
+    #
+    #     pos_robot = self._data.body("trunk").xpos[:2]
+    #
+    #     reward_collision = 10 * self.obstacle_robot_collision
+    #     reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])
+    #     # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
+    #     reward_antagonist = (reward_collision + reward_distance) * ( not pass_finish_line) +  -1*(pass_finish_line)
+    #     return reward_antagonist
 
     def is_absorbing(self, state):
 

@@ -155,12 +155,12 @@ class UnitreeGo1(gym.Env):
         self.y_limit = env_args["vy_limit"]
         self.wz_limit =  env_args["wz_limit"] #1.5, 5.5
         self.vel_curriculum = RewardThresholdCurriculum(100,
-                                                        x=(-self.x_limit, self.x_limit, 51),
-                                                        y=(-self.y_limit , self.y_limit ,21),
-                                                        z=(-self.wz_limit, self.wz_limit,51))
+                                                        x=(-5, 5, 21),
+                                                        y=(-1 , 1 ,5),
+                                                        z=(-5, 5,21))
 
         # low, high = np.array([-1, -0.6, -1]), np.array([1, 0.6, 1])
-        low, high = np.array([-1, -0.6, -1]), np.array([1, 0.6, 1])
+        low, high = np.array([-0.6, -0.6, -1]), np.array([0.6, 0.6, 1])
 
 
         self.vel_curriculum.set_to(low, high, value=1.0)
@@ -183,7 +183,7 @@ class UnitreeGo1(gym.Env):
         self.nr_envs_per_type = nr_envs_per_type
         self.eval = False
         self.np_rng = np.random.default_rng(self.seed)
-        self.nominal_height = 0.28 #0.325
+        self.nominal_height = 0.3 #0.325
         # self.nominal_joint_positions = np.array([
         #     -0.2, -0.7, 1.25,
         #     0.2, 0.7, -1.25,
@@ -198,7 +198,7 @@ class UnitreeGo1(gym.Env):
         ])
 
         self.max_joint_velocities = np.array([30.1, 30.1, 20.06] * 4)
-        self.initial_drop_height = 0.325 #0.325
+        self.initial_drop_height = 0.34 #0.325
 
         self.total_timesteps = 0
 
@@ -462,6 +462,7 @@ class UnitreeGo1(gym.Env):
         vx_tracking = self.vxy_tracking / timesteps
         wz_tracking = self.wz_tracking / timesteps
 
+
         if self.eval:
             cvx = np.random.uniform(-self.x_limit,self.x_limit)
             cvy = np.random.uniform(-self.y_limit,self.y_limit)
@@ -471,7 +472,9 @@ class UnitreeGo1(gym.Env):
 
         else:
 
-            self.vel_curriculum.update(self.old_batch, np.array([vx_tracking, ]), np.array([wz_tracking, ]), .85, 0.85, 0.5)
+            self.vel_curriculum.update(self.old_batch, np.array([vx_tracking, ]), np.array([wz_tracking, ]), .8, 0.5, 0.5)
+
+
 
             commands, old_batch = self.vel_curriculum.sample(1)
             v_command = commands[0].copy()
@@ -479,10 +482,11 @@ class UnitreeGo1(gym.Env):
             self.old_batch = old_batch
 
         # v_command[:2] =0
-      #  v_command[:2] *= (np.linalg.norm(v_command[:2]) > 0.2)
-
-        v_command[0] = 0 if np.abs(v_command[0]) < 0.1 else v_command[0]
-        v_command[1] = 0 if np.abs(v_command[1]) < 0.1 else v_command[1]
+        v_command[:2] *= (np.linalg.norm(v_command[:2]) > 0.2)
+        self.vxy_tracking = 0
+        self.wz_tracking = 0
+        #v_command[0] = 0 if np.abs(v_command[0]) < 0.1 else v_command[0]
+        #v_command[1] = 0 if np.abs(v_command[1]) < 0.1 else v_command[1]
 
 
         return v_command

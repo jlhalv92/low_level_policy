@@ -99,7 +99,7 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 
 
-    env_args = dict(vx_limit=1., vy_limit=1., wz_limit=1.0)
+    env_args = dict(vx_limit=2.5, vy_limit=1, wz_limit=3)
     mdp_eval = GymnasiumGO1(gamma=gamma,
                             n_envs=1,
                             joystick=joystick,
@@ -123,6 +123,9 @@ def experiment(alg, n_episodes_test=5, joystick=False):
     path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
     path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_last"
     path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_60"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE_RR/epoch_120"
+
 
     # path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_R/epoch_last"
     # path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_V2/epoch_last"
@@ -201,6 +204,6 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 if __name__ == '__main__':
     experiment(alg=PPO,
-                   n_episodes_test=1, joystick=True)
+                   n_episodes_test=5, joystick=False)
 
 

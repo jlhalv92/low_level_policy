@@ -93,7 +93,8 @@ def calculate_success_rate(info, last):
 
 def experiment(alg, n_epochs,
                n_steps, n_steps_per_fit,
-               n_episodes_test, n_envs = 10,
+               n_episodes_test,
+               n_envs = 10,
                n_minibatches=4,
                retrain=False,
                name_exp ="",
@@ -188,6 +189,7 @@ def experiment(alg, n_epochs,
 
         # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_last"
         path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_STABLE/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE_RR/epoch_120"
 
         agent = Agent.load(path)
     else:
@@ -249,7 +251,7 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--n_minibatches", type=int, default=4, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_{}_STABLE")
+    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_{}_STABLE_RR")
     parser.add_argument("--log", default=False,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -269,7 +271,7 @@ if __name__ == '__main__':
     n_steps = args.n_steps
     n_steps_per_fit= args.n_steps_per_fit #1000
     n_epochs = args.n_epochs # 150
-    total_data = n_epochs*n_steps*n_steps_per_fit
+    total_data = n_epochs*n_steps
     print('Total number of steps per env: {}'.format(total_data), "total number of steps: {}".format(total_data*n_envs))
     experiment(alg=PPO,
                n_epochs=n_epochs,
@@ -278,7 +280,7 @@ if __name__ == '__main__':
                n_episodes_test=args.n_episodes_test,
                n_envs=n_envs,
                n_minibatches=args.n_minibatches,
-               retrain=False,
+               retrain=True,
                name_exp=args.name_exp.format(n_epochs),
                log=args.log,
                config=args)

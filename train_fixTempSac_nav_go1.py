@@ -120,7 +120,7 @@ def experiment(method_name,
                          use_cuda=use_cuda)
 
     # Agent
-    antagonist_input_shape = (7,)
+    antagonist_input_shape = (6,)
     agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
                 actor_optimizer, critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
@@ -151,7 +151,7 @@ def experiment(method_name,
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[-1.5, 1.5], alpha=alpha)
+                critic_fit_params=None, range=[-1., 1.], alpha=alpha)
 
 
     core = Core([agent, antagonist],

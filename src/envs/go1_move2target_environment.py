@@ -706,7 +706,7 @@ class Go1(MuJoCo):
 
 
         robot_pos = self._data.qpos[:2]
-        angle = np.random.uniform(2, 2)
+        angle = np.random.uniform(-2, 2)
         distance = np.random.uniform(2.5, 4.5)
 
         self.target_pos = np.array([robot_pos[0] + distance*np.cos(angle),
@@ -714,7 +714,7 @@ class Go1(MuJoCo):
                                     0.3])
 
         self._model.site("target").pos =  self.target_pos
-        self.target_angle = np.random.uniform(-2, 2)
+        self.target_angle = np.random.uniform(-1, 1)
 
         quaternion = R.from_euler('z', self.target_angle ).as_quat().copy()
         quat = quaternion[[3, 0, 1, 2]].copy()

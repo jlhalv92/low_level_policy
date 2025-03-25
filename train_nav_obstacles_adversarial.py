@@ -407,7 +407,7 @@ def experiment_qarl(
             log_dict = dict(J=J_online,
                             R=R_online,
                             success_rate=success_rate,
-                            alfa=np.mean(temps),
+                            temperature=np.mean(temps),
                             r_antagonist=R_antagonist,
                             entropy_antagonist=E_online,
                             entropy_distribution=entropy_distribution,

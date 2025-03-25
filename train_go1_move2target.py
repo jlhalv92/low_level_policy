@@ -151,7 +151,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
     # min_a = -np.array([1.5,1,1.5])
     # max_a = np.array([1.5, 1, 1.5])
-    min_a = -np.array([1.5,1,1.5])
+    min_a = -np.array([0.5,1,1.5])
     max_a = np.array([1.5, 1, 1.5])
     agent = alg(mdp.info, actor_mu_params, actor_sigma_params,
                 actor_optimizer, critic_params, batch_size, initial_replay_size,
