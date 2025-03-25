@@ -121,10 +121,12 @@ def experiment(method_name,
 
     # Agent
     antagonist_input_shape = (6,)
+    min_a = -np.array([1.5,1,1.5])
+    max_a = np.array([1.5, 1, 1.5])
     agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
                 actor_optimizer, critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None)
+                critic_fit_params=None, range=[min_a, max_a])
 
     antagonist_mu_params = dict(network=ActorNetwork,
                            n_features=n_features,
