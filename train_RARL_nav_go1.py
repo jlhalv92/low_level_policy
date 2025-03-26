@@ -78,7 +78,9 @@ def experiment(method_name,
                max_level=False,
                joystick=joystick,
                static_obstacles=False,
-               activate_arrow=False)
+               activate_arrow=False,
+               max_antagonist_v=antagonist_velocity,
+               domain_randomization=True,)
 
 
 

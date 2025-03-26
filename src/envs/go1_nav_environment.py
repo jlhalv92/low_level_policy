@@ -238,6 +238,11 @@ class Go1(MuJoCo):
         else:
             self.max_antagonist_v = 1
 
+        if "domain_randomization" in cfg.keys():
+            self.domain_randomization = cfg["domain_randomization"]
+        else:
+            self.domain_randomization = False
+
         self.activate_arrow = cfg["activate_arrow"]
         self.controller_pd = PDController(self)
         self.narrow_passage = False
