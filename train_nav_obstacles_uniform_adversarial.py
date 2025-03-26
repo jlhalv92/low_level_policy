@@ -1,0 +1,394 @@
+import argparse
+
+import numpy as np
+
+from src.utils.state_preprocessor import StateVariableConcatenation
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from mushroom_rl.utils.callbacks import CollectDataset
+from src.core.core_quadruped_adversary import Core
+
+
+from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
+
+from mushroom_rl.core import Agent
+from mushroom_rl.core import Logger
+
+from src.envs.go1_nav_environment import Go1
+
+from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
+import wandb
+from src.mushroom.dataset.dataset import compute_J,parse_dataset
+
+from tqdm import trange
+
+
+
+def calculate_success_rate(info, last):
+    info_array = np.array([d["success"] for d in info])
+    success_cnt = np.count_nonzero(info_array)
+    last_cnt = np.count_nonzero(last)
+    success_rate = success_cnt / last_cnt
+    return success_rate
+
+
+def experiment_uniform(
+        method_name="",
+        alg=[SAC, AdaptiveTempSAC],
+        n_epochs=200,
+        n_steps=5000,
+        n_steps_per_fit=1,
+        n_episodes_test=10,
+        control_agent=None,
+        run_id=0,
+        log=False,
+        temperature_support=1,
+        use_cuda=False,
+
+        aware_rationality=False,
+        view=False,
+        wandb_project="",
+        checkpoint_dir=""):
+
+    np.random.seed()
+
+    logger = Logger(method_name, results_dir=None)
+    logger.strong_line()
+    task_name = "obstacles_navigation"
+
+    agent_task = f"{task_name}"
+    logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
+
+    # MDP
+    horizon = 500
+    gamma = 0.99
+    n_features = 256
+    warmup_transitions = 5000
+    batch_size = 256 #256
+    initial_replay_size = 5000
+    max_replay_size = int(1e6)
+    tau = 0.005
+    lr_alpha = 3e-4
+    job_name = method_name + f"_rationality_{aware_rationality}_temp_support_0_{temperature_support}_max_vel=1.5"
+    print(job_name)
+    if log:
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=wandb_project,
+            group=task_name,
+            job_type=job_name,
+            name="seed_{}".format(run_id)
+        )
+
+
+
+    cfg_rewards=dict()
+
+    joystick = False
+    cfg = dict(
+               antagonist=True,
+               max_level=True,
+               curriculum=False,
+               joystick=joystick,
+               resample=False,
+               domain_randomization=False,
+               rewards=cfg_rewards,
+               static_obstacles=False,
+                activate_arrow=False,
+                max_antagonist_v=1.5,)
+
+    mdp = Go1(horizon,
+              gamma,
+              timestep=0.005,
+              cfg=cfg,
+              task_name=task_name)
+
+    actor_input_shape = mdp.info.observation_space.shape
+
+    if aware_rationality:
+        actor_input_shape = (actor_input_shape[0] +1,)
+    else:
+        actor_input_shape = (actor_input_shape[0],)
+
+    actor_mu_params = dict(network=ActorBiNetwork,
+                           n_features=n_features,
+                           input_shape=actor_input_shape,
+                           output_shape=(3,),
+                           size_propioception=9,
+                           use_cuda=use_cuda)
+
+    actor_sigma_params = dict(network=ActorBiNetwork,
+                              n_features=n_features,
+                              input_shape=actor_input_shape,
+                              output_shape=(3,),
+                              size_propioception=9,
+                              use_cuda=use_cuda)
+
+
+    actor_optimizer = {'class': optim.Adam,
+                       'params': {'lr': 3e-4}}
+
+    critic_input_shape = (actor_input_shape[0] + 3,)
+    critic_params = dict(network=CriticNetwork,
+                         optimizer={'class': optim.Adam,
+                                    'params': {'lr': 3e-4}},
+                         loss=F.mse_loss,
+                         n_features=n_features,
+                         input_shape=critic_input_shape,
+                         output_shape=(1,),
+                         use_cuda=use_cuda)
+
+    # Agent
+
+    min_a = -np.array([1.5,1,1.5])
+    max_a = np.array([1.5, 1, 1.5])
+    agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
+                actor_optimizer, critic_params, batch_size, initial_replay_size,
+                max_replay_size, warmup_transitions, tau, lr_alpha,
+                critic_fit_params=None, range=[min_a, max_a])
+
+    # Adversary
+    obs_antagonist =6 + 1
+    adversary_actor_input_shape = (obs_antagonist,)
+    antagonist_mu_params = dict(
+        network=ActorNetwork,
+        n_features=n_features,
+        input_shape=adversary_actor_input_shape,
+        output_shape=(1,),
+        use_cuda=use_cuda,
+    )
+
+    antagonist_sigma_params = dict(
+        network=ActorNetwork,
+        n_features=n_features,
+        input_shape=adversary_actor_input_shape,
+        output_shape=(1,),
+        use_cuda=use_cuda,
+    )
+
+    antagonist_critic_input_shape = (adversary_actor_input_shape[0] +1,)
+    antagonist_critic_params = dict(
+        network=CriticNetwork,
+        optimizer={"class": optim.Adam, "params": {"lr": 3e-4}},
+        loss=F.mse_loss,
+        n_features=n_features,
+        input_shape=antagonist_critic_input_shape,
+        output_shape=(1,),
+        use_cuda=use_cuda,
+    )
+
+    antagonist = alg[1](
+        mdp.info,
+        antagonist_mu_params,
+        antagonist_sigma_params,
+        actor_optimizer,
+        antagonist_critic_params,
+        batch_size,
+        initial_replay_size,
+        max_replay_size,
+        warmup_transitions,
+        tau,
+        lr_alpha,
+        critic_fit_params=None,
+        range=[-1.5, 1.5],
+    )
+
+    # Algorithm
+    preprocessor = StateVariableConcatenation()
+
+    core = Core(
+        [agent, antagonist],
+        mdp,
+        low_level_agent=control_agent,
+        callback_step=CollectDataset(),
+        preprocessors=[preprocessor],
+        joystick=joystick,
+        aware_rationality=aware_rationality,
+        rationality_antagonist=True)
+
+
+
+    temps = np.random.uniform(0, temperature_support, 100)
+
+
+    core.set_variables_for_training(temps)
+    dataset_online = core.evaluate(
+        n_episodes=10, render=view, id_agent=0, return_antagonist_state=True
+    )
+    s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
+    J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
+    R_online = np.mean(compute_J(dataset_online))
+    success_rate = calculate_success_rate(info, last)
+    E_online = antagonist.policy.entropy(s)
+
+    logger.epoch_info(
+        0,
+        J_online=J_online,
+        R_online=R_online,
+        entropy=E_online,
+        success_rate=success_rate,
+        alfa=np.mean(temps)
+    )
+
+    sampled_temperatures = np.random.uniform(0, temperature_support, 100)
+
+
+    core.set_variables_for_training(sampled_temperatures)
+
+    logger.info("warm-up transitions  Antagonist")
+    core.learn(
+        n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1
+    )
+
+    logger.info("warm-up transitions  Protagonist")
+    core.learn(
+        n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=0
+    )
+
+
+    for it in trange(n_epochs, leave=False):
+
+
+        sampled_temperatures = np.random.uniform(0, temperature_support, 100)
+
+        core.set_variables_for_training(sampled_temperatures)
+
+        logger.info("Training Antagonist")
+        core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=1)
+
+        core.set_variables_for_training(sampled_temperatures)
+
+        logger.info("Training Protagonist")
+        core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
+
+        ##################EVALUATION#########################################
+        if it % 10 == 0 and view:
+            render = True
+        else:
+            render = False
+
+        logger.info("Evaluate Protagonist")
+
+        temps = np.random.uniform(0, temperature_support, n_episodes_test)
+
+        core.set_variables_for_training(temps)
+        core.callback_step.clean()
+
+        dataset_online = core.evaluate(
+            n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True
+        )
+
+        s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
+        J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
+        R_online = np.mean(compute_J(dataset_online))
+        success_rate = calculate_success_rate(info, last)
+        E_online = antagonist.policy.entropy(s)
+
+
+        ##################Evaluation 2#########################################
+
+        logger.info("Evaluate Antagonist")
+        core.set_variables_for_training(temps)
+        core.callback_step.clean()
+        dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
+        R_antagonist = np.mean(compute_J(dataset_antagonist))
+
+        logger.epoch_info(
+            it + 1,
+            J_online=J_online,
+            R_online=R_online,
+            success_rate=success_rate,
+            E_antagonist=E_online,
+            mean_temperature=np.mean(temps),
+            r_antagonist=R_antagonist
+        )
+
+        if log:
+
+            entropy_distribution  = np.log(0.5)  # Natural logarithm
+
+            a_dist = 1
+            b_dist = 1
+
+            log_dict = dict(J=J_online,
+                            R=R_online,
+                            success_rate=success_rate,
+                            temperature=np.mean(temps),
+                            r_antagonist=R_antagonist,
+                            entropy_antagonist=E_online,
+                            entropy_distribution=entropy_distribution,
+                            a_dist= a_dist,
+                            b_dist = b_dist)
+
+            wandb.log(log_dict, step=it)
+
+        if it % 10 == 0:
+            agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+
+    agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+
+    if log:
+        wandb.finish()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
+    parser.add_argument("--method", type=str, default="UNIFORM",choices=["UNIFORM"])
+    parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
+    parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
+    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--run_id", type=int, default=0, help="Run ID")
+    parser.add_argument("--log", default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
+    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
+    parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+
+    return parser.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+    if args.aware_rationality=="False":
+        args.aware_rationality = False
+    if args.aware_rationality=="True":
+        args.aware_rationality = True
+    if args.log=="False":
+        args.log = False
+    if args.log=="True":
+        args.log = True
+
+    path = "src/nominal_models/low_level/policy"
+    control_agent = Agent.load(path)
+
+    temperature = args.temperature
+    run_id = args.run_id
+    method = args.method
+    kl_max = args.kl_max
+
+    method_name = method
+    experiment_uniform(
+        method_name=method_name,
+        alg=[SAC, AdaptiveTempSAC],
+        n_epochs=args.n_epochs,
+        n_steps=args.n_steps,
+        n_steps_per_fit=args.n_steps_per_fit,
+        n_episodes_test=args.n_episodes_test,
+        control_agent=control_agent,
+        run_id=run_id,
+        log=args.log,
+        temperature_support=temperature,
+        use_cuda=True,
+        aware_rationality=args.aware_rationality,
+        view=False,
+        wandb_project=args.wandb_project,
+        checkpoint_dir = args.checkpoint_dir)
+
+
+
