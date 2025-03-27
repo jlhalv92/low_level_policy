@@ -67,7 +67,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"2d_antagonist_velocity={2}"
+    job_name = method_name + f"2d_antagonist_velocity={1.5}"
     if log:
         wandb.init(
             project=wandb_project,
@@ -81,7 +81,7 @@ def experiment(method_name,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
-               max_antagonist_v=2)
+               max_antagonist_v=1.5)
 
 
 
@@ -134,13 +134,13 @@ def experiment(method_name,
     antagonist_mu_params = dict(network=ActorNetwork,
                            n_features=n_features,
                            input_shape=antagonist_input_shape,
-                           output_shape=(1,),
+                           output_shape=(2,),
                            use_cuda=use_cuda)
 
     antagonist_sigma_params = dict(network=ActorNetwork,
                               n_features=n_features,
                               input_shape=antagonist_input_shape,
-                              output_shape=(1,),
+                              output_shape=(2,),
                               use_cuda=use_cuda)
 
     antagonist_critic_input_shape = (antagonist_input_shape[0] + 2,)
@@ -252,7 +252,6 @@ def parse_args():
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
-    parser.add_argument("--runs", type=int, default=5, help="Run ID")
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
