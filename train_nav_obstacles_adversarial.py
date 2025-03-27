@@ -31,8 +31,9 @@ from tqdm import trange
 class Teacher:
     def __init__(
             self,
-            initial_alpha: np.ndarray = 5,
-            initial_beta: np.ndarray = 0.10,
+
+            initial_alpha: np.ndarray = 5, #5.
+            initial_beta: np.ndarray = 0.1, #0.1
             target_alpha: np.ndarray = 1,
             target_beta: np.ndarray = 1,
             alpha_lower_bound: float = 1e-8,
@@ -102,7 +103,9 @@ def experiment_qarl(
         aware_rationality=False,
         view=False,
         wandb_project="",
-        checkpoint_dir=""):
+        checkpoint_dir="",
+        antagonist_velocity=1.5,
+        lower_bound=0.6):
 
     np.random.seed()
 
@@ -123,7 +126,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_rationality_{aware_rationality}_temp_support_0_{temperature_support}_max_vel=1.5"
+    job_name = method_name + f"_rationality_{aware_rationality}_temp_support_0_{temperature_support}_max_vel={antagonist_velocity}_lb={lower_bound}"
     print(job_name)
     if log:
         wandb.init(
@@ -136,7 +139,7 @@ def experiment_qarl(
 
 
     teacher = Teacher(max_kl= kl,
-            performance_lower_bound= 0.6,
+            performance_lower_bound= lower_bound,
             temperature = temperature_support)
 
 
@@ -148,21 +151,18 @@ def experiment_qarl(
     joystick = False
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
                domain_randomization=False,
                rewards=cfg_rewards,
                static_obstacles=False,
-                activate_arrow=False)
+                activate_arrow=False,
+                max_antagonist_v=antagonist_velocity)
 
-    vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
     mdp = Go1(horizon,
               gamma,
               timestep=0.005,
               cfg=cfg,
-              task_name=task_name, **vel_controller)
+              task_name=task_name)
 
     actor_input_shape = mdp.info.observation_space.shape
 
@@ -251,7 +251,7 @@ def experiment_qarl(
         tau,
         lr_alpha,
         critic_fit_params=None,
-        range=[-1.5, 1.5],
+        range=[-antagonist_velocity, antagonist_velocity],
     )
 
     # Algorithm
@@ -365,6 +365,8 @@ def experiment_qarl(
 
         ##################UPDATE distribution#########################################
         if method_name=="DORAEMON":
+
+
             temp_perf_buffer.update_buffer([temperatures, (success_rate*np.ones(n_episodes_test)).tolist()])
 
         if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
@@ -439,6 +441,9 @@ def parse_args():
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
+    parser.add_argument("--velocity",type=float,  default=1.5)
+    parser.add_argument("--lower_bound", type=float, default=0.6)
+
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
@@ -483,7 +488,9 @@ if __name__ == "__main__":
         aware_rationality=args.aware_rationality,
         view=False,
         wandb_project=args.wandb_project,
-        checkpoint_dir = args.checkpoint_dir)
+        checkpoint_dir = args.checkpoint_dir,
+        antagonist_velocity=args.velocity,
+        lower_bound=args.lower_bound)
 
 
 

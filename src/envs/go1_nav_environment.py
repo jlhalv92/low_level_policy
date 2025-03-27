@@ -270,7 +270,6 @@ class Go1(MuJoCo):
         self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
         self.level = 0
         self.antagonist = cfg["antagonist"]
-        self.max_level = cfg["max_level"]
         self.obstacle_velocity = 0
 
         # self.occupancy_grid = OccupancyGrid(15,15,0.01)
@@ -758,6 +757,7 @@ class Go1(MuJoCo):
                                 # 2, 2, 1, 1
         return np.concatenate((pos_robot, velocity_robot, velocity_obstacle, pass_finish_line))
 
+
     def get_reward(self, action):
 
 
@@ -788,6 +788,37 @@ class Go1(MuJoCo):
             reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
 
             return reward - penalties - y_bounders
+    # def get_reward(self, action):
+    #
+    #
+    #     if self.task == 1:
+    #         return self.reward_task_1()
+    #
+    #     if self.task == 2 or self.task == 3 or self.task == 4:
+    #         yaw = self.orientation_euler[2]
+    #         global_vel = self._data.qvel[:2].copy()
+    #         y_pos = self._data.body("trunk").xpos[1]
+    #         robot_pos = self._data.qpos[:2].copy()
+    #         desired_yaw = 0  # Assuming 0 is the forward direction
+    #         yaw_deviation_penalty = np.abs(yaw - desired_yaw)
+    #         distance = self._data.site("target").xpos[0] - self._data.qpos[0]
+    #
+    #         distance_to_obstacle = np.linalg.norm(self._data.site("obstacle_1").xpos[:2] - self._data.qpos[:2])
+    #
+    #         soft_hit_condition = self._model.site("obstacle_1").size[0] + self._model.site("robot_contact_limit").size[
+    #             0]
+    #
+    #         proximity_penalty = (distance_to_obstacle < soft_hit_condition) * np.exp(1 / distance_to_obstacle)
+    #
+    #         penalties = 1.*yaw_deviation_penalty + (np.abs(y_pos)) * (distance < -0.35) + proximity_penalty * (
+    #                     not self.narrow_passage and not self.no_walls) + self.collision_penalty()
+    #         if np.abs(y_pos)+0.15 >= self._room_width/2:
+    #             y_bounders = min(np.exp((np.abs(y_pos)+0.15 - self._room_width/2)/0.25), 5)
+    #         else:
+    #             y_bounders =0
+    #         target_vel = 1
+    #         reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
+    #         return reward - penalties - y_bounders
 
     def reward(self, state, action, next_state, absorbing):
 
@@ -923,8 +954,8 @@ class Go1(MuJoCo):
         # collision_robot_wall = self._check_collision("robot", "walls")
         collision_robot = legs_collision_obstacles or trunk_collision_obstacles
 
-
-        if fall | collision_robot |out_of_limit :
+        # fall | collision_robot | out_of_limit
+        if fall | collision_robot | out_of_limit  :
             self.terminates = True
 
     def reward_antagonist(self):
@@ -989,29 +1020,11 @@ class Go1(MuJoCo):
         self._data.qpos[7:19] = self.default_dof_pos.copy()
         self._data.qpos[0:3] = [0, 0, 0.36]
 
-        if self._reset_state is None:
-            if self.task == 2 or self.task == 3 or self.task == 4:
-                self.reset_states(self.task)
 
-            # for i in range(0, 10):
-            #
-            #     a = self.default_dof_pos.copy() + np.zeros(12)
-            #     torques = self.controller(a)
-            #     for i in range(4):
-            #         self._data.ctrl[:12] = torques
-            #         mujoco.mj_step(self._model, self._data)
-
-            self._reset_state = dict(q_pos=self._data.qpos.copy(), q_vel=self._data.qvel.copy())
+        self.reset_states(self.task)
 
 
-        else:
-            if self.task == 2 or self.task == 3:
-                self.reset_states(self.task)
-            else:
-                self._data.qpos = self._reset_state["q_pos"]
-                self._data.qvel = self._reset_state["q_vel"]
-
-            mujoco.mj_step(self._model, self._data)
+        mujoco.mj_forward(self._model, self._data)
 
         self.last_action = np.zeros(12)
         self.previous_vel = np.zeros(3)
@@ -1034,19 +1047,22 @@ class Go1(MuJoCo):
             geoms = spec.worldbody.geoms
             walls = ["wall_3", "wall_4"]
             # self._room_width = np.random.uniform(low=1.2, high=6)
-            self._room_width = 3
-            self._obstacle_l = 0.5
-            self._obstacle_w = 0.5
 
-            # if self._room_width > 2.0:
-            #     self.narrow_passage = False
-            #
-            #     self._room_width= np.random.uniform(0.1, 0.6)
-            #     self._obstacle_w = np.random.uniform(0.1, 0.6)
-            # else:
-            #     self.narrow_passage = True
-            #     self._obstacle_l = np.random.uniform(0.05, 0.25)
-            #     self._obstacle_w = np.random.uniform(0.05, 0.25)
+            if self.domain_randomization:
+                self._room_width = np.random.uniform(1, 5)
+                factor = 0.6
+                if self._room_width > 2.0:
+
+                    self._obstacle_l = np.random.uniform(0.5, (self._room_width/2)*factor)
+                    self._obstacle_w = np.random.uniform(0.5, (self._room_width/2)*factor)
+                else:
+                    self._obstacle_l = np.random.uniform(0.15, (self._room_width/2)*factor)
+                    self._obstacle_w = np.random.uniform(0.15, (self._room_width/2)*factor)
+
+            else:
+                self._room_width = 3
+                self._obstacle_l = 0.5
+                self._obstacle_w = 0.5
 
             self.wall_pos = self._room_width / 2
             worldbody = spec.worldbody
@@ -1071,12 +1087,13 @@ class Go1(MuJoCo):
             #     z_wall = -2
             # else:
             #     z_wall = 0.8
+            wall_pos = (self._room_width/2) + 0.5
             for geom in geoms:
                 if geom.name in walls:
                     if geom.pos[1] < 0:
-                        geom.pos[1] = -2 - geom.size[1] / 2
+                        geom.pos[1] = -wall_pos - geom.size[1] / 2
                     else:
-                        geom.pos[1] = 2 + geom.size[1] / 2
+                        geom.pos[1] = wall_pos + geom.size[1] / 2
                     geom.pos[2] = z_wall
             # for geom in geoms:
             #     if geom.name in walls:

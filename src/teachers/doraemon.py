@@ -41,7 +41,7 @@ class Doraemon:
                                                  use_cuda=False, dtype=torch.float64 )
 
 
-
+        self.keep_feasible = False
         self.new_alpha = initia_alpha
         self.new_beta = initia_beta
         self.max_kl = max_kl
@@ -127,7 +127,7 @@ class Doraemon:
             -np.inf,
             self.max_kl,
             jac=kl_constraint_grad_func,
-            keep_feasible=True,
+            keep_feasible=self.keep_feasible,
         )
 
         # Define the performance constraint
@@ -158,16 +158,16 @@ class Doraemon:
 
         perf_constraint = NonlinearConstraint(
             fun=perf_constraint_func,
-            lb=self.perf_lb,
-            ub=1,
+            lb=self.perf_lb -1e-4,
+            ub=np.inf,
             jac=perf_constraint_grad_func,
-            keep_feasible=True,
+            keep_feasible=self.keep_feasible,
         )
 
         if self.compute_target_temp_kl() > self.target_kl_threshold:
-            lb = np.array([0.1, 0.1])
-            ub = np.array([5., 5.])
-            bounds = Bounds(lb, ub, keep_feasible=True)
+            lb = np.array([0.05, 0.05])
+            ub = np.array([50., 50.])
+            bounds = Bounds(lb, ub, keep_feasible=self.keep_feasible)
 
             # If the bounds are active, clip the standard deviation to be in bounds (because we may re-introduce
             # bounds after they have previously been removed)
@@ -186,6 +186,7 @@ class Doraemon:
         try:
             if kl_constraint_func(x0) >= self.max_kl:
                 print("Warning! KL-Bound of x0 violates constraint already")
+
 
             if perf_constraint_func(x0) >= self.perf_lb:
                 print("Optimizing KL divergence")
@@ -213,7 +214,8 @@ class Doraemon:
                     method="trust-constr",
                     jac=True,
                     constraints=constraints,
-                    options={"gtol": G_TOL, "xtol": X_TOL},
+                    options={"gtol": G_TOL, "xtol": X_TOL, "disp":True},
+                    bounds=bounds
                 )
 
             # Only optimize the temperature distribution if the performance threshold has not yet been exceeded even
