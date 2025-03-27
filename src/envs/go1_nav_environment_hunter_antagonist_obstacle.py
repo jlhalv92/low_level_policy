@@ -922,18 +922,19 @@ class Go1(MuJoCo):
         # Reward Antagonist
         # distance = self._data.site("target").xpos[0] - self._data.qpos[0]
         # pass_finish_line = distance < -0.35
-        distance = self._data.body("obstacle_1").xpos[0] - self._data.qpos[0]
-        pass_finish_line = distance < -0.2
+        distance_x = self._data.body("obstacle_1").xpos[0] - self._data.qpos[0]
+        distance_y = np.abs(self._data.body("obstacle_1").xpos[1] - self._data.qpos[1])
+        pass_finish_line = distance_x < -0.2
 
-        pos_antagonist = self._data.body("obstacle_1").xpos[:2]
+        # pos_antagonist = self._data.body("obstacle_1").xpos[:2]
+        #
+        # pos_robot = self._data.body("trunk").xpos[:2]
+        # u_v = (pos_robot - pos_antagonist) / (np.linalg.norm(pos_robot - pos_antagonist) + 1e-5)
+        # current_vel = self._data.joint("obstacle").qvel[:2]
 
-        pos_robot = self._data.body("trunk").xpos[:2]
-        u_v = (pos_robot - pos_antagonist) / (np.linalg.norm(pos_robot - pos_antagonist) + 1e-5)
-        current_vel = self._data.joint("obstacle").qvel[:2]
+        reward_vel = -distance_y*(not pass_finish_line) -10*(pass_finish_line)
 
-        reward_vel = np.dot(u_v,current_vel)*(not pass_finish_line) -1*(pass_finish_line)
-
-        return reward_vel
+        # return reward_vel
         reward_collision = 10 * self.obstacle_robot_collision
         # reward_distance = -np.linalg.norm(pos_robot - pos_antagonist)
         # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
@@ -1029,11 +1030,11 @@ class Go1(MuJoCo):
             walls = ["wall_3", "wall_4"]
             self._room_width = np.random.uniform(low=1., high=5)
             if self._room_width<=2:
-                self._obstacle_l =np.random.uniform(low=0.1,  high= (self._room_width/2)*0.6)
-                self._obstacle_w = np.random.uniform(low=0.1, high= (self._room_width/2)*0.6)
+                self._obstacle_l =np.random.uniform(low=0.05,  high= (self._room_width/2)*0.4)
+                self._obstacle_w = np.random.uniform(low=0.05, high= (self._room_width/2)*0.4)
             else:
-                self._obstacle_l = np.random.uniform(low=0.5, high= (self._room_width/2)*0.6)
-                self._obstacle_w = np.random.uniform(low=0.5, high= (self._room_width/2)*0.6)
+                self._obstacle_l = np.random.uniform(low=0.2, high= (self._room_width/2)*0.4)
+                self._obstacle_w = np.random.uniform(low=0.2, high= (self._room_width/2)*0.4)
 
 
             self.wall_pos = self._room_width / 2
