@@ -67,7 +67,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"2d_antagonist_velocity={velocity_antagonist}"
+    job_name = method_name + f"antagonist_velocity={velocity_antagonist}"
     if log:
         wandb.init(
             project=wandb_project,
