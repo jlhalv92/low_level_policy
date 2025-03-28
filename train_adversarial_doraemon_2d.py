@@ -430,7 +430,7 @@ def experiment_qarl(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--method", type=str, default="DORAEMON",choices=["DORAEMON", "UNIFORM"],help="DORAEMON or UNIFORM")
+    parser.add_argument("--method", type=str, default="DORAEMON",choices=["DORAEMON"],help="DORAEMON or UNIFORM")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
@@ -444,7 +444,7 @@ def parse_args():
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_2D_ANTAGONIST")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
-    parser.add_argument("--performance_lower_bound", type=float, default=0.6, help=" performance lower bound")
+    parser.add_argument("--performance_lower_bound", type=float, default=0.4, help=" performance lower bound")
 
 
 

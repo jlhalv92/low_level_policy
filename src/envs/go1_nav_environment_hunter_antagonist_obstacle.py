@@ -986,30 +986,11 @@ class Go1(MuJoCo):
         self.episode_steps = 0
         self._data.qpos[7:19] = self.default_dof_pos.copy()
         self._data.qpos[0:3] = [0, 0, 0.36]
-
-        if self._reset_state is None:
-            if self.task == 2 or self.task == 3 or self.task == 4:
-                self.reset_states(self.task)
-
-            # for i in range(0, 10):
-            #
-            #     a = self.default_dof_pos.copy() + np.zeros(12)
-            #     torques = self.controller(a)
-            #     for i in range(4):
-            #         self._data.ctrl[:12] = torques
-            #         mujoco.mj_step(self._model, self._data)
-
-            self._reset_state = dict(q_pos=self._data.qpos.copy(), q_vel=self._data.qvel.copy())
+        self.reset_states(self.task)
 
 
-        else:
-            if self.task == 2 or self.task == 3:
-                self.reset_states(self.task)
-            else:
-                self._data.qpos = self._reset_state["q_pos"]
-                self._data.qvel = self._reset_state["q_vel"]
 
-            mujoco.mj_step(self._model, self._data)
+        mujoco.mj_step(self._model, self._data)
 
         self.last_action = np.zeros(12)
         self.previous_vel = np.zeros(3)
@@ -1028,13 +1009,15 @@ class Go1(MuJoCo):
 
             geoms = spec.worldbody.geoms
             walls = ["wall_3", "wall_4"]
-            self._room_width = np.random.uniform(low=1., high=5)
-            if self._room_width<=2:
-                self._obstacle_l =np.random.uniform(low=0.05,  high= (self._room_width/2)*0.4)
-                self._obstacle_w = np.random.uniform(low=0.05, high= (self._room_width/2)*0.4)
-            else:
-                self._obstacle_l = np.random.uniform(low=0.2, high= (self._room_width/2)*0.4)
-                self._obstacle_w = np.random.uniform(low=0.2, high= (self._room_width/2)*0.4)
+            self._room_width = 2.5
+            self._obstacle_l = 0.5
+            self._obstacle_w  = 0.5
+            # if self._room_width<=2:
+            #     self._obstacle_l =np.random.uniform(low=0.05,  high= (self._room_width/2)*0.4)
+            #     self._obstacle_w = np.random.uniform(low=0.05, high= (self._room_width/2)*0.4)
+            # else:
+            #     self._obstacle_l = np.random.uniform(low=0.2, high= (self._room_width/2)*0.4)
+            #     self._obstacle_w = np.random.uniform(low=0.2, high= (self._room_width/2)*0.4)
 
 
             self.wall_pos = self._room_width / 2
