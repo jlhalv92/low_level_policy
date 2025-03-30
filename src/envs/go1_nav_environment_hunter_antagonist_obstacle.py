@@ -1009,7 +1009,7 @@ class Go1(MuJoCo):
 
             geoms = spec.worldbody.geoms
             walls = ["wall_3", "wall_4"]
-            self._room_width = 2.5
+            self._room_width = 3.0
             self._obstacle_l = 0.5
             self._obstacle_w  = 0.5
             # if self._room_width<=2:
