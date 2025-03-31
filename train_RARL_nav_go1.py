@@ -37,9 +37,11 @@ def experiment(method_name,
                run_id=0,
                log=False,
                use_cuda=False,
-               alpha=1.,
                wandb_project="",
-               antagonist_velocity=1.5):
+               antagonist_velocity=1.5,
+               domain_randomization=False,
+               configs=None):
+
 
     np.random.seed()
 
@@ -65,13 +67,15 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"antagonist_velocity={antagonist_velocity}"
+    job_name = method_name + f"_antagonist_velocity={antagonist_velocity}_dr={domain_randomization}"
+    print(job_name)
     if log:
         wandb.init(
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=configs
         )
     joystick = False
     cfg = dict(antagonist=True,
@@ -80,7 +84,7 @@ def experiment(method_name,
                static_obstacles=False,
                activate_arrow=False,
                max_antagonist_v=antagonist_velocity,
-               domain_randomization=True,)
+               domain_randomization=domain_randomization,)
 
 
 
@@ -165,8 +169,7 @@ def experiment(method_name,
                 joystick=joystick)
 
 
-    dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
-
+    dataset = core.evaluate(n_episodes=10, render=False, id_agent=0)
     s,a, r, s1, absorbing, info, last = parse_dataset(dataset)
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
@@ -239,6 +242,15 @@ def experiment(method_name,
     if log:
         wandb.finish()
 
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', "True"):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', "False"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
@@ -247,10 +259,11 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=5, help="Run ID")
-    parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--velocity", type=float, default=1., help="Alpha value")
+    parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
+    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--velocity", type=float, default=1., help="velocity")
+    parser.add_argument("--domain_randomization",  type=str2bool, nargs='?', const=True, default=False, help="Domain Randomization")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
 
 
@@ -274,9 +287,10 @@ if __name__ == '__main__':
                run_id=args.run_id,
                log=args.log,
                use_cuda=args.use_cuda,
-               alpha=args.alpha,
                wandb_project=args.wandb_project,
-               antagonist_velocity = args.velocity)
+               antagonist_velocity = args.velocity,
+               domain_randomization=args.domain_randomization,
+               configs=vars(args))
 
 
 
