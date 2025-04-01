@@ -361,7 +361,7 @@ def parse_args():
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_2D_ANTAGONIST")
+    parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
 

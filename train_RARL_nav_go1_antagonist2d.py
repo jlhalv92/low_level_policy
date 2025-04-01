@@ -262,8 +262,8 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=5, help="Run ID")
     parser.add_argument("--log",dtype=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", dtype=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
-    parser.add_argument("--velocity", type=float, default=1., help="Alpha value")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_2D_ANTAGONIST")
+    parser.add_argument("--velocity", type=float, default=1.)
+    parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
     return parser.parse_args()
 
 if __name__ == '__main__':

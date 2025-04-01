@@ -40,7 +40,8 @@ def experiment(method_name,
                log=False,
                use_cuda=False,
                alpha=1.,
-               wandb_project=""):
+               wandb_project="",
+               antagonist_velocity=1.5):
 
     np.random.seed()
 
@@ -67,7 +68,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"2d_antagonist_velocity={1.5}"
+    job_name = method_name + f"_2d_antagonist_velocity={antagonist_velocity}"
     if log:
         wandb.init(
             project=wandb_project,
@@ -153,8 +154,8 @@ def experiment(method_name,
                          output_shape=(1,),
                          use_cuda=use_cuda)
 
-    min_a = -np.array([2, 2])
-    max_a = np.array([0, 2])
+    min_a = -np.array([antagonist_velocity, antagonist_velocity])
+    max_a = np.array([0, antagonist_velocity])
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
@@ -263,8 +264,10 @@ def parse_args():
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_2D_ANTAGONIST")
+    parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
     parser.add_argument("--run_id", type=int, default=0)
+    parser.add_argument("--velocity", type=float, default=1.5)
+
 
 
 
@@ -287,7 +290,8 @@ if __name__ == '__main__':
                log=args.log,
                use_cuda=args.use_cuda,
                alpha=args.alpha,
-               wandb_project=args.wandb_project)
+               wandb_project=args.wandb_project,
+               antagonist_velocity=args.velocity)
 
 
 
