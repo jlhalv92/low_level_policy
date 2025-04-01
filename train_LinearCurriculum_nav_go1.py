@@ -40,7 +40,8 @@ def experiment(method_name,
                log=False,
                use_cuda=False,
                alpha=1.,
-               wandb_project="", velocity_antagonist=1.5):
+               wandb_project="", velocity_antagonist=1.5,
+               conf=None):
 
     np.random.seed()
 
@@ -73,7 +74,8 @@ def experiment(method_name,
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=conf,
         )
     joystick = False
     cfg = dict(antagonist=True,
@@ -81,7 +83,8 @@ def experiment(method_name,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
-               max_antagonist_v=velocity_antagonist)
+               max_antagonist_v=velocity_antagonist,
+               domain_randomization=args.domain_randomization)
 
 
 
@@ -262,9 +265,11 @@ def parse_args():
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--run_id", type=int, default=0)
     parser.add_argument("--velocity", type=float, default=1.5)
+    parser.add_argument("--domain_randomization", type=str2bool, nargs='?', const=True, default=False)
+
 
     return parser.parse_args()
 
@@ -285,7 +290,8 @@ if __name__ == '__main__':
                use_cuda=args.use_cuda,
                alpha=args.alpha,
                wandb_project=args.wandb_project,
-               velocity_antagonist=args.velocity)
+               velocity_antagonist=args.velocity,
+               conf=args)
 
 
 

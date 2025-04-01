@@ -264,7 +264,7 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--velocity", type=float, default=1., help="velocity")
     parser.add_argument("--domain_randomization",  type=str2bool, nargs='?', const=True, default=False, help="Domain Randomization")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
 
 
 

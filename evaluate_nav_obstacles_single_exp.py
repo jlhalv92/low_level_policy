@@ -89,7 +89,7 @@ horizon=500
                curriculum=False,
                joystick=joystick,
                resample=False,
-               domain_randomization=False,
+               domain_randomization=True,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=True,
@@ -164,28 +164,18 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    velocity = 1.
+    velocity = 1.5
     model_id = "RARL_alpha"
     temperatures = np.linspace(0.5, 0, num=11)
     # level_a =0.4
     run = 4
-    alpha_antagonist = 0.
-    # path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{alpha}/run_{run}/PROTAGONIST/epoch_last"
-    # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_1/PROTAGONIST/epoch_last"
-    # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/PROTAGONIST/epoch_160"
-
-    # path_antagonist = 'checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_0/ANTAGONIST/epoch_last'
-    # path_antagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/ANTAGONIST/epoch_160"
-    # path_antagonist = 'checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/ANTAGONIST/epoch_20'
+    alpha_antagonist = 1.
     path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
 
     antagonist = Agent.load(path_antagonist)
 
-    # protagonist_id =f"{model_id}_{temperature}"
-    # msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist temperature {temperature} max velocity {velocity}"
-    # print(f"-----------------------------------------{msg}--------------------------------------------")
     performance = []
-    # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
+
 
     for temperature in temperatures:
         success_rates = []
@@ -203,9 +193,9 @@ if __name__ == "__main__":
                 protagonist_id = str(i),
                 seed=run,
                 # file_path=file_path,
-                render=False,
+                render=True,
                 record=False,
-                joystick=False,
+                joystick=True,
                 horizon=500,
 
             )
@@ -213,20 +203,6 @@ if __name__ == "__main__":
         mean_success_rate = np.mean(success_rates)
         performance.append(mean_success_rate)
 
-
-    import matplotlib.pyplot as plt
-
-    plt.figure(figsize=(12, 6))
-    plt.bar(temperatures, performance, width=0.008, color='blue', alpha=0.7)
-
-    # Labels and title
-    plt.xlabel("Temperature")
-    plt.ylabel("Success Rate")
-    plt.title(f"Obstacle Navigation Performance, Antagonist max velocity = {velocity}")
-    plt.grid(axis='y', linestyle='--', alpha=0.6)
-
-    # Show the plot
-    plt.show()
 
 
 

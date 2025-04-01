@@ -63,7 +63,8 @@ def experiment_uniform(
         view=False,
         wandb_project="",
         checkpoint_dir="",
-        antagonist_velocity=1.5):
+        antagonist_velocity=1.5,
+        conf=None,):
 
     np.random.seed()
 
@@ -104,7 +105,7 @@ def experiment_uniform(
     cfg = dict(
                antagonist=True,
                joystick=joystick,
-               domain_randomization=False,
+               domain_randomization=conf.domain_randomization,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=False,
@@ -345,6 +346,15 @@ def experiment_uniform(
     if log:
         wandb.finish()
 
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
@@ -353,27 +363,21 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
-    parser.add_argument("--log", default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
+    parser.add_argument("--log",type=str2bool, nargs='?', const=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
     parser.add_argument("--velocity",type=float,  default=1.5)
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--domain_randomization", type=str2bool, nargs='?', const=True, default=False)
+
 
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
-    if args.aware_rationality=="False":
-        args.aware_rationality = False
-    if args.aware_rationality=="True":
-        args.aware_rationality = True
-    if args.log=="False":
-        args.log = False
-    if args.log=="True":
-        args.log = True
+
 
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
@@ -392,12 +396,13 @@ if __name__ == "__main__":
         run_id=run_id,
         log=args.log,
         temperature_support=temperature,
-        use_cuda=True,
+        use_cuda=args.use_cuda,
         aware_rationality=args.aware_rationality,
         view=False,
         wandb_project=args.wandb_project,
         checkpoint_dir = args.checkpoint_dir,
-        antagonist_velocity=args.velocity)
+        antagonist_velocity=args.velocity,
+        conf=args)
 
 
 

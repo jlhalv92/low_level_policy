@@ -154,7 +154,7 @@ def experiment_qarl(
     cfg = dict(
                antagonist=True,
                joystick=joystick,
-               domain_randomization=False,
+               domain_randomization=args.domain_randomization,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=False,
@@ -444,10 +444,11 @@ def parse_args():
     parser.add_argument("--velocity",type=float,  default=1.5)
     parser.add_argument("--lower_bound", type=float, default=0.6)
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--method",type=str,default="DORAEMON")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--full_obs", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--domain_randomization", type=str2bool, nargs='?', const=True, default=False)
 
 
     return parser.parse_args()
@@ -476,7 +477,7 @@ if __name__ == "__main__":
         log=args.log,
         Teacher=Teacher,
         temperature_support=temperature,
-        use_cuda=True,
+        use_cuda=args.use_cuda,
         update=10,
         kl=kl_max,
         aware_rationality=args.aware_rationality,

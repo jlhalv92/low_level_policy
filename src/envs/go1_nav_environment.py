@@ -792,7 +792,7 @@ class Go1(MuJoCo):
 
             penalties = 1.*yaw_deviation_penalty + (np.abs(y_pos)) * (distance < -0.35) + proximity_penalty * (
                         not self.narrow_passage and not self.no_walls) + self.collision_penalty()
-            y_bounders = 5*(np.abs(y_pos) >= self._room_width/2)
+            y_bounders = 5*(np.abs(y_pos)+0.15 >= self._room_width/2)
 
             target_vel = 1
             reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
@@ -965,7 +965,7 @@ class Go1(MuJoCo):
         collision_robot = legs_collision_obstacles or trunk_collision_obstacles
 
         # fall | collision_robot | out_of_limit
-        if fall | collision_robot | out_of_limit  :
+        if fall | collision_robot :
             self.terminates = True
 
     def reward_antagonist(self):
@@ -1062,12 +1062,14 @@ class Go1(MuJoCo):
                 self._room_width = np.random.uniform(1, 5)
                 factor = 0.6
                 if self._room_width > 2.0:
-
-                    self._obstacle_l = np.random.uniform(0.5, (self._room_width/2)*factor)
-                    self._obstacle_w = np.random.uniform(0.5, (self._room_width/2)*factor)
+                    size = np.random.uniform(0.3, (self._room_width/2)*factor)
+                    self._obstacle_l = size
+                    self._obstacle_w = size
                 else:
-                    self._obstacle_l = np.random.uniform(0.15, (self._room_width/2)*factor)
-                    self._obstacle_w = np.random.uniform(0.15, (self._room_width/2)*factor)
+                    factor = 0.4
+                    size = np.random.uniform(0.1, (self._room_width/2)*factor)
+                    self._obstacle_l = size
+                    self._obstacle_w = size
 
             else:
                 self._room_width = 3
