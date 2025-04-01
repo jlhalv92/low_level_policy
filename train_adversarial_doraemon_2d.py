@@ -455,7 +455,7 @@ def parse_args():
     parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
-    parser.add_argument("--performance_lower_bound", type=float, default=0.4, help=" performance lower bound")
+    parser.add_argument("--lower_bound", type=float, default=0.4, help=" performance lower bound")
 
 
 
@@ -493,7 +493,7 @@ if __name__ == "__main__":
         view=False,
         wandb_project=args.wandb_project,
         checkpoint_dir = args.checkpoint_dir,
-        performance_lower_bound=args.performance_lower_bound,
+        performance_lower_bound=args.lower_bound,
         conf=vars(args))
 
 

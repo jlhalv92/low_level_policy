@@ -378,7 +378,6 @@ if __name__ == "__main__":
 
     temperature = args.temperature
     run_id = args.run_id
-    method = args.method
     kl_max = args.kl_max
 
     experiment(

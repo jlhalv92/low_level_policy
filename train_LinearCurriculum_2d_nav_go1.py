@@ -264,7 +264,7 @@ def parse_args():
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
     parser.add_argument("--run_id", type=int, default=0)
     parser.add_argument("--velocity", type=float, default=1.5)
@@ -292,7 +292,7 @@ if __name__ == '__main__':
                run_id=args.run_id,
                log=args.log,
                use_cuda=args.use_cuda,
-               alpha=args.alpha,
+               alpha=args.temperature,
                wandb_project=args.wandb_project,
                antagonist_velocity=args.velocity,
                checkpoint_dir=args.checkpoint_dir
