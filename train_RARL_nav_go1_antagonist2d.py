@@ -39,7 +39,8 @@ def experiment(method_name,
                use_cuda=False,
                wandb_project="",
                antagonist_velocity=1.5,
-               conf=None):
+               conf=None,
+               checkpoint_dir=""):
 
     np.random.seed()
 
@@ -235,11 +236,11 @@ def experiment(method_name,
             wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
-            agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
-            antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+            agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-    agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
-    antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -264,6 +265,8 @@ def parse_args():
     parser.add_argument("--use_cuda", dtype=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--velocity", type=float, default=1.)
     parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -284,6 +287,7 @@ if __name__ == '__main__':
                use_cuda=args.use_cuda,
                wandb_project=args.wandb_project,
                antagonist_velocity = args.velocity,
+               checkpoint_dir=args.checkpoint_dir,
                conf=vars(args)
                )
 

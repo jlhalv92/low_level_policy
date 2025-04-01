@@ -41,7 +41,8 @@ def experiment(method_name,
                use_cuda=False,
                alpha=1.,
                wandb_project="",
-               antagonist_velocity=1.5):
+               antagonist_velocity=1.5,
+               checkpoint_dir=""):
 
     np.random.seed()
 
@@ -231,8 +232,8 @@ def experiment(method_name,
             wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
-            agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
-            antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+            agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
         if it % 5 ==0:
             alpha = temp_schedule[idx]
@@ -240,8 +241,8 @@ def experiment(method_name,
             antagonist.update_alpha(alpha)
 
 
-    agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
-    antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -267,6 +268,8 @@ def parse_args():
     parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
     parser.add_argument("--run_id", type=int, default=0)
     parser.add_argument("--velocity", type=float, default=1.5)
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+
 
 
 
@@ -291,7 +294,9 @@ if __name__ == '__main__':
                use_cuda=args.use_cuda,
                alpha=args.alpha,
                wandb_project=args.wandb_project,
-               antagonist_velocity=args.velocity)
+               antagonist_velocity=args.velocity,
+               checkpoint_dir=args.checkpoint_dir
+               )
 
 
 
