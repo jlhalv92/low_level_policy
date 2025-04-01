@@ -437,8 +437,8 @@ def parse_args():
     parser.add_argument("--lower_bound", type=float, default=0.6)
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--method",type=str,default="DORAEMON")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--obje", type=str, default="checkpoint")
 
     return parser.parse_args()
 
@@ -458,10 +458,9 @@ if __name__ == "__main__":
 
     temperature = args.temperature
     run_id = args.run_id
-    method = args.method
     kl_max = args.kl_max
 
-    method_name = method
+
     experiment_qarl(
         method_name="DORAEMON",
         alg=[SAC, AdaptiveTempSAC],
