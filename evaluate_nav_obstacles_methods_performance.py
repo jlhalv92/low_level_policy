@@ -178,11 +178,12 @@ if __name__ == "__main__":
     performance = []
     # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
     # path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
-    model_id = "RARL"
+    model_id = "linear_curriculum_antagonist_velocity=1.5"
+    print(model_id)
     for temperature in temperatures:
         success_rates = []
         for i in range(5):
-            path_protagonist = f"checkpoint/GO1/server_exp/RARLantagonist_velocity=1.5/run_{i}/PROTAGONIST/epoch_last"
+            path_protagonist = f"/home/jose-luis/checkpoints/{model_id}/run_{i}/PROTAGONIST/epoch_last"
             protagonist = Agent.load(path_protagonist)
             success_rate = benchmark(
                 protagonist=protagonist,

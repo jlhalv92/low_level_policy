@@ -150,7 +150,7 @@ def experiment(alg, n_epochs,
 
     actor = PolicyNetwork
     critic = ValueNetwork
-    env_args = dict(vx_limit=2, vy_limit=1, wz_limit=2)
+    env_args = dict(vx_limit=3, vy_limit=1, wz_limit=3.5)
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, **env_args)
     mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
 
@@ -189,7 +189,7 @@ def experiment(alg, n_epochs,
 
         # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_last"
         path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_STABLE/epoch_last"
-        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE_RR/epoch_120"
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE_RR/epoch_150"
 
         agent = Agent.load(path)
     else:
@@ -247,11 +247,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_envs", type=int, default=100, help="Number of steps")
     parser.add_argument("--n_steps", type=int, default=10_000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=400, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--n_minibatches", type=int, default=4, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_{}_STABLE_RR")
+    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_{}_STABLE_Retrain")
     parser.add_argument("--log", default=False,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--lr", type=float, default=1e-3)

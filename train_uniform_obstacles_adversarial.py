@@ -1,7 +1,11 @@
 import argparse
 
 import numpy as np
-
+# from src.teachers.self_paced_gamma_teacher_fixed_beta import (
+#     SelfPaced,
+# )
+from src.teachers.doraemon import Doraemon
+from src.utils.buffer import Buffer
 from src.utils.state_preprocessor import StateVariableConcatenation
 import torch
 import torch.optim as optim
@@ -33,6 +37,15 @@ def calculate_success_rate(info, last):
     success_rate = success_cnt / last_cnt
     return success_rate
 
+def extract_temp_and_sample_return(data, gamma, temperature_support_a=0, temperature_support_b=1):
+    temperatures = list()
+    for i in range(len(data)):
+        if data[i][-1] or i == len(data) - 1:
+            temperatures.append((data[i][0][-1]-temperature_support_a)/(temperature_support_b-temperature_support_a))
+
+    sample_returns = compute_J(data, gamma)
+
+    return temperatures, sample_returns
 
 def experiment_uniform(
         method_name="",
@@ -46,11 +59,11 @@ def experiment_uniform(
         log=False,
         temperature_support=1,
         use_cuda=False,
-
         aware_rationality=False,
         view=False,
         wandb_project="",
-        checkpoint_dir=""):
+        checkpoint_dir="",
+        antagonist_velocity=1.5):
 
     np.random.seed()
 
@@ -71,7 +84,7 @@ def experiment_uniform(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_rationality_{aware_rationality}_temp_support_0_{temperature_support}_max_vel=1.5"
+    job_name = method_name + f"_rationality_{aware_rationality}_t_0_{temperature_support}_mv={antagonist_velocity}"
     print(job_name)
     if log:
         wandb.init(
@@ -84,20 +97,18 @@ def experiment_uniform(
 
 
 
+
     cfg_rewards=dict()
 
     joystick = False
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
                domain_randomization=False,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=False,
-                max_antagonist_v=1.5,)
+                max_antagonist_v=antagonist_velocity)
 
     mdp = Go1(horizon,
               gamma,
@@ -192,7 +203,7 @@ def experiment_uniform(
         tau,
         lr_alpha,
         critic_fit_params=None,
-        range=[-1.5, 1.5],
+        range=[-antagonist_velocity, antagonist_velocity],
     )
 
     # Algorithm
@@ -209,9 +220,7 @@ def experiment_uniform(
         rationality_antagonist=True)
 
 
-
     temps = np.random.uniform(0, temperature_support, 100)
-
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
@@ -229,7 +238,7 @@ def experiment_uniform(
         R_online=R_online,
         entropy=E_online,
         success_rate=success_rate,
-        alfa=np.mean(temps)
+        temperature=np.mean(temps)
     )
 
     sampled_temperatures = np.random.uniform(0, temperature_support, 100)
@@ -273,6 +282,7 @@ def experiment_uniform(
 
         temps = np.random.uniform(0, temperature_support, n_episodes_test)
 
+
         core.set_variables_for_training(temps)
         core.callback_step.clean()
 
@@ -287,8 +297,9 @@ def experiment_uniform(
         E_online = antagonist.policy.entropy(s)
 
 
-        ##################Evaluation 2#########################################
 
+
+        ###########Evaluation 2#########################################
         logger.info("Evaluate Antagonist")
         core.set_variables_for_training(temps)
         core.callback_step.clean()
@@ -337,7 +348,6 @@ def experiment_uniform(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--method", type=str, default="UNIFORM",choices=["UNIFORM"])
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
@@ -347,6 +357,7 @@ def parse_args():
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
+    parser.add_argument("--velocity",type=float,  default=1.5)
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
@@ -369,12 +380,9 @@ if __name__ == "__main__":
 
     temperature = args.temperature
     run_id = args.run_id
-    method = args.method
-    kl_max = args.kl_max
 
-    method_name = method
     experiment_uniform(
-        method_name=method_name,
+        method_name="UNIFORM",
         alg=[SAC, AdaptiveTempSAC],
         n_epochs=args.n_epochs,
         n_steps=args.n_steps,
@@ -388,7 +396,8 @@ if __name__ == "__main__":
         aware_rationality=args.aware_rationality,
         view=False,
         wandb_project=args.wandb_project,
-        checkpoint_dir = args.checkpoint_dir)
+        checkpoint_dir = args.checkpoint_dir,
+        antagonist_velocity=args.velocity)
 
 
 

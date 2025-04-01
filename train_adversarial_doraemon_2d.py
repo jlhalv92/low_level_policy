@@ -102,7 +102,8 @@ def experiment_qarl(
         wandb_project="",
         checkpoint_dir="",
         antagonist_velocity=1.,
-        performance_lower_bound =0.6):
+        performance_lower_bound =0.6,
+        conf=None,):
 
     np.random.seed()
 
@@ -131,7 +132,8 @@ def experiment_qarl(
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=conf,
         )
 
 
@@ -156,7 +158,7 @@ def experiment_qarl(
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=False,
-                max_antagonist_v=antagonist_velocity,)
+                max_antagonist_v=antagonist_velocity)
 
     mdp = Go1(horizon,
               gamma,
@@ -286,7 +288,6 @@ def experiment_qarl(
     R_online = np.mean(compute_J(dataset_online))
     success_rate = calculate_success_rate(info, last)
     E_online = antagonist.policy.entropy(s)
-
     logger.epoch_info(
         0,
         J_online=J_online,
@@ -427,6 +428,16 @@ def experiment_qarl(
     if log:
         wandb.finish()
 
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
@@ -436,11 +447,11 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
-    parser.add_argument("--log", default=False,  help="Enable logging")
+    parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
-    parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
+    parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_2D_ANTAGONIST")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
@@ -452,14 +463,6 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    if args.aware_rationality=="False":
-        args.aware_rationality = False
-    if args.aware_rationality=="True":
-        args.aware_rationality = True
-    if args.log=="False":
-        args.log = False
-    if args.log=="True":
-        args.log = True
 
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
@@ -490,7 +493,8 @@ if __name__ == "__main__":
         view=False,
         wandb_project=args.wandb_project,
         checkpoint_dir = args.checkpoint_dir,
-        performance_lower_bound=args.performance_lower_bound)
+        performance_lower_bound=args.performance_lower_bound,
+        conf=vars(args))
 
 
 

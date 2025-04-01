@@ -1,19 +1,11 @@
-import argparse
+
 
 import numpy as np
-from src.teachers.self_paced_gamma_teacher_fixed_beta import (
-    SelfPaced,
-)
-from src.utils.buffer import Buffer
+
 from src.utils.state_preprocessor import StateVariableConcatenation
-import torch
-import torch.optim as optim
-import torch.nn.functional as F
+
 from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary2d import Core
-
-import json
-
 
 from src.algorithm.deep_actor_critic.sac import  SAC
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
@@ -27,7 +19,6 @@ from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorB
 import wandb
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
-from tqdm import trange
 
 
 def calculate_success_rate(info, last):
@@ -165,20 +156,10 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    velocity = 1.5
+    velocity = 2.
     model_id = "RARL_alpha"
-    temperatures = np.linspace(0.5, 0, num=11)
-    # level_a =0.4
-    run = 4
-    alpha_antagonist = 0.
-    # path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{alpha}/run_{run}/PROTAGONIST/epoch_last"
-    # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_1/PROTAGONIST/epoch_last"
-    # path_protagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/PROTAGONIST/epoch_160"
-
-    # path_antagonist = 'checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.1/run_0/ANTAGONIST/epoch_last'
-    # path_antagonist = "checkpoint/GO1/obstacles_navigation/DORAEMON_aware_rationality_True_temperature_support_0_0.4_partial_obs/run_0/ANTAGONIST/epoch_160"
-    # path_antagonist = 'checkpoint/GO1/obstacles_navigation/RARL_alpha_0.5/run_0/ANTAGONIST/epoch_20'
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0_2d/run_0/ANTAGONIST/epoch_40"
+    run=0
+    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_temperature_2.0_2d_max_v=2/run_0/ANTAGONIST/epoch_50"
 
     antagonist = Agent.load(path_antagonist)
 
@@ -187,16 +168,16 @@ if __name__ == "__main__":
     # print(f"-----------------------------------------{msg}--------------------------------------------")
     performance = []
     # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
-    temperature = 0.5
+    temperature = 1.
     success_rates = []
     for i in range(1):
-        path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
+        path_protagonist = f"/home/jose-luis/checkpoint_2d/DORAEMON_r_True_t_support_1.0_mv=1.0_plb=0.4_kl=0.0001/run_{run}/PROTAGONIST/epoch_last"
         protagonist = Agent.load(path_protagonist)
         success_rate = benchmark(
             protagonist=protagonist,
             antagonist=antagonist,
             control_agent=control_agent,
-            aware_rationality=False,
+            aware_rationality=True,
             max_v_antagonist=velocity,
             n_episodes_test=5,
             alpha=temperature,

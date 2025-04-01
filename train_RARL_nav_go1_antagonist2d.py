@@ -38,7 +38,8 @@ def experiment(method_name,
                log=False,
                use_cuda=False,
                wandb_project="",
-               antagonist_velocity=1.5):
+               antagonist_velocity=1.5,
+               conf=None):
 
     np.random.seed()
 
@@ -70,7 +71,8 @@ def experiment(method_name,
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=conf,
         )
     joystick = False
     cfg = dict(antagonist=True,
@@ -242,7 +244,15 @@ def experiment(method_name,
     if log:
         wandb.finish()
 
-
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs")
@@ -250,14 +260,10 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=5, help="Run ID")
-    parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
+    parser.add_argument("--log",dtype=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", dtype=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--velocity", type=float, default=1., help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_2D_ANTAGONIST")
-
-
-
-
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -277,7 +283,9 @@ if __name__ == '__main__':
                log=args.log,
                use_cuda=args.use_cuda,
                wandb_project=args.wandb_project,
-               antagonist_velocity = args.velocity)
+               antagonist_velocity = args.velocity,
+               conf=vars(args)
+               )
 
 
 

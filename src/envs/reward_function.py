@@ -18,7 +18,7 @@ class Reward:
                  collision_coeff= -1,
                  base_height_coeff= -30, #30
                  air_time_coeff= 1, # 0.1
-                 stand_still_coeff= -0.25,
+                 stand_still_coeff= -0.5,
                  xy_tracking_temperature= 0.25,
                  yaw_tracking_temperature= 0.25,
                  soft_joint_position_limit= 0.9,

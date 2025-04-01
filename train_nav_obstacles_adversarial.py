@@ -105,7 +105,8 @@ def experiment_qarl(
         wandb_project="",
         checkpoint_dir="",
         antagonist_velocity=1.5,
-        lower_bound=0.6):
+        lower_bound=0.6,
+        conf=None):
 
     np.random.seed()
 
@@ -126,7 +127,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_rationality_{aware_rationality}_temp_support_0_{temperature_support}_max_vel={antagonist_velocity}_lb={lower_bound}"
+    job_name = method_name + f"_rationality_{aware_rationality}_t_0_{temperature_support}_mv={antagonist_velocity}_lb={lower_bound}"
     print(job_name)
     if log:
         wandb.init(
@@ -134,7 +135,8 @@ def experiment_qarl(
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=conf
         )
 
 
@@ -270,10 +272,9 @@ def experiment_qarl(
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
     # evaluation_temp = teacher.teacher.temp_dist.mean()
-    if method_name=="DORAEMON":
-        temps = teacher.sample_n_temperatures(n=100)
-    else:
-        temps = np.random.uniform(0, temperature_support, 100)
+
+    temps = teacher.sample_n_temperatures(n=100)
+
 
 
     core.set_variables_for_training(temps)
@@ -294,11 +295,8 @@ def experiment_qarl(
         success_rate=success_rate,
         alfa=np.mean(temps)
     )
-    if method_name=="DORAEMON":
-        sampled_temperatures = teacher.sample_n_temperatures(n=100)
-    else:
-        sampled_temperatures = np.random.uniform(0, temperature_support, 100)
 
+    sampled_temperatures = teacher.sample_n_temperatures(n=100)
 
     core.set_variables_for_training(sampled_temperatures)
 
@@ -315,10 +313,9 @@ def experiment_qarl(
 
     for it in trange(n_epochs, leave=False):
 
-        if method_name == "DORAEMON":
-            sampled_temperatures = teacher.sample_n_temperatures(n=100)
-        else:
-            sampled_temperatures = np.random.uniform(0, temperature_support, 100)
+
+        sampled_temperatures = teacher.sample_n_temperatures(n=100)
+
 
         core.set_variables_for_training(sampled_temperatures)
 
@@ -364,10 +361,10 @@ def experiment_qarl(
 
 
         ##################UPDATE distribution#########################################
-        if method_name=="DORAEMON":
 
 
-            temp_perf_buffer.update_buffer([temperatures, (success_rate*np.ones(n_episodes_test)).tolist()])
+
+        temp_perf_buffer.update_buffer([temperatures, (success_rate*np.ones(n_episodes_test)).tolist()])
 
         if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
             temps_perfs = temp_perf_buffer.read_buffer(reset=True)
@@ -395,16 +392,12 @@ def experiment_qarl(
         )
 
         if log:
-            if method_name == "DORAEMON":
 
-                entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
-                a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
-                b_dist = teacher.teacher.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
-            else:
-                entropy_distribution  = np.log(0.5)  # Natural logarithm
 
-                a_dist = 1
-                b_dist = 1
+            entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
+            a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+            b_dist = teacher.teacher.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
+
 
             log_dict = dict(J=J_online,
                             R=R_online,
@@ -431,7 +424,6 @@ def experiment_qarl(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--method", type=str, default="DORAEMON",choices=["DORAEMON", "UNIFORM"],help="DORAEMON or UNIFORM")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
@@ -443,10 +435,10 @@ def parse_args():
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
     parser.add_argument("--velocity",type=float,  default=1.5)
     parser.add_argument("--lower_bound", type=float, default=0.6)
-
     parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--obje", type=str, default="checkpoint")
 
     return parser.parse_args()
 
@@ -471,7 +463,7 @@ if __name__ == "__main__":
 
     method_name = method
     experiment_qarl(
-        method_name=method_name,
+        method_name="DORAEMON",
         alg=[SAC, AdaptiveTempSAC],
         n_epochs=args.n_epochs,
         n_steps=args.n_steps,
@@ -490,7 +482,8 @@ if __name__ == "__main__":
         wandb_project=args.wandb_project,
         checkpoint_dir = args.checkpoint_dir,
         antagonist_velocity=args.velocity,
-        lower_bound=args.lower_bound)
+        lower_bound=args.lower_bound,
+        conf=vars(args))
 
 
 

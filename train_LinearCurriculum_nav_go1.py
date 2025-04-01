@@ -244,23 +244,27 @@ def experiment(method_name,
     if log:
         wandb.finish()
 
-
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
-    parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
+    parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--alpha", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--run_id", type=int, default=0)
     parser.add_argument("--velocity", type=float, default=1.5)
-
-
-
-
 
     return parser.parse_args()
 

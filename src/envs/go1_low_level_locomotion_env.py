@@ -160,7 +160,9 @@ class UnitreeGo1(gym.Env):
                                                         z=(-5, 5,21))
 
         # low, high = np.array([-1, -0.6, -1]), np.array([1, 0.6, 1])
-        low, high = np.array([-0.6, -0.6, -1]), np.array([0.6, 0.6, 1])
+        # low, high = np.array([-0.6, -0.6, -1]), np.array([0.6, 0.6, 1])
+        low, high = np.array([-2, -1, -2]), np.array([2, 1, 2])
+
 
 
         self.vel_curriculum.set_to(low, high, value=1.0)

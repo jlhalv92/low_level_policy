@@ -7,14 +7,17 @@ temperatures = np.round(np.linspace(0.5, 0, num=11),2)
 
 model_names = [
                'Linear Curriculum',
-                'Doraemon_low_performance_threshold=0.3',
-               'Doraemon_aware_rationality_low_performance_threshold=0.3',
+                'Doraemon_rationality_lb=0.3',
+               'Doraemon_no_rationality_lb=0.3',
                 'RARL',
-                'Doraemon_low_performance_threshold=0.6',
-                'Doraemon_aware_rationality_low_performance_threshold=0.6']
+                'Doraemon_rationality_lb=0.6',
+                'Uniform_rationality',
+                'Uniform_no_rationality',
+                'Doraemon_no_rationality_lb=0.6']
 velocity = 1.5
 performances = {}
 files = os.listdir("results")
+
 for idx,data_addr in enumerate(files):
     loaded_array = np.load(f"results/{data_addr}")
     print(idx, model_names[idx])

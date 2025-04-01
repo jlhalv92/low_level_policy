@@ -41,16 +41,17 @@ def experiment(method_name,
                run_id=0,
                log=False,
                use_cuda=False,
-               alpha=1.,
-               wandb_project=""):
+               temperature=1.,
+               wandb_project="",
+               max_v=2):
 
     np.random.seed()
 
-    logger = Logger("RARL", results_dir=None)
+    logger = Logger("EXP", results_dir=None)
     logger.strong_line()
     task_name = "obstacles_navigation"
     agent_task = "{}".format(task_name)
-    logger.info('Experiment Algorithm: ' + "RARL" + " task " + agent_task )
+    logger.info('Experiment Algorithm: ' + " task " + agent_task )
 
 
     view = False
@@ -68,7 +69,8 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"_alpha_{alpha}_2d"
+    job_name = method_name + f"_temperature_{temperature}_2d_max_v={max_v}"
+    print(job_name)
     if log:
         wandb.init(
             project=wandb_project,
@@ -82,7 +84,7 @@ def experiment(method_name,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
-               max_antagonist_v=2)
+               max_antagonist_v=max_v)
 
 
 
@@ -118,8 +120,8 @@ def experiment(method_name,
                          input_shape=antagonist_critic_input_shape,
                          output_shape=(1,),
                          use_cuda=use_cuda)
-    min_a = -np.array([2, 2])
-    max_a = np.array([0, 2])
+    min_a = -np.array([max_v, max_v])
+    max_a = np.array([0, max_v])
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
@@ -136,7 +138,7 @@ def experiment(method_name,
                 preprocessors = [preprocessor],
                 rationality_antagonist = True)
 
-    temps = np.random.uniform(low=0, high=0.5, size=(100,))
+    temps = np.random.uniform(low=0, high=temperature, size=(100,))
     core.set_variables_for_training(temps)
     dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
 
@@ -148,7 +150,7 @@ def experiment(method_name,
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
-    temps = np.random.uniform(low=0, high=0.5, size=(100,))
+    temps = np.random.uniform(low=0, high=temperature, size=(100,))
     core.set_variables_for_training(temps)
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
@@ -156,7 +158,7 @@ def experiment(method_name,
 
 
     for it in trange(n_epochs, leave=False):
-        temps = np.random.uniform(low=0, high=0.5, size=(100,))
+        temps = np.random.uniform(low=0, high=temperature, size=(100,))
         core.set_variables_for_training(temps)
 
         logger.info("Training Antagonist")
@@ -183,10 +185,10 @@ def experiment(method_name,
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=1)
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-        alpha = antagonist._alpha.cpu().numpy()
+        # alpha = antagonist._alpha.cpu().numpy()
         E_a=antagonist.policy.entropy(s)
         logger.epoch_info(it+1, J=J, R=R, entropy=E,
-                          success_rate=success_rate, alfa=temps[:20].mean(),
+                          success_rate=success_rate, temperature=temps[:20].mean(),
                           r_antagonist=R_antagonist, entropy_antagonist=E_a)
 
 
@@ -223,7 +225,7 @@ def parse_args():
     parser.add_argument("--runs", type=int, default=5, help="Run ID")
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=1., help="Alpha value")
+    parser.add_argument("--alpha", type=float, default=2., help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--run_id", type=int, default=0)
 
@@ -248,7 +250,7 @@ if __name__ == '__main__':
                run_id=args.run_id,
                log=args.log,
                use_cuda=args.use_cuda,
-               alpha=args.alpha,
+               temperature=args.alpha,
                wandb_project=args.wandb_project)
 
 
