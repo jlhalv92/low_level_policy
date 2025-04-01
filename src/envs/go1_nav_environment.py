@@ -227,12 +227,17 @@ class Go1(MuJoCo):
 
     """
 
-    def __init__(self, horizon, gamma, target_pose=None, task_name="nominal", timestep=0.002, version=0, cfg=None, **kwargs):
+    def __init__(self, horizon, gamma,
+                 target_pose=None,
+                 task_name="nominal",
+                 timestep=0.002,
+                 full_obs=False,
+                 cfg=None, **kwargs):
         """
         Constructor.
 
         """
-
+        self.full_obs = full_obs
         if "max_antagonist_v" in cfg.keys():
             self.max_antagonist_v = cfg["max_antagonist_v"]
         else:
@@ -318,8 +323,7 @@ class Go1(MuJoCo):
         if task == 3:
             self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
-        if task == 4:
-            self.xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1_evaluation_v{}.xml".format(version)
+
 
         self.joint_limits = np.array([[-0.802851, 0.802851], [-1.0472, 4.18879], [-2.69653, -0.916298]] * 4)
 
@@ -400,18 +404,27 @@ class Go1(MuJoCo):
             current_velocity = [("current_velocity", "a_velocity", ObservationType.L_VELOCITY)]
             angular_velocity = [("angular_velocity", "a_velocity", ObservationType.L_VELOCITY)]
             room_width = [("room_width", "room_width", ObservationType.ROOM_WIDTH)]
-            # robot_bounding_box = [("robot_bounding_box", "robot_bounding_box", ObservationType.ROBOT_BOUNDING_BOX)]
-            # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
-            position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
-            velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
+            if self.full_obs:
 
-            observation_spec = (current_velocity +  # (3,)
-                                angular_velocity + #(3,)
-                                robot_orientation +  # (3,)
-                                robot_pos +  # (2,)
-                               #  position_obstacle +  # (2,)
-                               # velocity_obstacle +  # (2,)
-                                rays)  # (50,)
+                # robot_bounding_box = [("robot_bounding_box", "robot_bounding_box", ObservationType.ROBOT_BOUNDING_BOX)]
+                # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
+                position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
+                velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
+                observation_spec = (current_velocity +  # (3,)
+                                    angular_velocity +  # (3,)
+                                    robot_orientation +  # (3,)
+                                    robot_pos +  # (2,)
+                                     position_obstacle +  # (2,)
+                                    velocity_obstacle +  # (2,)
+                                    rays)  # (50,)
+            else:
+                observation_spec = (current_velocity +  # (3,)
+                                    angular_velocity + #(3,)
+                                    robot_orientation +  # (3,)
+                                    robot_pos +  # (2,)
+                                   #  position_obstacle +  # (2,)
+                                   # velocity_obstacle +  # (2,)
+                                    rays)  # (50,)
 
         elif self.task == 3:
             rays = [("distance_rays_small", "distance_rays_small", ObservationType.RAYS_SMALL)]
@@ -561,16 +574,13 @@ class Go1(MuJoCo):
         obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
         angular_velocity = self._data.qvel[3:6]
         obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
-        # pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
-        # relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
-        # vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
-        # relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
-        #
-        # obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
-        # obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
-
-
-
+        if self.full_obs:
+            pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
+            relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
+            vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
+            relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
+            obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
+            obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
 
         return obs
 
