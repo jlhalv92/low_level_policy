@@ -1059,15 +1059,15 @@ class Go1(MuJoCo):
             # self._room_width = np.random.uniform(low=1.2, high=6)
 
             if self.domain_randomization:
-                self._room_width = np.random.uniform(1, 5)
+                self._room_width = np.random.uniform(2, 5)
                 factor = 0.6
-                if self._room_width > 2.0:
-                    size = np.random.uniform(0.3, (self._room_width/2)*factor)
+                if self._room_width >= 3:
+                    size = np.random.uniform(0.3, 1.5)
                     self._obstacle_l = size
                     self._obstacle_w = size
                 else:
-                    factor = 0.4
-                    size = np.random.uniform(0.1, (self._room_width/2)*factor)
+
+                    size = np.random.uniform(0.1, 0.5)
                     self._obstacle_l = size
                     self._obstacle_w = size
 
