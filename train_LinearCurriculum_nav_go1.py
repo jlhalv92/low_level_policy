@@ -288,7 +288,7 @@ if __name__ == '__main__':
                run_id=args.run_id,
                log=args.log,
                use_cuda=args.use_cuda,
-               alpha=args.alpha,
+               alpha=args.temperature,
                wandb_project=args.wandb_project,
                velocity_antagonist=args.velocity,
                conf=args)
