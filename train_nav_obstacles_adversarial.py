@@ -111,7 +111,9 @@ def experiment_qarl(
         checkpoint_dir="",
         antagonist_velocity=1.5,
         lower_bound=0.6,
-        conf=None):
+        conf=None,
+        pre_train_adversary=None,):
+
     np.random.seed()
 
     logger = Logger(method_name, results_dir=None)
@@ -271,6 +273,17 @@ def experiment_qarl(
         aware_rationality=aware_rationality,
         rationality_antagonist=True)
 
+    if pre_train_adversary:
+        core_eval = Core(
+            [agent, pre_train_adversary],
+            mdp,
+            low_level_agent=control_agent,
+            callback_step=CollectDataset(),
+            preprocessors=[preprocessor],
+            joystick=joystick,
+            aware_rationality=aware_rationality,
+            rationality_antagonist=True)
+
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
     # evaluation_temp = teacher.teacher.temp_dist.mean()
@@ -374,6 +387,20 @@ def experiment_qarl(
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
 
+
+
+        if pre_train_adversary:
+            core_eval.set_variables_for_training(temps)
+            core_eval.callback_step.clean()
+            dataset_eval = core_eval.evaluate(
+                n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True
+            )
+
+            s, a, r, s1, absorbing, info, last = parse_dataset(dataset_eval)
+            success_rate_eval = calculate_success_rate(info, last)
+        else:
+            success_rate_eval = 0
+
         logger.epoch_info(
             it + 1,
             J_online=J_online,
@@ -381,7 +408,8 @@ def experiment_qarl(
             success_rate=success_rate,
             E_antagonist=E_online,
             mean_temperature=np.mean(temps),
-            r_antagonist=R_antagonist
+            r_antagonist=R_antagonist,
+            success_rate_antagonist=success_rate_eval,
         )
 
         if log:
@@ -397,7 +425,8 @@ def experiment_qarl(
                             entropy_antagonist=E_online,
                             entropy_distribution=entropy_distribution,
                             a_dist=a_dist,
-                            b_dist=b_dist)
+                            b_dist=b_dist,
+                            success_rate_eval=success_rate_eval)
 
             wandb.log(log_dict, step=it)
 
@@ -458,6 +487,8 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
+    path_pre_train_adversary = "src/nominal_models/antagonist_1d/epoch_last"
+    pre_train_adversary = Agent.load(path_pre_train_adversary)
     temperature = args.temperature
     run_id = args.run_id
     kl_max = args.kl_max
@@ -483,4 +514,5 @@ if __name__ == "__main__":
         checkpoint_dir=args.checkpoint_dir,
         antagonist_velocity=args.velocity,
         lower_bound=args.lower_bound,
-        conf=args)
+        conf=args,
+        pre_train_adversary=pre_train_adversary)
