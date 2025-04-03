@@ -80,7 +80,6 @@ def experiment(method_name,
         )
     joystick = False
     cfg = dict(antagonist=True,
-               max_level=False,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
@@ -129,7 +128,7 @@ def experiment(method_name,
 
     preprocessor = StateVariableConcatenation()
 
-    path_protagonist = "checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_1/PROTAGONIST/epoch_last"
+    path_protagonist = "src/nominal_models/nominal_test_protagonist/model"
     protagonist = Agent.load(path_protagonist)
 
     core = Core([protagonist, antagonist],
@@ -140,7 +139,7 @@ def experiment(method_name,
 
     temps = np.random.uniform(low=0, high=temperature, size=(100,))
     core.set_variables_for_training(temps)
-    dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
+    dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
 
     s,a, r, s1, absorbing, info, last = parse_dataset(dataset)
 
@@ -150,7 +149,7 @@ def experiment(method_name,
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
-    temps = np.random.uniform(low=0, high=temperature, size=(100,))
+    temps = temperature*np.ones(100)
     core.set_variables_for_training(temps)
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
@@ -158,21 +157,20 @@ def experiment(method_name,
 
 
     for it in trange(n_epochs, leave=False):
-        temps = np.random.uniform(low=0, high=temperature, size=(100,))
+        temps = temperature*np.ones(100)
         core.set_variables_for_training(temps)
 
         logger.info("Training Antagonist")
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
-        # logger.info("Training Protagonist")
-        # core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
+
 
         if it % 10==0 and view:
             render=True
         else:
             render=False
 
-        # temps = np.random.uniform(low=1, high=0.8, size=(100,))
-        core.set_variables_for_training(temps)
+        temps_eval = temperature*np.ones(n_episodes_test)
+        core.set_variables_for_training(temps_eval)
 
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=0)
 
@@ -182,13 +180,14 @@ def experiment(method_name,
         E = protagonist.policy.entropy(s)
         success_rate = calculate_success_rate(info, last)
 
+        core.set_variables_for_training(temps_eval)
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=1)
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-        # alpha = antagonist._alpha.cpu().numpy()
         E_a=antagonist.policy.entropy(s)
+
         logger.epoch_info(it+1, J=J, R=R, entropy=E,
-                          success_rate=success_rate, temperature=temps[:20].mean(),
+                          success_rate=success_rate, temperature=temps_eval.mean(),
                           r_antagonist=R_antagonist, entropy_antagonist=E_a)
 
 
@@ -204,17 +203,22 @@ def experiment(method_name,
             # agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
             antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-        # if it % 20 ==0:
-        # alpha = np.random.uniform(0, 1)
-        # antagonist.update_alpha(alpha)
 
-
-    # agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
     antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
 
+
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
@@ -223,11 +227,12 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--runs", type=int, default=5, help="Run ID")
-    parser.add_argument("--log",default=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=2., help="Alpha value")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
+    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=False, help="Use CUDA for computation")
+    parser.add_argument("--temperature", type=float, default=2., help="Alpha value")
+    parser.add_argument("--wandb_project",type=str,default="Max Temperature Analysis Antagonist 2D")
     parser.add_argument("--run_id", type=int, default=0)
+    parser.add_argument("--velocity", type=float, default=2.)
 
 
 
@@ -236,11 +241,9 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-
-    experiment(method_name="Antagonist_FIX_Temp_uniform",
+    experiment(method_name="Antagonist_2d",
                alg=[SAC, AdaptiveTempSAC],
                n_epochs=args.n_epochs,
                n_steps=args.n_steps,
@@ -250,8 +253,9 @@ if __name__ == '__main__':
                run_id=args.run_id,
                log=args.log,
                use_cuda=args.use_cuda,
-               temperature=args.alpha,
-               wandb_project=args.wandb_project)
+               temperature=args.temperature,
+               wandb_project=args.wandb_project,
+               max_v=args.velocity)
 
 
 

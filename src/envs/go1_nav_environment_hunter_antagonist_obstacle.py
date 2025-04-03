@@ -265,7 +265,6 @@ class Go1(MuJoCo):
         self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
         self.level = 0
         self.antagonist = cfg["antagonist"]
-        self.max_level = cfg["max_level"]
         self.obstacle_velocity = np.zeros(2)
 
         # self.occupancy_grid = OccupancyGrid(15,15,0.01)
