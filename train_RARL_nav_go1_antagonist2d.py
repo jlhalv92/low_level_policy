@@ -157,11 +157,11 @@ def experiment(method_name,
 
     min_a = -np.array([antagonist_velocity,antagonist_velocity])
     max_a = np.array([0, antagonist_velocity])
-
+    temperature = conf["temperature"]
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[min_a, max_a])
+                critic_fit_params=None, range=[min_a, max_a], init_alpha=temperature)
 
 
 
@@ -267,6 +267,7 @@ def parse_args():
     parser.add_argument("--velocity", type=float, default=1.)
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--temperature", type=float, default=1)
 
     return parser.parse_args()
 

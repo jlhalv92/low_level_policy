@@ -228,7 +228,7 @@ class SAC(DeepAC):
                  actor_optimizer, critic_params, batch_size,
                  initial_replay_size, max_replay_size, warmup_transitions, tau,
                  lr_alpha, log_std_min=-20, log_std_max=2, target_entropy=None,
-                 critic_fit_params=None, range=None):
+                 critic_fit_params=None, range=None, init_alpha=1):
         """
         Constructor.
 
@@ -304,8 +304,8 @@ class SAC(DeepAC):
 
         self._init_target(self._critic_approximator,
                           self._target_critic_approximator)
-
-        self._log_alpha = torch.tensor(0., dtype=torch.float32)
+        init_log_alpha = np.log(init_alpha)
+        self._log_alpha = torch.tensor(init_log_alpha, dtype=torch.float32)
 
         if policy.use_cuda:
             self._log_alpha = self._log_alpha.cuda().requires_grad_()
