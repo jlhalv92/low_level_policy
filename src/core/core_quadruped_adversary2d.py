@@ -30,7 +30,8 @@ class Core(object):
                  preprocessors=None, low_level_agent=None,
                  record_dictionary=None, joystick=False,
                  aware_rationality=False,
-                 rationality_antagonist=False):
+                 rationality_antagonist=False,
+                 use_antagonist=True,):
         """
         Constructor.
 
@@ -54,7 +55,7 @@ class Core(object):
         self.history = HistoryStore(5)
         self.use_history = True
 
-        self.use_antagonist = True
+        self.use_antagonist = use_antagonist
 
         self.agents = agents
 
@@ -226,7 +227,6 @@ class Core(object):
         self._current_episodes_counter = 0
         self._current_steps_counter = 0
         dataset = list()
-        dataset_antagonist = list()
         self._prior_sample_count = 0
         self._prior_success_count = 0
         last = True
@@ -303,10 +303,10 @@ class Core(object):
         if learning:
             # navigation_state = self._state[-obs_dim:]
             action = self.agents[0].draw_noisy_action(nav_state)
-            action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+
 
             if self.use_antagonist:
-
+                action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
                 self.mdp.obstacle_velocity = action_antagonist
 
             if not self.joystick:
@@ -320,10 +320,10 @@ class Core(object):
         else: # Default
             action = self.agents[0].draw_action(nav_state)
 
-            action_antagonist = self.agents[1].draw_action(self._adversary_state)
+
 
             if self.use_antagonist:
-
+                action_antagonist = self.agents[1].draw_action(self._adversary_state)
                 self.mdp.obstacle_velocity = action_antagonist
 
             if not self.joystick:
