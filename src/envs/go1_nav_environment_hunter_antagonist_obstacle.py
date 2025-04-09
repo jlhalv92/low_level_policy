@@ -624,18 +624,22 @@ class Go1(MuJoCo):
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
-            # pos_robot = self._data.qpos[:2]
-            # pos_obstacle = self._data.body("obstacle_1").xpos[:2]
-            # dir_vel = (pos_robot-pos_obstacle)/(np.linalg.norm(pos_robot - pos_obstacle) + 1e-5)
-            # module = np.linalg.norm(pos_robot - pos_obstacle)
-            # vel_obstacle = module*dir_vel
+
             self._data.actuator("thrust1").ctrl =np.clip(self.obstacle_velocity[0], -self.max_antagonist_v,0)
             self._data.actuator("thrust2").ctrl =np.clip(self.obstacle_velocity[1],-self.max_antagonist_v,self.max_antagonist_v)
             self._data.actuator("rotation_z").ctrl = 0
 
-            # self._data.ctrl[-3] = 0
-            # self._data.ctrl[-2] =0
-            # self._data.ctrl[-1] = 0
+        else:
+            pos_robot_x = self._data.qpos[0]
+            pos_obstacle_x = self._data.body("obstacle_1").xpos[0]
+            pos_robot_y = self._data.qpos[1]
+            pos_obstacle_y = self._data.body("obstacle_1").xpos[1]
+            module_x = np.clip(2*(pos_robot_x - pos_obstacle_x), -self.max_antagonist_v,0)
+            module_y = np.clip(2*(pos_robot_y - pos_obstacle_y),-self.max_antagonist_v,self.max_antagonist_v)
+
+            self._data.actuator("thrust1").ctrl =module_x
+            self._data.actuator("thrust2").ctrl =module_y
+            self._data.actuator("rotation_z").ctrl = 0
 
     def check_any_collision(self, groups):
         if isinstance(groups, list):
