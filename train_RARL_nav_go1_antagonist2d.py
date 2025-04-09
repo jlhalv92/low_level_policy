@@ -81,7 +81,8 @@ def experiment(method_name,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
-               max_antagonist_v = antagonist_velocity)
+               max_antagonist_v = antagonist_velocity,
+               domain_randomization=False,)
 
 
 
@@ -264,7 +265,7 @@ def parse_args():
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--velocity", type=float, default=1.)
-    parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
+    parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
 
     return parser.parse_args()

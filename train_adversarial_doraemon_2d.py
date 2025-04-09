@@ -2,7 +2,8 @@ import argparse
 
 import numpy as np
 
-from src.teachers.doraemon import Doraemon
+from src.teachers.doraemon3 import Doraemon
+
 from src.utils.buffer import Buffer
 from src.utils.state_preprocessor import StateVariableConcatenation
 import torch
@@ -71,6 +72,11 @@ def calculate_success_rate(info, last):
     last_cnt = np.count_nonzero(last)
     success_rate = success_cnt / last_cnt
     return success_rate
+
+def calculate_success_rate_array(info, last):
+    last_idxs = [i for i, x in enumerate(last) if x]
+    success = np.array([element['success'] for element in info])
+    return success[last_idxs]
 
 def extract_temp_and_sample_return(data, gamma, temperature_support_a=0, temperature_support_b=1):
     temperatures = list()
@@ -273,10 +279,8 @@ def experiment_qarl(
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
     # evaluation_temp = teacher.teacher.temp_dist.mean()
-    if method_name=="DORAEMON":
-        temps = teacher.sample_n_temperatures(n=100)
-    else:
-        temps = np.random.uniform(0, temperature_support, 100)
+    temps = teacher.sample_n_temperatures(n=100)
+
 
 
     core.set_variables_for_training(temps)
@@ -284,6 +288,9 @@ def experiment_qarl(
         n_episodes=10, render=view, id_agent=0, return_antagonist_state=True
     )
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
+
+
+
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
     R_online = np.mean(compute_J(dataset_online))
     success_rate = calculate_success_rate(info, last)
@@ -296,10 +303,9 @@ def experiment_qarl(
         success_rate=success_rate,
         alfa=np.mean(temps)
     )
-    if method_name=="DORAEMON":
-        sampled_temperatures = teacher.sample_n_temperatures(n=100)
-    else:
-        sampled_temperatures = np.random.uniform(0, temperature_support, 100)
+
+    sampled_temperatures = teacher.sample_n_temperatures(n=100)
+
 
 
     core.set_variables_for_training(sampled_temperatures)
@@ -317,10 +323,8 @@ def experiment_qarl(
 
     for it in trange(n_epochs, leave=False):
 
-        if method_name == "DORAEMON":
-            sampled_temperatures = teacher.sample_n_temperatures(n=100)
-        else:
-            sampled_temperatures = np.random.uniform(0, temperature_support, 100)
+        sampled_temperatures = teacher.sample_n_temperatures(n=100)
+
 
         core.set_variables_for_training(sampled_temperatures)
 
@@ -339,11 +343,8 @@ def experiment_qarl(
             render = False
 
         logger.info("Evaluate Protagonist")
-        if method_name=="DORAEMON":
-            temps = teacher.sample_n_temperatures(n=n_episodes_test)
+        temps = teacher.sample_n_temperatures(n=n_episodes_test)
 
-        else:
-            temps = np.random.uniform(0, temperature_support, n_episodes_test)
 
 
         core.set_variables_for_training(temps)
@@ -366,16 +367,16 @@ def experiment_qarl(
 
 
         ##################UPDATE distribution#########################################
-        if method_name=="DORAEMON":
-            temp_perf_buffer.update_buffer([temperatures, (success_rate*np.ones(n_episodes_test)).tolist()])
+        success_rate_array = calculate_success_rate_array(info, last)
+        temp_perf_buffer.update_buffer([temperatures, success_rate_array.tolist()])
 
-            if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
-                temps_perfs = temp_perf_buffer.read_buffer(reset=True)
+        if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
+            temps_perfs = temp_perf_buffer.read_buffer(reset=True)
 
-                logger.info("Update Teacher Distribution")
-                teacher.teacher.update_temperature_distribution(
-                    temps_perfs[0], temps_perfs[1], it
-                )
+            logger.info("Update Teacher Distribution")
+            teacher.teacher.update_temperature_distribution(
+                temps_perfs[0], temps_perfs[1], it
+            )
         ##################Evaluation 2#########################################
 
         logger.info("Evaluate Antagonist")
@@ -395,16 +396,11 @@ def experiment_qarl(
         )
 
         if log:
-            if method_name == "DORAEMON":
 
-                entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
-                a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
-                b_dist = teacher.teacher.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
-            else:
-                entropy_distribution  = np.log(0.5)  # Natural logarithm
+            entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
+            a_dist = teacher.teacher.temp_dist.parameters()[0].data.detach().cpu().numpy()[0]
+            b_dist = teacher.teacher.temp_dist.parameters()[1].data.detach().cpu().numpy()[0]
 
-                a_dist = 1
-                b_dist = 1
 
             log_dict = dict(J=J_online,
                             R=R_online,
@@ -441,7 +437,7 @@ def str2bool(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--method", type=str, default="DORAEMON",choices=["DORAEMON"],help="DORAEMON or UNIFORM")
+    parser.add_argument("--method", type=str, default="DORAEMON_BACKUP",choices=["DORAEMON_BACKUP"],help="DORAEMON or UNIFORM")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
@@ -452,7 +448,7 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="Al_2D_ANTAGONIST")
+    parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
     parser.add_argument("--lower_bound", type=float, default=0.4, help=" performance lower bound")
