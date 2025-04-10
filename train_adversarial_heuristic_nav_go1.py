@@ -223,13 +223,13 @@ def experiment(method_name ,alg,
             wandb.log(logs_dict, step=it)
 
         if it % 10 == 0:
-            agent.save("{}/{}/{}/{}/epoch_{}_{}".format(args.checkpoint_dir,'GO1',method_name, agent_task, it, run_id))
+            agent.save("{}/{}/{}/{}/epoch_{}_{}".format(args.checkpoint_dir,'GO1',job_id, agent_task, it, run_id))
 
 
         logger.epoch_info(it + 1, J=J , R=R, entropy=E,
                           success_rate=success_rate, critic_loss =loss_mean, Q=Q)
 
-    agent.save("{}/{}/{}/{}/epoch_{}_{}".format(args.checkpoint_dir,'GO1', method_name, agent_task, "last", run_id))
+    agent.save("{}/{}/{}/{}/epoch_{}_{}".format(args.checkpoint_dir,'GO1', job_id, agent_task, "last", run_id))
 
 
     core.evaluate(n_episodes=n_episodes_test, render=False)
