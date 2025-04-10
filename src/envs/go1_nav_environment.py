@@ -248,7 +248,11 @@ class Go1(MuJoCo):
         else:
             self.domain_randomization = False
 
-        self.activate_arrow = cfg["activate_arrow"]
+        if "activate_arrow" in cfg.keys():
+            self.activate_arrow = cfg["activate_arrow"]
+        else:
+            self.activate_arrow = False
+
         self.controller_pd = PDController(self)
         self.narrow_passage = False
         self.no_walls = False
@@ -401,16 +405,13 @@ class Go1(MuJoCo):
             rays = [("distance_rays", "distance_rays", ObservationType.RAYS)]
             robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
             robot_orientation = [("orientation", "orientation_sensor", ObservationType.ORIENTATION)]
-            current_velocity = [("current_velocity", "a_velocity", ObservationType.L_VELOCITY)]
+            current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
             angular_velocity = [("angular_velocity", "a_velocity", ObservationType.L_VELOCITY)]
-            room_width = [("room_width", "room_width", ObservationType.ROOM_WIDTH)]
             if self.full_obs:
 
-                # robot_bounding_box = [("robot_bounding_box", "robot_bounding_box", ObservationType.ROBOT_BOUNDING_BOX)]
-                # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
                 position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
                 velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
-                observation_spec = (current_velocity +  # (3,)
+                observation_spec = (current_velocity +  # (2,)
                                     angular_velocity +  # (3,)
                                     robot_orientation +  # (3,)
                                     robot_pos +  # (2,)
@@ -418,12 +419,10 @@ class Go1(MuJoCo):
                                     velocity_obstacle +  # (2,)
                                     rays)  # (50,)
             else:
-                observation_spec = (current_velocity +  # (3,)
+                observation_spec = (current_velocity +  # (2,)
                                     angular_velocity + #(3,)
                                     robot_orientation +  # (3,)
                                     robot_pos +  # (2,)
-                                   #  position_obstacle +  # (2,)
-                                   # velocity_obstacle +  # (2,)
                                     rays)  # (50,)
 
         elif self.task == 3:
@@ -567,8 +566,7 @@ class Go1(MuJoCo):
         linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
         vx = linear_velocity[0]
         vy = linear_velocity[1]
-        wz = self._data.qvel[5]
-        current_velocity = np.array([vx, vy, wz])
+        current_velocity = np.array([vx, vy])
         robot_orientation = self.orientation_euler.copy() # (1,)
         obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
         obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
@@ -579,6 +577,7 @@ class Go1(MuJoCo):
             relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
             vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
             relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
+
             obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
             obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
 
@@ -798,37 +797,7 @@ class Go1(MuJoCo):
             reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
 
             return reward - penalties - y_bounders
-    # def get_reward(self, action):
-    #
-    #
-    #     if self.task == 1:
-    #         return self.reward_task_1()
-    #
-    #     if self.task == 2 or self.task == 3 or self.task == 4:
-    #         yaw = self.orientation_euler[2]
-    #         global_vel = self._data.qvel[:2].copy()
-    #         y_pos = self._data.body("trunk").xpos[1]
-    #         robot_pos = self._data.qpos[:2].copy()
-    #         desired_yaw = 0  # Assuming 0 is the forward direction
-    #         yaw_deviation_penalty = np.abs(yaw - desired_yaw)
-    #         distance = self._data.site("target").xpos[0] - self._data.qpos[0]
-    #
-    #         distance_to_obstacle = np.linalg.norm(self._data.site("obstacle_1").xpos[:2] - self._data.qpos[:2])
-    #
-    #         soft_hit_condition = self._model.site("obstacle_1").size[0] + self._model.site("robot_contact_limit").size[
-    #             0]
-    #
-    #         proximity_penalty = (distance_to_obstacle < soft_hit_condition) * np.exp(1 / distance_to_obstacle)
-    #
-    #         penalties = 1.*yaw_deviation_penalty + (np.abs(y_pos)) * (distance < -0.35) + proximity_penalty * (
-    #                     not self.narrow_passage and not self.no_walls) + self.collision_penalty()
-    #         if np.abs(y_pos)+0.15 >= self._room_width/2:
-    #             y_bounders = min(np.exp((np.abs(y_pos)+0.15 - self._room_width/2)/0.25), 5)
-    #         else:
-    #             y_bounders =0
-    #         target_vel = 1
-    #         reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
-    #         return reward - penalties - y_bounders
+
 
     def reward(self, state, action, next_state, absorbing):
 
@@ -850,31 +819,7 @@ class Go1(MuJoCo):
         obs = rf_readings_f
         return obs
 
-    # def render(self, record=False, depth=False):
-    #
-    #     if self.use_mujoco_renderer:
-    #
-    #         self.renderer_main_camera.update_scene(self._data, "backview")
-    #         img = self.renderer_main_camera.render()
-    #
-    #         if depth:
-    #             self.renderer_depth.update_scene(self._data, "head", self.mujoco_options)
-    #             depth_image = self.renderer_depth.render()
-    #
-    #             depth_image = np.clip(depth_image, 0, 5)
-    #             min_val = depth_image.min()
-    #             max_val = depth_image.max()
-    #             norm_depth_image = 255 * ((depth_image - min_val) / (max_val - min_val))
-    #             # # Shift nearest values to the origin.
-    #             # depth_image -= depth_image.min()
-    #             # # Scale by 2 mean distances of near rays.
-    #             # depth_image /= 2 * depth_image[depth_image <= 1].mean()
-    #             # # Scale to [0, 255]
-    #             # depth_image = 255 * np.clip(depth_image, 0, 1)
-    #
-    #             return img, norm_depth_image
-    #         else:
-    #             return img
+
 
     def get_robot_observation(self):
 
@@ -1187,5 +1132,4 @@ class Go1(MuJoCo):
 
                 self._data.ctrl[-3] = self.obstacle_pose_x
                 self._data.ctrl[-2] = 0
-
 

@@ -38,7 +38,7 @@ class ObservationType(Enum):
         SITE_POS: (3,) x, y, z position of the body
         SITE_ROT: (9,) rotation matrix of the site
     """
-    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS D_RANDOMIZATION ROOM_WIDTH ROBOT_BOUNDING_BOX OBSTACLE_BOUNDING_BOX RAYS_SMALL A_VELOCITY"
+    __order__ = "BODY_POS BODY_ROT BODY_VEL JOINT_POS JOINT_VEL SITE_POS SITE_ROT FEET_SENSOR ACTIONS SENSOR_VELOCITY SENSOR_ORIENTATION  PRIVILEGE_OBS COMMANDS IMU VELOCITY L_VELOCITY ORIENTATION HEIGHT TARGET_POSE DISTANCE HEADING OCCUPANCY POS_OBSTACLE POS RAYS D_RANDOMIZATION ROOM_WIDTH ROBOT_BOUNDING_BOX OBSTACLE_BOUNDING_BOX RAYS_SMALL A_VELOCITY H_RAYS"
     BODY_POS = 0
     BODY_ROT = 1
     BODY_VEL = 2
@@ -70,6 +70,7 @@ class ObservationType(Enum):
     OBSTACLE_BOUNDING_BOX=28
     RAYS_SMALL = 29
     A_VELOCITY = 30
+    H_RAYS=31
 
 
 
@@ -342,23 +343,12 @@ class ObservationHelper:
             limit_distance = 5 #20
             rf_readings = np.array([data.sensor("rf_{}".format(i+1)).data.copy()[0] for i in range(50)])
             rf_readings = np.where(rf_readings == -1 , limit_distance, rf_readings)
-            rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
-            rf_readings_2 = np.where(rf_readings >=limit_distance , limit_distance, rf_readings)
-            rf_readings_f = np.log2(rf_readings_2)
-            obs = rf_readings_f
+            rf_readings_2 = np.clip(rf_readings, 0.01, limit_distance)
+            obs = np.log2(rf_readings_2)
 
-            # limit_distance = 20 #20
-            # rf_readings = np.array([data.sensor("rf_{}".format(i+1)).data.copy()[0] for i in range(50)])
-            # rf_readings = np.where(rf_readings == -1 , limit_distance, rf_readings)
-            # rf_readings = np.where(rf_readings == 0, rf_readings + 0.01, rf_readings)
-            # rf_readings_2 = np.where(rf_readings >=limit_distance , limit_distance, rf_readings)
-            # # rf_readings_f = np.log2(rf_readings_2)
-            # obs = rf_readings_2/limit_distance
+        elif o_type == ObservationType.H_RAYS:
+            obs = np.zeros(250)
 
-            # self.history.add_sample(rf_readings_f)
-            #
-            # obs = self.history.get_history()
-            # obs = rf_readings_f
         elif o_type == ObservationType.RAYS_SMALL:
 
             rf_readings = np.array([data.sensor("rf_l_{}".format(i+1)).data.copy()[0] for i in range(10)])
@@ -398,4 +388,3 @@ class ObservationHelper:
 
     def get_all_observation_keys(self):
         return list(self.obs_idx_map.keys())
-

@@ -1,21 +1,27 @@
+import argparse
+
 import numpy as np
 
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.sac import SAC
 
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
-# from src.envs.go1_env_obstacles_rays import Go1
-# from src.envs.go1_env_obstacles_rays_old_policy import Go1
+
 from src.envs.go1_nav_environment import Go1
 
 from src.networks.nets import  CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork
 import wandb
 import torch.nn as nn
+
+
+from src.utils.dataset.dataset import parse_dataset, compute_J
+from tqdm import trange
+
 
 class PolicyNetworkStudent(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):
@@ -46,10 +52,6 @@ class PolicyNetworkStudent(nn.Module):
 
         return a
 
-from mushroom_rl.utils.dataset import compute_J, parse_dataset
-
-from tqdm import trange
-
 
 def calculate_success_rate(info, last):
     info_array = np.array([d["success"] for d in info])
@@ -58,7 +60,17 @@ def calculate_success_rate(info, last):
     success_rate = success_cnt / last_cnt
     return success_rate
 
-def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_test, control_agent=None, run_id=0):
+def experiment(method_name ,alg,
+               n_epochs,
+               n_steps,
+               n_steps_per_fit,
+               n_episodes_test,
+               control_agent=None,
+               run_id=0,
+               velocity=1,
+               full_obs=False
+               ,log=False,
+               config=None):
 
     np.random.seed()
 
@@ -81,59 +93,49 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    history = False
 
-    cfg_rewards=dict()
 
-    log = True
+
     joystick = False
-    cfg = dict(kp=20,
-               kd=0.5,
+    cfg = dict(max_antagonist_v=velocity,
                antagonist=False,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
-               rewards=cfg_rewards,
-               static_obstacles=True,
-               activate_arrow=False)
+               static_obstacles=False)
 
     vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
     mdp = Go1(horizon,
               gamma,
+              full_obs=full_obs,
               timestep=0.005,
               cfg=cfg,
               task_name=task_name, **vel_controller)
-    cfg["static_obstacles"] = False
-    mdp_eval = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name, **vel_controller)
+
+    job_id =method_name + f"_full_obs_{full_obs}"
+    print(job_id)
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
-            project="REWARDS COMPARISON STATIC OBSTACLES",
-            group=task_name + "_dense_reward_",
-            job_type=method_name,
+            project=config.wandb_project,
+            group=task_name,
+            job_type=job_id,
             name="seed_{}".format(run_id)
         )
     actor_input_shape = mdp.info.observation_space.shape
 
     actor_input_shape = actor_input_shape
+
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=8,
                            use_cuda=True)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=8,
                               use_cuda=True)
 
 
@@ -150,10 +152,7 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
                          output_shape=(1,),
                          use_cuda=True)
 
-    # Agent
 
-    # min_a = -np.array([1.5,1,1.5])
-    # max_a = np.array([1.5, 1, 1.5])
     min_a = -np.array([1.5,1,1.5])
     max_a = np.array([1.5, 1, 1.5])
     agent = alg(mdp.info, actor_mu_params, actor_sigma_params,
@@ -168,14 +167,11 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
 
     core = Core(agent,
                 mdp,
-                low_level_agent=control_agent, joystick=joystick,use_history=history)
-    core_eval = Core(agent,
-                mdp_eval,
-                low_level_agent=control_agent, joystick=False,use_history=history)
+                low_level_agent=control_agent, joystick=joystick)
 
 
 
-    dataset = core.evaluate(n_episodes=n_episodes_test, render=True)
+    dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
 
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
@@ -186,11 +182,9 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
     E = agent.policy.entropy(s)
     success_rate = calculate_success_rate(info, last)
 
-    dataset_e = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
-    s, a, r, s1, absorbing, info, last = parse_dataset(dataset_e)
-    success_rate_adversarial = calculate_success_rate(info, last)
 
-    logger.epoch_info(0, J=J, R=R, entropy=E, success_rate=success_rate, success_rate_adversarial=success_rate_adversarial)
+
+    logger.epoch_info(0, J=J, R=R, entropy=E, success_rate=success_rate)
 
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions)
@@ -210,59 +204,88 @@ def experiment(method_name ,alg, n_epochs, n_steps, n_steps_per_fit, n_episodes_
             render=False
 
 
-        dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
+        dataset = core.evaluate(n_episodes=n_episodes_test, render=render)
 
-        s, a, r, s1, absorbing, info, last  = parse_dataset(dataset)
+        s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
         Q = np.mean(agent._critic_approximator.predict(s, a, prediction='min', output_tensor=False))
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy(s)
         success_rate = calculate_success_rate(info, last)
 
-        dataset_e = core_eval.evaluate(n_episodes=n_episodes_test, render=render)
-        s, a, r, s1, absorbing, info, last  = parse_dataset(dataset_e)
-        success_rate_adversarial = calculate_success_rate(info, last)
 
 
 
         if log:
             logs_dict = dict(J=J , R=R, entropy=E,
-                          success_rate=success_rate,
-                          success_rate_adversarial=success_rate_adversarial, critic_loss =loss_mean, Q=Q)
+                          success_rate=success_rate, critic_loss =loss_mean, Q=Q)
 
             wandb.log(logs_dict, step=it)
 
         if it % 10 == 0:
-            agent.save("checkpoint/{}/{}/{}/epoch_{}_{}".format('GO1',method_name, agent_task, it, run_id))
+            agent.save("{}/{}/{}/{}/epoch_{}_{}".format(args.checkpoint_dir,'GO1',method_name, agent_task, it, run_id))
 
 
         logger.epoch_info(it + 1, J=J , R=R, entropy=E,
-                          success_rate=success_rate,
-                          success_rate_adversarial=success_rate_adversarial, critic_loss =loss_mean, Q=Q)
+                          success_rate=success_rate, critic_loss =loss_mean, Q=Q)
 
-    agent.save("checkpoint/{}/{}/{}/epoch_{}_{}".format('GO1', method_name, agent_task, "last", run_id))
+    agent.save("{}/{}/{}/{}/epoch_{}_{}".format(args.checkpoint_dir,'GO1', method_name, agent_task, "last", run_id))
 
 
     core.evaluate(n_episodes=n_episodes_test, render=False)
     if log:
         wandb.finish()
 
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+def parse_args():
+    parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
+    parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
+    parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
+    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--run_id", type=int, default=0, help="Run ID")
+    parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
+    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
+                        help="Use CUDA for computation")
+    parser.add_argument("--velocity", type=float, default=1.)
+    parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
+    parser.add_argument("--method", type=str, default="SAC")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--full_obs", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--domain_randomization", type=str2bool, nargs='?', const=True, default=False)
+
+    return parser.parse_args()
 if __name__ == '__main__':
+    args = parse_args()
 
     # path = "src/nominal_models/go1/epoch_last"
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_50"
-    path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
+    path = "src/nominal_models/low_level/policy"
 
     # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_70"
 
     control_agent = Agent.load(path)
-    for i in range(5):
-        experiment(method_name="SAC",
-                   alg=SAC,
-                   n_epochs=100,
-                   n_steps=5000,
-                   n_steps_per_fit=1,
-                   n_episodes_test=10,
-                   control_agent=control_agent, run_id=i)
+
+    experiment(method_name=args.method,
+               alg=SAC,
+               n_epochs=args.n_epochs,
+               n_steps=args.n_steps,
+               n_steps_per_fit=args.n_steps_per_fit,
+               n_episodes_test=args.n_episodes_test,
+               control_agent=control_agent,
+               run_id=args.run_id,
+               velocity=args.run_id,
+               full_obs=args.full_obs,
+               log=args.log,
+               config=args)
 
 
