@@ -128,14 +128,14 @@ def experiment(method_name ,alg,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=8,
+                           size_propioception=6,
                            use_cuda=True)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=8,
+                              size_propioception=6,
                               use_cuda=True)
 
 
@@ -171,7 +171,7 @@ def experiment(method_name ,alg,
 
 
 
-    dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
+    dataset = core.evaluate(n_episodes=n_episodes_test, render=True)
 
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
@@ -185,7 +185,6 @@ def experiment(method_name ,alg,
 
 
     logger.epoch_info(0, J=J, R=R, entropy=E, success_rate=success_rate)
-
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions)
 

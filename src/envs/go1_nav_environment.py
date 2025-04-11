@@ -338,7 +338,6 @@ class Go1(MuJoCo):
         self.target_pose = target_pose
         self._reset_state = None
         self._ts = 0
-        self.air_time_max = 0.5
 
         propioception = [
             ("FR_hip_pos", "FR_hip_joint", ObservationType.JOINT_POS),
@@ -404,24 +403,24 @@ class Go1(MuJoCo):
             target_pos = [("target_pose", "target", ObservationType.POS)]
             rays = [("distance_rays", "distance_rays", ObservationType.RAYS)]
             robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
-            robot_orientation = [("orientation", "orientation_sensor", ObservationType.ORIENTATION)]
+            robot_orientation = [("orientation", "orientation_sensor", ObservationType.ELEMENT)]
             current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
-            angular_velocity = [("angular_velocity", "a_velocity", ObservationType.L_VELOCITY)]
+            angular_velocity = [("angular_velocity", "a_velocity", ObservationType.ELEMENT)]
             if self.full_obs:
 
                 position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
                 velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
                 observation_spec = (current_velocity +  # (2,)
-                                    angular_velocity +  # (3,)
-                                    robot_orientation +  # (3,)
+                                    angular_velocity +  # (1,)
+                                    robot_orientation +  # (1,)
                                     robot_pos +  # (2,)
                                      position_obstacle +  # (2,)
                                     velocity_obstacle +  # (2,)
                                     rays)  # (50,)
             else:
                 observation_spec = (current_velocity +  # (2,)
-                                    angular_velocity + #(3,)
-                                    robot_orientation +  # (3,)
+                                    angular_velocity + #(1,)
+                                    robot_orientation +  # (1,)
                                     robot_pos +  # (2,)
                                     rays)  # (50,)
 
@@ -560,6 +559,33 @@ class Go1(MuJoCo):
         self.orientation_euler = self.orientation_quat.as_euler("xyz")
         self.orientation_quat_inv = self.orientation_quat.inv()
 
+    def get_priviledge_observation(self):
+        linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+        vx = linear_velocity[0]
+        vy = linear_velocity[1]
+        current_velocity = np.array([vx, vy])
+        robot_orientation = self.orientation_euler.copy() # (1,)
+        angular_velocity = self._data.qvel[3:6]
+        pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
+        relative_obstacle_pos = pos_diff[:2]
+        vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
+        relative_obstacle_vel = vel_diff[:2]
+        robot_pos = self._data.body("trunk").xpos[:2]
+        limit_distance = 5  # 20
+        rf_readings = np.array([self._data.sensor("rf_{}".format(i + 1)).data.copy()[0] for i in range(50)])
+        rf_readings = np.where(rf_readings == -1, limit_distance, rf_readings)
+        rf_readings_2 = np.clip(rf_readings, 0.01, limit_distance)
+        rays = np.log2(rf_readings_2)
+        obs =np.concatenate((current_velocity,  # (2,)
+                                    np.array([angular_velocity[2]]), #(1,)
+                                    np.array([robot_orientation[2]]),  # (1,)
+                                    robot_pos, #(2,)
+                                    relative_obstacle_pos,
+                                    relative_obstacle_vel,
+                                    rays))
+
+        return obs
+
     def _modify_observation(self, obs):
 
 
@@ -569,18 +595,15 @@ class Go1(MuJoCo):
         current_velocity = np.array([vx, vy])
         robot_orientation = self.orientation_euler.copy() # (1,)
         obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
-        obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
+        obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation[2])
         angular_velocity = self._data.qvel[3:6]
-        obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
+        obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity[2])
         if self.full_obs:
             pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
-            relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
             vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
-            relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
 
-            obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
-            obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
-
+            obs = self.obs_helper.modify_obs(obs, "obstacle_pose", pos_diff[:2])
+            obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", vel_diff[:2])
         return obs
 
     def _compute_action(self, cur_obs, action):

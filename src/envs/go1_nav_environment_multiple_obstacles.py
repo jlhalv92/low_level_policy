@@ -266,7 +266,6 @@ class Go1(MuJoCo):
         self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
         self.level = 0
         self.antagonist = cfg["antagonist"]
-        self.max_level = cfg["max_level"]
         self.obstacle_velocity = 0
 
         # self.occupancy_grid = OccupancyGrid(15,15,0.01)
@@ -306,13 +305,9 @@ class Go1(MuJoCo):
 
         if task == 2:
 
-            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays_multi_object.xml"
 
-        if task == 3:
-            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
-        if task == 4:
-            self.xml_path = "src/envs/unitree_go1/obstacles_navigation_complex_go1_evaluation_v{}.xml".format(version)
 
         self.joint_limits = np.array([[-0.802851, 0.802851], [-1.0472, 4.18879], [-2.69653, -0.916298]] * 4)
 
@@ -455,7 +450,7 @@ class Go1(MuJoCo):
                                        "trunk_7", "trunk_8"])]
         if self.task == 2:
             # collision_walls = ("walls",["wall_1", "wall_2","wall_3", "wall_4"])
-            collision_walls = ("walls", ["wall_3", "wall_4"])
+            collision_walls = ("walls", ["wall_1", "wall_2","wall_3", "wall_4"])
             obstacles = ["obstacle_1"]
 
             collision_obstacle = ("obstacles", obstacles)
@@ -761,12 +756,13 @@ class Go1(MuJoCo):
             yaw = self.orientation_euler[2]
             global_vel = self._data.qvel[:2].copy()
             y_pos = self._data.body("trunk").xpos[1]
-            robot_pos = self._data.qpos[:2].copy()
             desired_yaw = 0  # Assuming 0 is the forward direction
             yaw_deviation_penalty = np.abs(yaw - desired_yaw)
-            distance = self._data.site("target").xpos[0] - self._data.qpos[0]
+            distance = self._data.site("target").xpos[0] - self._data.qpos[0] -2
 
             distance_to_obstacle = np.linalg.norm(self._data.site("obstacle_1").xpos[:2] - self._data.qpos[:2])
+            distance_to_finish_line = np.linalg.norm(self._data.site("target").xpos[:2] - self._data.qpos[:2])
+
 
             soft_hit_condition = self._model.site("obstacle_1").size[0] + self._model.site("robot_contact_limit").size[
                 0]
@@ -778,8 +774,11 @@ class Go1(MuJoCo):
             y_bounders = 5*(np.abs(y_pos) >= self._room_width/2)
 
             target_vel = 1
-            reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
-
+            norm_global_vel = np.linalg.norm(global_vel)
+            reward_move = 2.5 * max(min(target_vel, global_vel[0]), 0)*(distance > -0.35)
+            reward_target = 5*(distance_to_finish_line < 2)*(1/(1+(distance_to_finish_line)**2))
+            reward_target_tight = 10*(distance_to_finish_line < 0.5)*(1/(1+(distance_to_finish_line)**2))
+            reward = reward_move + reward_target + reward_target_tight
             return reward - penalties - y_bounders
 
     def reward(self, state, action, next_state, absorbing):
@@ -888,10 +887,10 @@ class Go1(MuJoCo):
         if self.task == 3 or self.task == 2:
             robot_pose = self._data.qpos[:2]
             target_pose = self._data.site("target").xpos[:2]
-            norm_distance = target_pose[0] - robot_pose[0]
-            self.pass_finish_line = norm_distance <= 0.1
-
+            norm_distance = target_pose[0] - robot_pose[0] - 2
+            self.pass_finish_line = norm_distance < -0.3
             if self._ts >= self.horizon:
+
                 self.success = self.robot_collisions == 0 and self.pass_finish_line and not out_of_limit
 
         if self.joystick:
@@ -917,7 +916,7 @@ class Go1(MuJoCo):
         collision_robot = legs_collision_obstacles or trunk_collision_obstacles
 
 
-        if fall | collision_robot |out_of_limit :
+        if fall :
             self.terminates = True
 
     def reward_antagonist(self):
@@ -1002,14 +1001,13 @@ class Go1(MuJoCo):
 
 
         if task == 2:
-            if self.behaviour_cloning:
-                spec = mujoco.MjSpec.from_file(
-                    filename="src/envs/unitree_go1/navigation_go1_rays_behaviour_cloning.xml")
-            else:
-                spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays.xml")
+
+            spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays_multi_object.xml")
 
             geoms = spec.worldbody.geoms
             walls = ["wall_3", "wall_4"]
+            h_walls = ["wall_1", "wall_2"]
+
             if self.activate_arrow:
                 trunk = spec.find_body("trunk")
                 trunk.add_site(name="velocity_arrow",
@@ -1027,16 +1025,16 @@ class Go1(MuJoCo):
                 rgba = [1, 0, 0, 1])
             # self._room_width = np.random.uniform(low=1.2, high=6)
             self._room_width = 5
-            self._obstacle_l = 0.25
-            self._obstacle_w = 0.25
+            self._obstacle_l = 0.5
+            self._obstacle_w = 0.5
             obstacles_list = ["obstacle_1"]
 
             for i in range(7):
                 obstacle_name =f'static_obstacle_{i}'
                 obstacles_list.append(obstacle_name)
-                sx = np.random.uniform(low=0.2, high=0.4)
-                sy = np.random.uniform(low=0.2, high=0.4)
-                sz = np.random.uniform(low=0.4, high=0.8)
+                sx = 0.5
+                sy =0.5
+                sz = 0.5
 
                 body = spec.worldbody.add_body(
                     name=obstacle_name,
@@ -1055,9 +1053,21 @@ class Go1(MuJoCo):
             z_wall = 0.8
             worldbody.add_site(
                 type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=[6.5, self._room_width/2, 0.05],
-                pos=[5,0,0],
+                size=[10, self._room_width/2, 0.05],
+                pos=[8,0,0],
                 rgba=[0,1,0,0.1]
+            )
+            worldbody.add_site(
+                type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+                size=[1,0.2, 0],
+                pos=[16,0,0],
+                rgba=[0,0,1,0.3]
+            )
+            worldbody.add_site(
+                type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+                size=[0.25,0.2, 0],
+                pos=[16,0,0],
+                rgba=[0,1,1,0.3]
             )
             # worldbody.add_site(
             #     name="finish_line",
@@ -1074,27 +1084,31 @@ class Go1(MuJoCo):
                     else:
                         geom.pos[1] = 3 + geom.size[1] / 2
                     geom.pos[2] = z_wall
-            pos_x = np.linspace(1, 9, 8) + np.random.uniform(low=-0.2, high=0.2, size=8)
+                    geom.pos[0] = 8
+                    geom.size[0] = 10
+
+            for geom in geoms:
+                if geom.name in h_walls:
+                    if geom.pos[0] < 0:
+                        geom.pos[0] = -2
+                    else:
+                        geom.pos[0] = 18
+                    geom.size[1] = 3
+                    geom.pos[2] = z_wall
+
+            pos_x = np.linspace(2, 14, 8)
             np.random.shuffle(pos_x)
+
             for idx,obstacle_id in enumerate(obstacles_list):
                 obstacle = spec.find_body(obstacle_id)
+
                 if obstacle_id == "obstacle_1":
                     obstacle_height = np.random.uniform(low=0.25, high=0.8)
                     obstacle.first_geom().size = [self._obstacle_l, self._obstacle_w, obstacle_height]
                     self.obstacle_pose_x = pos_x[idx]
                 sx,sy,sz = obstacle.first_geom().size
-                y_so = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
+                y_so = np.random.uniform(-self.wall_pos + sy/2, self.wall_pos - sy/2)
                 obstacle.pos = [pos_x[idx], y_so, sz]
-
-            # y_obstacle = np.random.uniform(-self.wall_pos + self._obstacle_w, self.wall_pos - self._obstacle_w)
-            # self.obstacle_pose_x =np.random.uniform(2.5, 3.5)
-
-            # pos_obstacle = np.random.uniform(2.5, 3.5)
-            # obstacle_height = np.random.uniform(low=0.25, high=0.8)
-            # obstacle.first_geom().size = [self._obstacle_l, self._obstacle_w, obstacle_height]
-            # obstacle.pos =  [self.obstacle_pose_x, y_obstacle, obstacle_height]
-
-
 
 
             model = spec.compile()
@@ -1104,33 +1118,26 @@ class Go1(MuJoCo):
             self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
 
             new_obstacles = [f"static_obstacle_{i}" for i in range(7)]
+
             self.collision_groups_list[-1][1].extend(new_obstacles)
 
             self.collision_groups = self.create_collision_groups(self.collision_groups_list)
-            # new_obstacles = [f"static_obstacle_{i}" for i in range(3)]
-            # obstacles.extend(new_obstacles)
+
 
 
             self._data.qpos[7:19] = self.default_dof_pos.copy()
-            # x = np.random.uniform(-1.5, 1.5)
-            x = 0
-            # self._data.qpos[0:3] = [x, y_robot, 0.36]
-            # self._data.body(f'static_obstacle_0').xpos[:2]= [1,3]
 
 
-            # self._data.joint("obstacle").qpos[:3] = [self.obstacle_pose_x, y_obstacle, obstacle_height]
-            self._model.site("target").pos[0] = 11
+
+
+            self._model.site("target").pos[0] = 16
+            self._model.site("target").size[0] = 2
             self._model.site("target").size[1] = self.wall_pos
             self._model.site("target").pos[-1] = 0.1
             if self._viewer is not None:
                 self._viewer.load_new_model(self._model)
 
-            # if self.use_mujoco_renderer:
-            #     self.renderer_main_camera = None
-            #     self.renderer_depth = None
-            #     self.renderer_main_camera = mujoco.Renderer(self._model, width=1024, height=720)
-            #     self.renderer_depth = mujoco.Renderer(self._model, width=106, height=60)
-            #     self.renderer_depth.enable_depth_rendering()
+
 
             if self.task == 2:
                 if not self.antagonist:
