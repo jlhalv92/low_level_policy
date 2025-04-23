@@ -145,6 +145,7 @@ def experiment_qarl(
             project=wandb_project,
             job_type=job_name,
             name="seed_{}".format(run_id),
+            group="DORAEMON_asymetric",
             config=vars(conf)
         )
 
