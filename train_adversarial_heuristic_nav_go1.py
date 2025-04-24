@@ -69,6 +69,7 @@ def experiment(method_name ,alg,
                run_id=0,
                velocity=1,
                log=False,
+               use_heuristic = False,
                config=None):
 
     np.random.seed()
@@ -99,7 +100,7 @@ def experiment(method_name ,alg,
     cfg = dict(max_antagonist_v=velocity,
                antagonist=False,
                joystick=joystick,
-               static_obstacles=False)
+               use_heuristic=use_heuristic,)
 
     mdp = Go1(horizon,
               gamma,
@@ -107,7 +108,7 @@ def experiment(method_name ,alg,
               cfg=cfg,
               task_name=task_name)
 
-    job_id =method_name + f"_base_protagonist"
+    job_id =method_name + f"_heuristic_velocity_antagonist_{velocity}"
     print(job_id)
     if log:
         wandb.init(
@@ -250,6 +251,7 @@ def parse_args():
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
+    parser.add_argument("--use_heuristic", type=str2bool, nargs='?', const=True, default=False, help="Enable Heuristic")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
                         help="Use CUDA for computation")
     parser.add_argument("--velocity", type=float, default=1.5)
@@ -278,8 +280,9 @@ if __name__ == '__main__':
                n_episodes_test=args.n_episodes_test,
                control_agent=control_agent,
                run_id=args.run_id,
-               velocity=args.run_id,
+               velocity=args.velocity,
                log=args.log,
+               use_heuristic=args.use_heuristic,
                config=args)
 
 

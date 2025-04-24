@@ -109,52 +109,6 @@ def get_bounding_box_vertices(height, width, length, center_x, center_y, center_
     return vertices
 
 
-class StepProbabilitySampling:
-    def __init__(self, env, probability=0.005):
-        self.env = env
-        self.probability = probability
-
-    def setup(self):
-        return False
-
-    def step(self):
-        return self.env.np_rng.uniform() < self.probability
-
-
-class DefaultDomainPerturbation:
-    def __init__(self, env,
-                 push_velocity_x_min=-1.0, push_velocity_x_max=1.0,
-                 push_velocity_y_min=-1.0, push_velocity_y_max=1.0,
-                 push_velocity_z_min=-1.0, push_velocity_z_max=1.0,
-                 set_chance=0.5, additive_multiplier=1):
-        self.env = env
-        self.push_velocity_x_min = push_velocity_x_min
-        self.push_velocity_x_max = push_velocity_x_max
-        self.push_velocity_y_min = push_velocity_y_min
-        self.push_velocity_y_max = push_velocity_y_max
-        self.push_velocity_z_min = push_velocity_z_min
-        self.push_velocity_z_max = push_velocity_z_max
-        self.set_chance = set_chance
-        self.additive_multiplier = additive_multiplier
-        self.sampled_push_velocity_x = 0.0
-        self.sampled_push_velocity_y = 0.0
-        self.sampled_push_velocity_z = 0.0
-
-    def sample(self):
-        self.sampled_push_velocity_x = self.env.np_rng.uniform(self.push_velocity_x_min, self.push_velocity_x_max)
-        self.sampled_push_velocity_y = self.env.np_rng.uniform(self.push_velocity_y_min, self.push_velocity_y_max)
-        self.sampled_push_velocity_z = self.env.np_rng.uniform(self.push_velocity_z_min, self.push_velocity_z_max)
-
-        if self.env.np_rng.uniform() < self.set_chance:
-
-            self.env._data.qvel[0:3] = np.array(
-                [self.sampled_push_velocity_x, self.sampled_push_velocity_y, self.sampled_push_velocity_z])
-
-        else:
-
-            self.env._data.qvel[0:3] += np.array([self.sampled_push_velocity_x,
-                                                  self.sampled_push_velocity_y,
-                                                  self.sampled_push_velocity_z]) * self.additive_multiplier
 
 
 def read_control_values(file_path):
@@ -253,6 +207,16 @@ class Go1(MuJoCo):
         else:
             self.activate_arrow = False
 
+        if "use_heuristic" in cfg.keys():
+            self.use_heuristic = cfg["use_heuristic"]
+        else:
+            self.use_heuristic = False
+
+        if "static_obstacles" in cfg.keys():
+            self.static_obstacles = cfg["static_obstacles"]
+        else:
+            self.static_obstacles = False
+
         self.controller_pd = PDController(self)
         self.narrow_passage = False
         self.no_walls = False
@@ -266,7 +230,6 @@ class Go1(MuJoCo):
         self.robot_collisions = None
         self.not_hit_obstacle = None
         self._all_obstacles_move = False
-        self.static_obstacles = cfg["static_obstacles"]
         self.obstacle_id = 0
         self._room_width = 10
         self.joystick = cfg["joystick"]
@@ -894,13 +857,20 @@ class Go1(MuJoCo):
         out_of_limit = 5 * (np.abs(y_pos) >= self._room_width / 2)
 
         if self.task == 2:
-            if not self.static_obstacles:
-                if not self.antagonist:
-                    obstacle_pose = self._data.body("obstacle_1").xpos[1]
-                    robot_pose = self._data.body("trunk").xpos[1]
-                    self._data.ctrl[-3] = self.obstacle_pose_x
-                    self._data.ctrl[-2] = 0
-                    self._data.ctrl[-1] = np.clip((robot_pose - obstacle_pose), -self.max_antagonist_v, self.max_antagonist_v)
+            if self.use_heuristic:
+                obstacle_pose = self._data.body("obstacle_1").xpos[1]
+                distance_obstacle_target = self.target_pose - obstacle_pose
+                if np.abs(distance_obstacle_target) < 0.2:
+                    self.target_pose = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+                    self._model.site("goal").pos[1] = self.target_pose
+
+                self._data.ctrl[-3] = self.obstacle_pose_x
+                self._data.ctrl[-2] = 0
+                self._data.ctrl[-1] = np.clip((distance_obstacle_target), -self.max_antagonist_v, self.max_antagonist_v)
+            else:
+                self._data.ctrl[-3] = self.obstacle_pose_x
+                self._data.ctrl[-2] = 0
+                self._data.ctrl[-1] = 0
 
         if self.task == 3 or self.task == 2:
             robot_pose = self._data.qpos[:2]
@@ -1101,6 +1071,7 @@ class Go1(MuJoCo):
                 euler =[0, 0, 0],
                 pos = [0., 0, 0.1],
                 rgba = [1, 0, 0, 1])
+
             # target_heading = np.random.uniform(-np.pi / 4, np.pi / 4)
             # goal_position_x = np.random.uniform(6, 20)
             # if self.no_walls:
@@ -1115,12 +1086,25 @@ class Go1(MuJoCo):
             #                                     euler=[0, 0, target_heading])
 
             # self._model.site("obstacle_1").size = max(self._obstacle_l , self._obstacle_w )
+            if self.use_heuristic:
+                self.target_pose = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+
+                goal_site = spec.worldbody.add_site(name="goal",
+                                                    type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+                                                    size=[0.2, 0.1, 0],
+                                                    rgba=[1, 1, 1, 0.2],
+                                                    pos=[0, self.target_pose, 0.2],
+                                                    euler=[0, 0, 0])
             model = spec.compile()
             self._model = model
 
             self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
             y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
             y_obstacle = np.random.uniform(-self.wall_pos + self._obstacle_w, self.wall_pos - self._obstacle_w)
+
+
+
+
             self._model.opt.timestep = 0.005
             self._data = mujoco.MjData(model)
             self._data.qpos[7:19] = self.default_dof_pos.copy()
@@ -1128,6 +1112,9 @@ class Go1(MuJoCo):
             x = 0
             self._data.qpos[0:3] = [x, y_robot, 0.36]
             self.obstacle_pose_x = x + np.random.uniform(2.5, 3.5)
+            if self.use_heuristic:
+                self.target_pose = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+                self._model.site("goal").pos[0] = self.obstacle_pose_x
 
             self._data.joint("obstacle").qpos[:3] = [self.obstacle_pose_x, y_obstacle, obstacle_height]
             self._model.site("target").pos[0] = self.obstacle_pose_x + 1
