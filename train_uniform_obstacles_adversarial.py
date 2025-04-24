@@ -92,7 +92,8 @@ def experiment_uniform(
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=conf
         )
 
 
