@@ -137,7 +137,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_velocity_antagonist_{antagonist_velocity}"
+    job_name = method_name + f"_velocity_antagonist_{antagonist_velocity}_support={temperature_support}"
 
     if log:
         wandb.init(

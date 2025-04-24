@@ -84,7 +84,7 @@ def experiment_uniform(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_mv={antagonist_velocity}"
+    job_name = method_name + f"_mv={antagonist_velocity}_support={temperature_support}"
     print(job_name)
     if log:
         wandb.init(
@@ -316,7 +316,7 @@ def experiment_uniform(
 
         if log:
 
-            entropy_distribution  = np.log(0.5)  # Natural logarithm
+            entropy_distribution  = np.log(temperature_support)  # Natural logarithm
 
             a_dist = 1
             b_dist = 1
@@ -366,6 +366,8 @@ def parse_args():
     parser.add_argument("--velocity",type=float,  default=1.5)
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--method", type=str, default="UNIFORM")
+
 
 
     return parser.parse_args()
@@ -381,7 +383,7 @@ if __name__ == "__main__":
     run_id = args.run_id
 
     experiment_uniform(
-        method_name="UNIFORM",
+        method_name=args.method,
         alg=[SAC, AdaptiveTempSAC],
         n_epochs=args.n_epochs,
         n_steps=args.n_steps,
