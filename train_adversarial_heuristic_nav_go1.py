@@ -115,7 +115,8 @@ def experiment(method_name ,alg,
             project=config.wandb_project,
             group=task_name,
             job_type=job_id,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=vars(config),
         )
     actor_input_shape = mdp.info.observation_space.shape
 
@@ -251,7 +252,7 @@ def parse_args():
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
                         help="Use CUDA for computation")
-    parser.add_argument("--velocity", type=float, default=1.)
+    parser.add_argument("--velocity", type=float, default=1.5)
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="SAC")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
