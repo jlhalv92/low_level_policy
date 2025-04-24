@@ -185,14 +185,14 @@ def experiment_qarl(
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=6,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=6,
                               use_cuda=use_cuda)
 
     actor_optimizer = {'class': optim.Adam,
@@ -276,16 +276,16 @@ def experiment_qarl(
         aware_rationality=aware_rationality,
         rationality_antagonist=True)
 
-    if pre_train_adversary:
-        core_eval = Core(
-            [agent, pre_train_adversary],
-            mdp,
-            low_level_agent=control_agent,
-            callback_step=CollectDataset(),
-            preprocessors=[preprocessor],
-            joystick=joystick,
-            aware_rationality=aware_rationality,
-            rationality_antagonist=True)
+    # if pre_train_adversary:
+    #     core_eval = Core(
+    #         [agent, pre_train_adversary],
+    #         mdp,
+    #         low_level_agent=control_agent,
+    #         callback_step=CollectDataset(),
+    #         preprocessors=[preprocessor],
+    #         joystick=joystick,
+    #         aware_rationality=aware_rationality,
+    #         rationality_antagonist=True)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
@@ -392,17 +392,17 @@ def experiment_qarl(
 
 
 
-        if pre_train_adversary:
-            core_eval.set_variables_for_training(temps)
-            core_eval.callback_step.clean()
-            dataset_eval = core_eval.evaluate(
-                n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True
-            )
-
-            s, a, r, s1, absorbing, info, last = parse_dataset(dataset_eval)
-            success_rate_eval = calculate_success_rate(info, last)
-        else:
-            success_rate_eval = 0
+        # if pre_train_adversary:
+        #     core_eval.set_variables_for_training(temps)
+        #     core_eval.callback_step.clean()
+        #     dataset_eval = core_eval.evaluate(
+        #         n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True
+        #     )
+        #
+        #     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_eval)
+        #     success_rate_eval = calculate_success_rate(info, last)
+        # else:
+        #     success_rate_eval = 0
 
         logger.epoch_info(
             it + 1,
@@ -412,7 +412,7 @@ def experiment_qarl(
             E_antagonist=E_online,
             mean_temperature=np.mean(temps),
             r_antagonist=R_antagonist,
-            success_rate_antagonist=success_rate_eval,
+            # success_rate_antagonist=success_rate_eval,
         )
 
         if log:
@@ -428,8 +428,7 @@ def experiment_qarl(
                             entropy_antagonist=E_online,
                             entropy_distribution=entropy_distribution,
                             a_dist=a_dist,
-                            b_dist=b_dist,
-                            success_rate_eval=success_rate_eval)
+                            b_dist=b_dist)
 
             wandb.log(log_dict, step=it)
 
@@ -489,8 +488,8 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    path_pre_train_adversary = "src/nominal_models/antagonist_1d/epoch_last"
-    pre_train_adversary = Agent.load(path_pre_train_adversary)
+    # path_pre_train_adversary = "src/nominal_models/antagonist_1d/epoch_last"
+    # pre_train_adversary = Agent.load(path_pre_train_adversary)
     temperature = args.temperature
     run_id = args.run_id
     kl_max = args.kl_max
@@ -517,4 +516,4 @@ if __name__ == "__main__":
         antagonist_velocity=args.velocity,
         lower_bound=args.lower_bound,
         conf=args,
-        pre_train_adversary=pre_train_adversary)
+        pre_train_adversary=None)

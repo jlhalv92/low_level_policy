@@ -406,23 +406,23 @@ class Go1(MuJoCo):
             robot_orientation = [("orientation", "orientation_sensor", ObservationType.ELEMENT)]
             current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
             angular_velocity = [("angular_velocity", "a_velocity", ObservationType.ELEMENT)]
-            if self.full_obs:
-
-                position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
-                velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
-                observation_spec = (current_velocity +  # (2,)
-                                    angular_velocity +  # (1,)
-                                    robot_orientation +  # (1,)
-                                    robot_pos +  # (2,)
-                                     position_obstacle +  # (2,)
-                                    velocity_obstacle +  # (2,)
-                                    rays)  # (50,)
-            else:
-                observation_spec = (current_velocity +  # (2,)
-                                    angular_velocity + #(1,)
-                                    robot_orientation +  # (1,)
-                                    robot_pos +  # (2,)
-                                    rays)  # (50,)
+            # if self.full_obs:
+            #
+            #     position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
+            #     velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
+            #     observation_spec = (current_velocity +  # (2,)
+            #                         angular_velocity +  # (1,)
+            #                         robot_orientation +  # (1,)
+            #                         robot_pos +  # (2,)
+            #                          position_obstacle +  # (2,)
+            #                         velocity_obstacle +  # (2,)
+            #                         rays)  # (50,)
+            # else:
+            observation_spec = (current_velocity +  # (2,)
+                                angular_velocity + #(1,)
+                                robot_orientation +  # (1,)
+                                robot_pos +  # (2,)
+                                rays)  # (50,)
 
         elif self.task == 3:
             rays = [("distance_rays_small", "distance_rays_small", ObservationType.RAYS_SMALL)]
@@ -598,6 +598,7 @@ class Go1(MuJoCo):
         obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation[2])
         angular_velocity = self._data.qvel[3:6]
         obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity[2])
+
         if self.full_obs:
             pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
             vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]

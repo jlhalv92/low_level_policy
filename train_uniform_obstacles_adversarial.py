@@ -14,7 +14,7 @@ from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary import Core
 
 
-from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.a_sac import SAC
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 
 from mushroom_rl.core import Agent
@@ -59,7 +59,6 @@ def experiment_uniform(
         log=False,
         temperature_support=1,
         use_cuda=False,
-        aware_rationality=False,
         view=False,
         wandb_project="",
         checkpoint_dir="",
@@ -85,7 +84,7 @@ def experiment_uniform(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_rationality_{aware_rationality}_t_0_{temperature_support}_mv={antagonist_velocity}"
+    job_name = method_name + f"_mv={antagonist_velocity}"
     print(job_name)
     if log:
         wandb.init(
@@ -105,7 +104,6 @@ def experiment_uniform(
     cfg = dict(
                antagonist=True,
                joystick=joystick,
-               domain_randomization=conf.domain_randomization,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=False,
@@ -119,30 +117,28 @@ def experiment_uniform(
 
     actor_input_shape = mdp.info.observation_space.shape
 
-    if aware_rationality:
-        actor_input_shape = (actor_input_shape[0] +1,)
-    else:
-        actor_input_shape = (actor_input_shape[0],)
+
+    actor_input_shape = (actor_input_shape[0],)
 
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=6,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=6,
                               use_cuda=use_cuda)
 
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
 
-    critic_input_shape = (actor_input_shape[0] + 3,)
+    critic_input_shape = (actor_input_shape[0] +1 + 3,)
     critic_params = dict(network=CriticNetwork,
                          optimizer={'class': optim.Adam,
                                     'params': {'lr': 3e-4}},
@@ -217,7 +213,7 @@ def experiment_uniform(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality,
+        aware_rationality=True,
         rationality_antagonist=True)
 
 
@@ -367,10 +363,8 @@ def parse_args():
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--velocity",type=float,  default=1.5)
-    parser.add_argument("--aware_rationality", default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--domain_randomization", type=str2bool, nargs='?', const=True, default=False)
 
 
     return parser.parse_args()
@@ -397,7 +391,6 @@ if __name__ == "__main__":
         log=args.log,
         temperature_support=temperature,
         use_cuda=args.use_cuda,
-        aware_rationality=args.aware_rationality,
         view=False,
         wandb_project=args.wandb_project,
         checkpoint_dir = args.checkpoint_dir,

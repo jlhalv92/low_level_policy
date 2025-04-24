@@ -68,8 +68,7 @@ def experiment(method_name ,alg,
                control_agent=None,
                run_id=0,
                velocity=1,
-               full_obs=False
-               ,log=False,
+               log=False,
                config=None):
 
     np.random.seed()
@@ -78,7 +77,7 @@ def experiment(method_name ,alg,
     logger.strong_line()
     task_name = "obstacles_navigation"
 
-    agent_task = f"{task_name}_adversarial_static"
+    agent_task = f"{task_name}_velocity_antagonist_{velocity}"
     logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
 
     view = False
@@ -102,15 +101,13 @@ def experiment(method_name ,alg,
                joystick=joystick,
                static_obstacles=False)
 
-    vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
     mdp = Go1(horizon,
               gamma,
-              full_obs=full_obs,
               timestep=0.005,
               cfg=cfg,
-              task_name=task_name, **vel_controller)
+              task_name=task_name)
 
-    job_id =method_name + f"_full_obs_{full_obs}"
+    job_id =method_name + f"_base_protagonist"
     print(job_id)
     if log:
         wandb.init(
@@ -258,8 +255,6 @@ def parse_args():
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="SAC")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--full_obs", type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument("--domain_randomization", type=str2bool, nargs='?', const=True, default=False)
 
     return parser.parse_args()
 if __name__ == '__main__':
@@ -283,7 +278,6 @@ if __name__ == '__main__':
                control_agent=control_agent,
                run_id=args.run_id,
                velocity=args.run_id,
-               full_obs=args.full_obs,
                log=args.log,
                config=args)
 

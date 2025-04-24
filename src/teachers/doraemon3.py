@@ -222,11 +222,10 @@ class Doraemon:
                 )
             elif perf_constraint_func(x0) < self.perf_lb and self.above_perf_lb:
                 print(f"Performance {perf_constraint_func(x0)} dropped below {self.perf_lb},Return to save region")
-                self.max_kl *= (1-0.1)
                 kl_constraint_r = NonlinearConstraint(
                     kl_constraint_func,
                     -np.inf,
-                    0.01,
+                    0.005,
                     jac=kl_constraint_grad_func,
                     keep_feasible=self.keep_feasible,
                 )

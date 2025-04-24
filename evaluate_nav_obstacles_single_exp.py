@@ -89,7 +89,7 @@ horizon=500
                curriculum=False,
                joystick=joystick,
                resample=False,
-               domain_randomization=True,
+               domain_randomization=False,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=True,
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     temperatures = np.linspace(0.5, 0, num=11)
     # level_a =0.4
     run = 4
-    alpha_antagonist = 1.
+
     path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
 
     antagonist = Agent.load(path_antagonist)
@@ -177,31 +177,35 @@ if __name__ == "__main__":
     performance = []
 
 
-    for temperature in temperatures:
-        success_rates = []
-        for i in range(5):
-            path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
-            protagonist = Agent.load(path_protagonist)
-            success_rate = benchmark(
-                protagonist=protagonist,
-                antagonist=antagonist,
-                control_agent=control_agent,
-                aware_rationality=False,
-                max_v_antagonist=velocity,
-                n_episodes_test=50,
-                alpha=temperature,
-                protagonist_id = str(i),
-                seed=run,
-                # file_path=file_path,
-                render=True,
-                record=False,
-                joystick=True,
-                horizon=500,
 
-            )
-            success_rates.append(success_rate)
-        mean_success_rate = np.mean(success_rates)
-        performance.append(mean_success_rate)
+
+        # path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
+        # path_protagonist = "checkpoint/GO1/SAC/obstacles_navigation_adversarial_static/epoch_last_0"
+    path_protagonist = "/home/jose-luis/checkpoints/test/epoch_last"
+    path_protagonist = "checkpoint/GO1/SAC_base_protagonist/obstacles_navigation_adversarial_static/epoch_last_0"
+    path_protagonist = "/home/jose-luis/checkpoints/UNIFORM_rationality_False_temp_support_0_0.5_max_vel=1.5/run_0/PROTAGONIST/epoch_last"
+    protagonist = Agent.load(path_protagonist)
+
+    success_rate = benchmark(
+        protagonist=protagonist,
+        antagonist=antagonist,
+        control_agent=control_agent,
+        aware_rationality=False,
+        max_v_antagonist=velocity,
+        n_episodes_test=50,
+        alpha=0.3,
+        protagonist_id ="0",
+        seed=run,
+        # file_path=file_path,
+        render=True,
+        record=False,
+        joystick=False,
+        horizon=500,
+
+    )
+        #     success_rates.append(success_rate)
+        # mean_success_rate = np.mean(success_rates)
+        # performance.append(mean_success_rate)
 
 
 

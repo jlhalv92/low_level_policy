@@ -39,8 +39,8 @@ def experiment(method_name,
                use_cuda=False,
                wandb_project="",
                antagonist_velocity=1.5,
-               domain_randomization=False,
-               configs=None):
+               configs=None,
+               checkpoint_dir = ""):
 
 
     np.random.seed()
@@ -67,7 +67,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"_antagonist_velocity={antagonist_velocity}_dr={domain_randomization}"
+    job_name = method_name + f"_antagonist_velocity={antagonist_velocity}"
     print(job_name)
     if log:
         wandb.init(
@@ -83,8 +83,7 @@ def experiment(method_name,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
-               max_antagonist_v=antagonist_velocity,
-               domain_randomization=domain_randomization,)
+               max_antagonist_v=antagonist_velocity,)
 
 
 
@@ -101,14 +100,14 @@ def experiment(method_name,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=6,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=6,
                               use_cuda=use_cuda)
 
 
@@ -236,8 +235,8 @@ def experiment(method_name,
             agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
             antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-    agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
-    antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -262,9 +261,9 @@ def parse_args():
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--velocity", type=float, default=1., help="velocity")
-    parser.add_argument("--domain_randomization",  type=str2bool, nargs='?', const=True, default=False, help="Domain Randomization")
+    parser.add_argument("--velocity", type=float, default=1.5, help="velocity")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
 
 
 
@@ -289,7 +288,7 @@ if __name__ == '__main__':
                use_cuda=args.use_cuda,
                wandb_project=args.wandb_project,
                antagonist_velocity = args.velocity,
-               domain_randomization=args.domain_randomization,
+               checkpoint_dir=args.checkpoint_dir,
                configs=vars(args))
 
 

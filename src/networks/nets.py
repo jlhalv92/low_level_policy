@@ -106,6 +106,7 @@ class PolicyNetworkStudent(nn.Module):
         nn.init.constant_(self._h4.bias, 0.0)
 
     def forward(self, state, **kwargs):
+
         features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
         features2 = F.elu(self._h2(features1))
         features3 = F.elu(self._h3(features2))
@@ -126,6 +127,7 @@ class ActorBiNetwork(nn.Module):
             self.size_exteroception = size_exteroception
         else:
             self.size_exteroception = input_shape[0] - size_propioception
+
         n_output = output_shape[0]
 
         # Intrinsic Processing (Expand 4 → 10)
@@ -154,6 +156,7 @@ class ActorBiNetwork(nn.Module):
         nn.init.zeros_(self._out.bias)  # Initialize bias to zero
 
     def forward(self, state):
+
         state_intrinsic = state[:,:self.size_propioception]
         state_extrinsic_privilege = state[:,self.size_propioception:]
 
