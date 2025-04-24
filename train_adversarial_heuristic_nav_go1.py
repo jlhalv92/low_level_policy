@@ -170,7 +170,7 @@ def experiment(method_name ,alg,
 
 
 
-    dataset = core.evaluate(n_episodes=n_episodes_test, render=True)
+    dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
 
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
