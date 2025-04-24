@@ -85,9 +85,9 @@ def experiment(method_name ,alg,
     horizon = 500
     gamma = 0.99
     n_features = 256
-    warmup_transitions = 10_000
+    warmup_transitions = 5000
     batch_size = 256 #256
-    initial_replay_size = 10_000
+    initial_replay_size = 5000
     retrain = False
     max_replay_size = int(1e6)
     tau = 0.005
@@ -169,7 +169,7 @@ def experiment(method_name ,alg,
 
 
 
-    dataset = core.evaluate(n_episodes=n_episodes_test, render=False)
+    dataset = core.evaluate(n_episodes=n_episodes_test, render=True)
 
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)

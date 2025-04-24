@@ -900,7 +900,7 @@ class Go1(MuJoCo):
                     robot_pose = self._data.body("trunk").xpos[1]
                     self._data.ctrl[-3] = self.obstacle_pose_x
                     self._data.ctrl[-2] = 0
-                    self._data.ctrl[-1] = np.clip((robot_pose - obstacle_pose), -1, 1)
+                    self._data.ctrl[-1] = np.clip((robot_pose - obstacle_pose), -self.max_antagonist_v, self.max_antagonist_v)
 
         if self.task == 3 or self.task == 2:
             robot_pose = self._data.qpos[:2]
