@@ -373,6 +373,8 @@ def experiment_qarl(
 
         ##################UPDATE distribution#########################################
         success_rate_array = calculate_success_rate_array(info, last)
+
+
         temp_perf_buffer.update_buffer([temperatures, success_rate_array])
 
         if temp_perf_buffer.__len__() >= n_samples_for_dist_update:
@@ -463,7 +465,7 @@ def parse_args():
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
-    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--n_episodes_test", type=int, default=20, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
@@ -472,7 +474,7 @@ def parse_args():
     parser.add_argument("--kl_max", type=float, default=0.001, help="kl_max")
     parser.add_argument("--velocity", type=float, default=1.5)
     parser.add_argument("--lower_bound", type=float, default=0.6)
-    parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False,
+    parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=True,
                         help="Enable logging")
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="DORAEMON")
@@ -507,7 +509,7 @@ if __name__ == "__main__":
         Teacher=Teacher,
         temperature_support=temperature,
         use_cuda=args.use_cuda,
-        update=10,
+        update=args.n_episodes_test,
         kl=kl_max,
         aware_rationality=args.aware_rationality,
         view=False,

@@ -222,10 +222,14 @@ class Doraemon:
                 )
             elif perf_constraint_func(x0) < self.perf_lb and self.above_perf_lb:
                 print(f"Performance {perf_constraint_func(x0)} dropped below {self.perf_lb},Return to save region")
+                lb = np.array([0.1, 0.1])
+                ub = np.array([5., 1.])
+                kl_reverse = 0.001 # 0.005
+                bounds_reverse = Bounds(lb, ub, keep_feasible=self.keep_feasible)
                 kl_constraint_r = NonlinearConstraint(
                     kl_constraint_func,
                     -np.inf,
-                    0.005,
+                    kl_reverse,
                     jac=kl_constraint_grad_func,
                     keep_feasible=self.keep_feasible,
                 )
@@ -250,7 +254,7 @@ class Doraemon:
                     jac=True,
                     constraints=constraints,
                     options={"gtol": G_TOL, "xtol": X_TOL, "disp":True},
-                    bounds=bounds
+                    bounds=bounds_reverse
                 )
                 self.temp_dist.set_weights(np.array([result.x[0], result.x[1]]))
 
