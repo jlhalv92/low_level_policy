@@ -267,6 +267,8 @@ def parse_args():
     parser.add_argument("--velocity", type=float, default=2.)
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--temperature", type=float, default=6.)
+
 
     return parser.parse_args()
 
