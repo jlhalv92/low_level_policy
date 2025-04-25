@@ -13,7 +13,7 @@ from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary2d import Core
 
 
-from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.a_sac import SAC
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 
 from mushroom_rl.core import Agent
@@ -151,19 +151,11 @@ def experiment_qarl(
     n_samples_for_dist_update = update
 
 
-    cfg_rewards=dict()
 
     joystick = False
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
-               rewards=cfg_rewards,
-               static_obstacles=False,
-                activate_arrow=False,
                 max_antagonist_v=antagonist_velocity)
 
     mdp = Go1(horizon,
@@ -174,30 +166,28 @@ def experiment_qarl(
 
     actor_input_shape = mdp.info.observation_space.shape
 
-    if aware_rationality:
-        actor_input_shape = (actor_input_shape[0] +1,)
-    else:
-        actor_input_shape = (actor_input_shape[0],)
+
+    actor_input_shape = (actor_input_shape[0],)
 
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=6,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=6,
                               use_cuda=use_cuda)
 
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
 
-    critic_input_shape = (actor_input_shape[0] + 3,)
+    critic_input_shape = (actor_input_shape[0] + 3 +1 ,)
     critic_params = dict(network=CriticNetwork,
                          optimizer={'class': optim.Adam,
                                     'params': {'lr': 3e-4}},
@@ -273,7 +263,7 @@ def experiment_qarl(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality,
+        aware_rationality=True,
         rationality_antagonist=True)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
@@ -441,16 +431,16 @@ def parse_args():
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
-    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--n_episodes_test", type=int, default=20, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--kl_max",type=float,  default=0.03,  help="kl_max")
+    parser.add_argument("--temperature", type=float, default=6, help="Alpha value")
+    parser.add_argument("--kl_max",type=float,  default=0.001,  help="kl_max")
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
+    parser.add_argument("--velocity", type=float, default=2., help=" antagonist vel value")
     parser.add_argument("--lower_bound", type=float, default=0.4, help=" performance lower bound")
 
 
@@ -483,7 +473,7 @@ if __name__ == "__main__":
         Teacher=Teacher,
         temperature_support=temperature,
         use_cuda=True,
-        update=10,
+        update=args.n_episodes_test,
         kl=kl_max,
         aware_rationality=args.aware_rationality,
         view=False,

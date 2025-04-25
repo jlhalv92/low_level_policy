@@ -94,14 +94,7 @@ def experiment(
     joystick = False
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
-               rewards=cfg_rewards,
-               static_obstacles=False,
-                activate_arrow=False,
                 max_antagonist_v=antagonist_velocity,)
 
     mdp = Go1(horizon,
@@ -112,30 +105,28 @@ def experiment(
 
     actor_input_shape = mdp.info.observation_space.shape
 
-    if aware_rationality:
-        actor_input_shape = (actor_input_shape[0] +1,)
-    else:
-        actor_input_shape = (actor_input_shape[0],)
+
+    actor_input_shape = (actor_input_shape[0],)
 
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=6,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=6,
                               use_cuda=use_cuda)
 
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
 
-    critic_input_shape = (actor_input_shape[0] + 3,)
+    critic_input_shape = (actor_input_shape[0] + 1 + 3,)
     critic_params = dict(network=CriticNetwork,
                          optimizer={'class': optim.Adam,
                                     'params': {'lr': 3e-4}},
@@ -211,7 +202,7 @@ def experiment(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality,
+        aware_rationality=True,
         rationality_antagonist=True)
 
 
@@ -359,11 +350,11 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=6, help="Alpha value")
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--velocity", type=float, default=1., help=" antagonist vel value")
+    parser.add_argument("--velocity", type=float, default=2., help=" antagonist vel value")
 
 
 

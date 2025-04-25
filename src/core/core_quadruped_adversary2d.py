@@ -302,8 +302,10 @@ class Core(object):
 
         if learning:
             # navigation_state = self._state[-obs_dim:]
-            action = self.agents[0].draw_noisy_action(nav_state)
-
+            if self.aware_rationality:
+                action = self.agents[0].draw_noisy_action(nav_state[:-1])
+            else:
+                action = self.agents[0].draw_noisy_action(nav_state)
 
             if self.use_antagonist:
                 action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
@@ -318,9 +320,10 @@ class Core(object):
 
 
         else: # Default
-            action = self.agents[0].draw_action(nav_state)
-
-
+            if self.aware_rationality:
+                action = self.agents[0].draw_action(nav_state[:-1])
+            else:
+                action = self.agents[0].draw_action(nav_state)
 
             if self.use_antagonist:
                 action_antagonist = self.agents[1].draw_action(self._adversary_state)
@@ -362,12 +365,9 @@ class Core(object):
 
 
 
-        if self.aware_rationality:
-            next_nav_state = self._preprocess(next_state.copy())
-        else:
-            next_nav_state = next_state.copy()
+        next_nav_state = self._preprocess(next_state.copy())
 
-        self._state = next_nav_state
+        self._state = next_nav_state.copy()
 
         self._adversary_state = next_state_antagonist
 

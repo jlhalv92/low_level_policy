@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 
-from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.a_sac import SAC
 
 from mushroom_rl.core import Agent
 import wandb
@@ -99,14 +99,14 @@ def experiment(method_name,
                            n_features=n_features,
                            input_shape=actor_input_shape,
                            output_shape=(3,),
-                           size_propioception=9,
+                           size_propioception=6,
                            use_cuda=use_cuda)
 
     actor_sigma_params = dict(network=ActorBiNetwork,
                               n_features=n_features,
                               input_shape=actor_input_shape,
                               output_shape=(3,),
-                              size_propioception=9,
+                              size_propioception=6,
                               use_cuda=use_cuda)
 
 
@@ -264,10 +264,9 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=5, help="Run ID")
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
-    parser.add_argument("--velocity", type=float, default=1.)
+    parser.add_argument("--velocity", type=float, default=2.)
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--temperature", type=float, default=1)
 
     return parser.parse_args()
 
