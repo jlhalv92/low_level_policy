@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 
-from src.algorithm.deep_actor_critic.a_sac import SAC
+from src.algorithm.deep_actor_critic.sac import  SAC
 
 from mushroom_rl.core import Agent
 import wandb

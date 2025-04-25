@@ -12,7 +12,8 @@ from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary2d import Core
 
 
-from src.algorithm.deep_actor_critic.sac import  SAC
+from src.algorithm.deep_actor_critic.a_sac import SAC
+
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 
 from mushroom_rl.core import Agent
