@@ -923,8 +923,7 @@ class Go1(MuJoCo):
         pos_robot = self._data.body("trunk").xpos[:2]
 
         reward_collision = 10 * self.obstacle_robot_collision
-        reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])/self._room_width
-        # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
+        reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])
         reward_antagonist = (reward_collision + reward_distance)
 
         return reward_antagonist
