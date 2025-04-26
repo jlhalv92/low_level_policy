@@ -85,14 +85,8 @@ horizon=500
 
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
                rewards=cfg_rewards,
-               static_obstacles=False,
-                activate_arrow=True,
                 max_antagonist_v=max_v_antagonist)
 
 
@@ -166,10 +160,10 @@ if __name__ == "__main__":
 
     velocity = 1.5
 
-    temperatures = np.linspace(0.5, 0, num=11)
+    temperatures = np.linspace(0.5, 0, num=5)
     # level_a =0.4
     path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
-
+    # path_protagonist = f"/home/jose-luis/CORL_final_results/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.3/run_{i}/PROTAGONIST/epoch_las
     antagonist = Agent.load(path_antagonist)
 
     # protagonist_id =f"{model_id}_{temperature}"
@@ -178,12 +172,15 @@ if __name__ == "__main__":
     performance = []
     # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
     # path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
-    model_id = "linear_curriculum_antagonist_velocity=1.5"
+    model_id = "MAX_ENTROPY"
+    model_id = "RARL"
     print(model_id)
     for temperature in temperatures:
         success_rates = []
         for i in range(5):
-            path_protagonist = f"/home/jose-luis/checkpoints/{model_id}/run_{i}/PROTAGONIST/epoch_last"
+            path_protagonist = f"/home/jose-luis/CORL_final_results/obstacles_navigation/RARL_antagonist_velocity=1.5/run_{i}/PROTAGONIST/epoch_last"
+
+            # path_protagonist = f"/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_{i}"
             protagonist = Agent.load(path_protagonist)
             success_rate = benchmark(
                 protagonist=protagonist,
@@ -207,19 +204,7 @@ if __name__ == "__main__":
 
     performance_np = np.array(performance)
     np.save(f'results/performance_{model_id}.npy', performance_np)
-    # import matplotlib.pyplot as plt
-    #
-    # plt.figure(figsize=(12, 6))
-    # plt.bar(temperatures, performance, width=0.008, color='blue', alpha=0.7)
-    #
-    # # Labels and title
-    # plt.xlabel("Temperature")
-    # plt.ylabel("Success Rate")
-    # plt.title(f"Obstacle Navigation Performance, Antagonist max velocity = {velocity}")
-    # plt.grid(axis='y', linestyle='--', alpha=0.6)
-    #
-    # # Show the plot
-    # plt.show()
+
 
 
 

@@ -41,7 +41,7 @@ def experiment(method_name,
                run_id=0,
                log=False,
                use_cuda=False,
-               alpha=1.,
+               temperature=1.,
                wandb_project=""):
 
     np.random.seed()
@@ -68,7 +68,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"_alpha_{alpha}"
+    job_name = method_name + f"_alpha_{temperature}"
     if log:
         wandb.init(
             project=wandb_project,
@@ -94,42 +94,6 @@ def experiment(method_name,
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
 
-    # actor_input_shape  = mdp.info.observation_space.shape
-    #
-    #
-    # actor_mu_params = dict(network=ActorBiNetwork,
-    #                        n_features=n_features,
-    #                        input_shape=actor_input_shape,
-    #                        output_shape=(3,),
-    #                        size_propioception=9,
-    #                        use_cuda=use_cuda)
-    #
-    # actor_sigma_params = dict(network=ActorBiNetwork,
-    #                           n_features=n_features,
-    #                           input_shape=actor_input_shape,
-    #                           output_shape=(3,),
-    #                           size_propioception=9,
-    #                           use_cuda=use_cuda)
-    #
-    #
-
-    #
-    # critic_input_shape = (actor_input_shape[0] + 3,)
-    # critic_params = dict(network=CriticNetwork,
-    #                      optimizer={'class': optim.Adam,
-    #                                 'params': {'lr': 3e-4}},
-    #                      loss=F.mse_loss,
-    #                      n_features=n_features,
-    #                      input_shape=critic_input_shape,
-    #                      output_shape=(1,),
-    #                      use_cuda=use_cuda)
-    #
-    # # Agent
-    # antagonist_input_shape = (7,)
-    # agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
-    #             actor_optimizer, critic_params, batch_size, initial_replay_size,
-    #             max_replay_size, warmup_transitions, tau, lr_alpha,
-    #             critic_fit_params=None)
     antagonist_input_shape = (7,)
     antagonist_mu_params = dict(network=ActorNetwork,
                            n_features=n_features,
@@ -160,7 +124,8 @@ def experiment(method_name,
 
     preprocessor = StateVariableConcatenation()
 
-    path_protagonist = "checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_1/PROTAGONIST/epoch_last"
+    path_protagonist = "/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_0"
+
     protagonist = Agent.load(path_protagonist)
 
     core = Core([protagonist, antagonist],
@@ -169,9 +134,9 @@ def experiment(method_name,
                 preprocessors = [preprocessor],
                 rationality_antagonist = True)
 
-    temps = np.random.uniform(low=0, high=0.5, size=(100,))
+    temps = np.random.uniform(low=0, high=temperature, size=100)
     core.set_variables_for_training(temps)
-    dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
+    dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
 
     s,a, r, s1, absorbing, info, last = parse_dataset(dataset)
 
@@ -181,7 +146,7 @@ def experiment(method_name,
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
-    temps = np.random.uniform(low=0, high=0.5, size=(100,))
+    temps = np.random.uniform(low=0, high=temperature, size=100)
     core.set_variables_for_training(temps)
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
@@ -189,7 +154,7 @@ def experiment(method_name,
 
 
     for it in trange(n_epochs, leave=False):
-        temps = np.random.uniform(low=0, high=0.5, size=(100,))
+        temps = np.random.uniform(low=0, high=temperature, size=100)
         core.set_variables_for_training(temps)
 
         logger.info("Training Antagonist")
@@ -205,21 +170,13 @@ def experiment(method_name,
         # temps = np.random.uniform(low=1, high=0.8, size=(100,))
         core.set_variables_for_training(temps)
 
-        dataset = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=0)
-
-        s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
-        J = np.mean(compute_J(dataset, mdp.info.gamma))
-        R = np.mean(compute_J(dataset))
-        E = protagonist.policy.entropy(s)
-        success_rate = calculate_success_rate(info, last)
 
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=1)
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-        alpha = antagonist._alpha.cpu().numpy()
         E_a=antagonist.policy.entropy(s)
-        logger.epoch_info(it+1, J=J, R=R, entropy=E,
-                          success_rate=success_rate, alfa=temps[:20].mean(),
+        success_rate = calculate_success_rate(info, last)
+        logger.epoch_info(it+1,success_rate=success_rate, alfa=temps[:20].mean(),
                           r_antagonist=R_antagonist, entropy_antagonist=E_a)
 
 
@@ -271,7 +228,7 @@ if __name__ == '__main__':
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    experiment(method_name="Antagonist_FIX_Temp_uniform",
+    experiment(method_name="SAC_ANTAGONIST_norm_reward",
                alg=[SAC, AdaptiveTempSAC],
                n_epochs=args.n_epochs,
                n_steps=args.n_steps,
@@ -281,7 +238,7 @@ if __name__ == '__main__':
                run_id=args.run_id,
                log=args.log,
                use_cuda=args.use_cuda,
-               alpha=args.alpha,
+               temperature=args.alpha,
                wandb_project=args.wandb_project)
 
 

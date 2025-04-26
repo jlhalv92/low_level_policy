@@ -3,17 +3,15 @@ import numpy as np
 import os
 
 # Mock data
-temperatures = np.round(np.linspace(0.5, 0, num=11),2)
+temperatures = np.round(np.linspace(0.5, 0, num=5),2)
+files = os.listdir("results")
 
 model_names = [
-               'Linear Curriculum',
-                'Doraemon_rationality_lb=0.3',
-               'Doraemon_no_rationality_lb=0.3',
+               'UNIFORM',
+                'SAC_STATIC',
                 'RARL',
-                'Doraemon_rationality_lb=0.6',
-                'Uniform_rationality',
-                'Uniform_no_rationality',
-                'Doraemon_no_rationality_lb=0.6']
+               'SAC_HEURISTIC',
+                'RAMEM']
 velocity = 1.5
 performances = {}
 files = os.listdir("results")

@@ -1,7 +1,7 @@
 <mujoco model="go1">
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
   <visual>
-    <rgba rangefinder="1 1 0.1 0.1"/>
+    <rgba rangefinder="1 1 0.1 0."/>
     <map znear=".005" zfar="100"/>
   </visual>
   <option cone="pyramidal" impratio="100" timestep="0.005"/>
@@ -84,7 +84,7 @@
 
     <body name="trunk" pos="0 0 0.5" childclass="go1">
 <!--      <site name="robot_bb" type="box" size="0.35 0.2 0.2" pos="-0.05 0 -0.1" rgba=".6 .3 .3 0.2"  />-->
-        <site name="robot_contact_limit" type="cylinder" size=".4 0.5" rgba=".6 .3 .3 0.1"  />
+        <site name="robot_contact_limit" type="cylinder" size=".4 0.5" rgba=".6 .3 .3 0."  />
       <camera name="track" mode="trackcom" pos="0 -2 0" xyaxes="1 0 0 0 0 1"/>
       <freejoint/>
 

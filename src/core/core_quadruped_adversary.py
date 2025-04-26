@@ -328,7 +328,7 @@ class Core(object):
                 action = self.agents[0].draw_action(nav_state)
 
 
-            action_antagonist = self.agents[1].draw_action(self._adversary_state)
+            action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
 
             if self.use_antagonist:
 

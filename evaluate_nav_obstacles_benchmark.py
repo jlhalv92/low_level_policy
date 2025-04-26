@@ -82,14 +82,8 @@ def benchmark(
     joystick = False
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
                rewards=cfg_rewards,
-               static_obstacles=False,
-                activate_arrow=True,
                 max_antagonist_v=max_v_antagonist)
 
     vel_controller = dict(max_vx=1.5, max_vy=1, max_wz=1.5)
@@ -171,44 +165,8 @@ def parse_args():
     return parser.parse_args()
 
 if __name__ == "__main__":
-    # args = parse_args()
-    # print(args)
-    # path = "src/nominal_models/low_level/policy"
-    # control_agent = Agent.load(path)
-    # alphas = [0.5, 0.4, 0.3,0.2,0.1, 0.0]
-    # runs = [0, 1, 2, 3, 4]
-    # antagonist_level = [0.5] # [0.5 , 0.2, 0.0]
-    # velocity = 0.
-    # model_id = "RARL_alpha"
-    # for level_a, alpha_antagonist in enumerate(antagonist_level):
-    #     for alpha in alphas:
-    #         for run in runs:
-    #
-    #             path_protagonist = f"experiments_server/GO1/obstacles_navigation/{model_id}_{alpha}/run_{run}/PROTAGONIST/epoch_last"
-    #             protagonist = Agent.load(path_protagonist)
-    #
-    #             path_antagonist = f"experiments_server/GO1/obstacles_navigation/RARL_alpha_{alpha_antagonist}/run_0/ANTAGONIST/epoch_last"
-    #             antagonist = Agent.load(path_antagonist)
-    #
-    #             protagonist_id =f"{model_id}_{alpha}"
-    #             msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist level {level_a} max velocity {velocity}"
-    #             print(f"-----------------------------------------{msg}--------------------------------------------")
-    #             file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{level_a}_velocity_{velocity}.json"
-    #             benchmark(
-    #                 protagonist=protagonist,
-    #                 antagonist=antagonist,
-    #                 control_agent=control_agent,
-    #                 aware_rationality=False,
-    #                 max_v_antagonist=velocity,
-    #                 n_episodes_test=50,
-    #                 alpha=0.5,
-    #                 use_cuda=True,
-    #                 protagonist_id = protagonist_id,
-    #                 seed=run,
-    #                 level_antagonist=level_a,
-    #                 file_path=file_path
-    #
-    #             )
+
+
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
     rationalities = [False]

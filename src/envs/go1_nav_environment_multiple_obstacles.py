@@ -253,7 +253,7 @@ class Go1(MuJoCo):
         self.robot_collisions = None
         self.not_hit_obstacle = None
         self._all_obstacles_move = False
-        self.static_obstacles = cfg["static_obstacles"]
+
         self.obstacle_id = 0
         self._room_width = 10
         self.joystick = cfg["joystick"]
@@ -384,21 +384,25 @@ class Go1(MuJoCo):
             target_pos = [("target_pose", "target", ObservationType.POS)]
             rays = [("distance_rays", "distance_rays", ObservationType.RAYS)]
             robot_pos = [("robot_pose", "trunk", ObservationType.POS)]
-            robot_orientation = [("orientation", "orientation_sensor", ObservationType.ORIENTATION)]
-            current_velocity = [("current_velocity", "a_velocity", ObservationType.L_VELOCITY)]
-            angular_velocity = [("angular_velocity", "a_velocity", ObservationType.L_VELOCITY)]
-            room_width = [("room_width", "room_width", ObservationType.ROOM_WIDTH)]
-            # robot_bounding_box = [("robot_bounding_box", "robot_bounding_box", ObservationType.ROBOT_BOUNDING_BOX)]
-            # obstacle_bounding_box = [("obstacle_bounding_box", "obstacle_bounding_box", ObservationType.OBSTACLE_BOUNDING_BOX)]
-            position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
-            velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
-
-            observation_spec = (current_velocity +  # (3,)
-                                angular_velocity + #(3,)
-                                robot_orientation +  # (3,)
+            robot_orientation = [("orientation", "orientation_sensor", ObservationType.ELEMENT)]
+            current_velocity = [("current_velocity", "a_velocity", ObservationType.VELOCITY)]
+            angular_velocity = [("angular_velocity", "a_velocity", ObservationType.ELEMENT)]
+            # if self.full_obs:
+            #
+            #     position_obstacle = [("obstacle_pose", "obstacle_1", ObservationType.BODY_POS)]
+            #     velocity_obstacle = [("obstacle_velocity", "obstacle_1", ObservationType.VELOCITY)]
+            #     observation_spec = (current_velocity +  # (2,)
+            #                         angular_velocity +  # (1,)
+            #                         robot_orientation +  # (1,)
+            #                         robot_pos +  # (2,)
+            #                          position_obstacle +  # (2,)
+            #                         velocity_obstacle +  # (2,)
+            #                         rays)  # (50,)
+            # else:
+            observation_spec = (current_velocity +  # (2,)
+                                angular_velocity + #(1,)
+                                robot_orientation +  # (1,)
                                 robot_pos +  # (2,)
-                               #  position_obstacle +  # (2,)
-                               # velocity_obstacle +  # (2,)
                                 rays)  # (50,)
 
         elif self.task == 3:
@@ -450,7 +454,7 @@ class Go1(MuJoCo):
                                        "trunk_7", "trunk_8"])]
         if self.task == 2:
             # collision_walls = ("walls",["wall_1", "wall_2","wall_3", "wall_4"])
-            collision_walls = ("walls", ["wall_1", "wall_2","wall_3", "wall_4"])
+            collision_walls = ("walls", ["wall_3", "wall_4"])
             obstacles = ["obstacle_1"]
 
             collision_obstacle = ("obstacles", obstacles)
@@ -536,30 +540,51 @@ class Go1(MuJoCo):
         self.orientation_euler = self.orientation_quat.as_euler("xyz")
         self.orientation_quat_inv = self.orientation_quat.inv()
 
+    # def _modify_observation(self, obs):
+    #
+    #
+    #     linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+    #     vx = linear_velocity[0]
+    #     vy = linear_velocity[1]
+    #     wz = self._data.qvel[5]
+    #     current_velocity = np.array([vx, vy, wz])
+    #     robot_orientation = self.orientation_euler.copy() # (1,)
+    #     obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
+    #     obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
+    #     angular_velocity = self._data.qvel[3:6]
+    #     obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
+    #     # pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
+    #     # relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
+    #     # vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
+    #     # relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
+    #     #
+    #     # obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
+    #     # obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
+    #
+    #
+    #
+    #
+    #     return obs
+
     def _modify_observation(self, obs):
 
 
         linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
         vx = linear_velocity[0]
         vy = linear_velocity[1]
-        wz = self._data.qvel[5]
-        current_velocity = np.array([vx, vy, wz])
+        current_velocity = np.array([vx, vy])
         robot_orientation = self.orientation_euler.copy() # (1,)
         obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
-        obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation)
+        obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation[2])
         angular_velocity = self._data.qvel[3:6]
-        obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity)
-        # pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
-        # relative_obstacle_pos = self.orientation_quat_inv.apply(pos_diff)
-        # vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
-        # relative_obstacle_vel = self.orientation_quat_inv.apply(vel_diff)
+        obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity[2])
+
+        # if self.full_obs:
+        #     pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
+        #     vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
         #
-        # obs = self.obs_helper.modify_obs(obs, "obstacle_pose", relative_obstacle_pos[:2])
-        # obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", relative_obstacle_vel[:2])
-
-
-
-
+        #     obs = self.obs_helper.modify_obs(obs, "obstacle_pose", pos_diff[:2])
+        #     obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", vel_diff[:2])
         return obs
 
     def _compute_action(self, cur_obs, action):
@@ -875,20 +900,21 @@ class Go1(MuJoCo):
         y_pos = self._data.body("trunk").xpos[1]
         out_of_limit = 5 * (np.abs(y_pos) >= self._room_width / 2)
 
-        if self.task == 2:
-            if not self.static_obstacles:
-                if not self.antagonist:
-                    obstacle_pose = self._data.body("obstacle_1").xpos[1]
-                    robot_pose = self._data.body("trunk").xpos[1]
-                    self._data.ctrl[-3] = self.obstacle_pose_x
-                    self._data.ctrl[-2] = 0
-                    self._data.ctrl[-1] = np.clip((robot_pose - obstacle_pose), -1, 1)
+        # if self.task == 2:
+        #     if not self.static_obstacles:
+        #         if not self.antagonist:
+        #             obstacle_pose = self._data.body("obstacle_1").xpos[1]
+        #             robot_pose = self._data.body("trunk").xpos[1]
+        #             self._data.ctrl[-3] = self.obstacle_pose_x
+        #             self._data.ctrl[-2] = 0
+        #             self._data.ctrl[-1] = np.clip((robot_pose - obstacle_pose), -1, 1)
 
         if self.task == 3 or self.task == 2:
             robot_pose = self._data.qpos[:2]
             target_pose = self._data.site("target").xpos[:2]
-            norm_distance = target_pose[0] - robot_pose[0] - 2
+            norm_distance = target_pose[0] - robot_pose[0]
             self.pass_finish_line = norm_distance < -0.3
+
             if self._ts >= self.horizon:
 
                 self.success = self.robot_collisions == 0 and self.pass_finish_line and not out_of_limit
@@ -912,11 +938,11 @@ class Go1(MuJoCo):
         trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
 
         self.obstacle_robot_collision = legs_collision_obstacles + trunk_collision_obstacles
-        # collision_robot_wall = self._check_collision("robot", "walls")
+        collision_robot_wall = self._check_collision("robot", "walls")
         collision_robot = legs_collision_obstacles or trunk_collision_obstacles
 
 
-        if fall :
+        if fall or collision_robot_wall or collision_robot :
             self.terminates = True
 
     def reward_antagonist(self):
@@ -997,8 +1023,7 @@ class Go1(MuJoCo):
 
 
     def reset_states(self, task):
-        self._model.site("target").pos[0] = 10
-
+        n_obstacles = 6
 
         if task == 2:
 
@@ -1024,12 +1049,12 @@ class Go1(MuJoCo):
                 pos = [0., 0, 0.1],
                 rgba = [1, 0, 0, 1])
             # self._room_width = np.random.uniform(low=1.2, high=6)
-            self._room_width = 5
+            self._room_width = 4
             self._obstacle_l = 0.5
             self._obstacle_w = 0.5
             obstacles_list = ["obstacle_1"]
 
-            for i in range(7):
+            for i in range(n_obstacles):
                 obstacle_name =f'static_obstacle_{i}'
                 obstacles_list.append(obstacle_name)
                 sx = 0.5
@@ -1051,24 +1076,24 @@ class Go1(MuJoCo):
             worldbody = spec.worldbody
             # z_wall = -2
             z_wall = 0.8
-            worldbody.add_site(
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=[10, self._room_width/2, 0.05],
-                pos=[8,0,0],
-                rgba=[0,1,0,0.1]
-            )
-            worldbody.add_site(
-                type=mujoco.mjtGeom.mjGEOM_CYLINDER,
-                size=[1,0.2, 0],
-                pos=[16,0,0],
-                rgba=[0,0,1,0.3]
-            )
-            worldbody.add_site(
-                type=mujoco.mjtGeom.mjGEOM_CYLINDER,
-                size=[0.25,0.2, 0],
-                pos=[16,0,0],
-                rgba=[0,1,1,0.3]
-            )
+            # worldbody.add_site(
+            #     type=mujoco.mjtGeom.mjGEOM_BOX,
+            #     size=[10, self._room_width/2, 0.05],
+            #     pos=[8,0,0],
+            #     rgba=[0,1,0,0.1]
+            # )
+            # worldbody.add_site(
+            #     type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+            #     size=[1,0.2, 0],
+            #     pos=[16,0,0],
+            #     rgba=[0,0,1,0.3]
+            # )
+            # worldbody.add_site(
+            #     type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+            #     size=[0.25,0.2, 0],
+            #     pos=[16,0,0],
+            #     rgba=[0,1,1,0.3]
+            # )
             # worldbody.add_site(
             #     name="finish_line",
             #     type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -1084,8 +1109,8 @@ class Go1(MuJoCo):
                     else:
                         geom.pos[1] = 3 + geom.size[1] / 2
                     geom.pos[2] = z_wall
-                    geom.pos[0] = 8
-                    geom.size[0] = 10
+
+
 
             for geom in geoms:
                 if geom.name in h_walls:
@@ -1096,14 +1121,15 @@ class Go1(MuJoCo):
                     geom.size[1] = 3
                     geom.pos[2] = z_wall
 
-            pos_x = np.linspace(2, 14, 8)
+            pos_x = np.linspace(2, 10, n_obstacles+1)
+            last_obstcle_pose = pos_x[-1]
             np.random.shuffle(pos_x)
 
             for idx,obstacle_id in enumerate(obstacles_list):
                 obstacle = spec.find_body(obstacle_id)
 
                 if obstacle_id == "obstacle_1":
-                    obstacle_height = np.random.uniform(low=0.25, high=0.8)
+                    obstacle_height = 0.8
                     obstacle.first_geom().size = [self._obstacle_l, self._obstacle_w, obstacle_height]
                     self.obstacle_pose_x = pos_x[idx]
                 sx,sy,sz = obstacle.first_geom().size
@@ -1117,7 +1143,7 @@ class Go1(MuJoCo):
             self._data = mujoco.MjData(model)
             self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
 
-            new_obstacles = [f"static_obstacle_{i}" for i in range(7)]
+            new_obstacles = [f"static_obstacle_{i}" for i in range(n_obstacles)]
 
             self.collision_groups_list[-1][1].extend(new_obstacles)
 
@@ -1130,10 +1156,10 @@ class Go1(MuJoCo):
 
 
 
-            self._model.site("target").pos[0] = 16
-            self._model.site("target").size[0] = 2
-            self._model.site("target").size[1] = self.wall_pos
-            self._model.site("target").pos[-1] = 0.1
+            self._model.site("target").pos[0] = last_obstcle_pose + 1
+            # self._model.site("target").size[0] = 2
+            # self._model.site("target").size[1] = self.wall_pos
+            # self._model.site("target").pos[-1] = 0.1
             if self._viewer is not None:
                 self._viewer.load_new_model(self._model)
 
@@ -1141,10 +1167,8 @@ class Go1(MuJoCo):
 
             if self.task == 2:
                 if not self.antagonist:
-                    if not self.static_obstacles:
-                        self._data.ctrl[-1] = np.random.uniform(-1, 1)
-                    else:
-                        self._data.ctrl[-1] = 0
+
+                    self._data.ctrl[-1] = 0
 
 
                 else:

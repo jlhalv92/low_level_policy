@@ -20,7 +20,7 @@ from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
-from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_environment_evaluation import Go1
 
 from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
 import wandb
@@ -61,7 +61,7 @@ def benchmark(
         record=True,
         save_file=False,
     joystick=False,
-horizon=500
+horizon=1000
 ):
 
     np.random.seed()
@@ -85,11 +85,7 @@ horizon=500
 
     cfg = dict(
                antagonist=True,
-               max_level=True,
-               curriculum=False,
                joystick=joystick,
-               resample=False,
-               domain_randomization=False,
                rewards=cfg_rewards,
                static_obstacles=False,
                 activate_arrow=True,
@@ -122,7 +118,7 @@ horizon=500
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True, record=False
+        n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True, record=record
     )
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
@@ -140,20 +136,6 @@ horizon=500
         alfa=np.mean(temps)
     )
 
-    # results_dict = dict(
-    #     protagonist_id=protagonist_id,
-    #     J_online=J_online,
-    #     R_online=R_online,
-    #     success_rate=success_rate,
-    #     alfa=np.mean(temps),
-    #     antagonist_velocity=max_v_antagonist,
-    #     seed=seed,
-    #     level_antagonist=level_antagonist)
-    #
-    # if save_file:
-    #     print("writing results...")
-    #     with open(file_path, 'w') as f:
-    #         json.dump(results_dict, f, indent=4)
 
     return success_rate
 
@@ -166,11 +148,11 @@ if __name__ == "__main__":
 
     velocity = 1.5
     model_id = "RARL_alpha"
-    temperatures = np.linspace(0.5, 0, num=11)
     # level_a =0.4
     run = 4
 
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
+    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_0"
+    path_antagonist = "checkpoint/GO1/obstacles_navigation/SAC_ANTAGONIST_norm_reward_alpha_1.0/run_0/ANTAGONIST/epoch_50"
 
     antagonist = Agent.load(path_antagonist)
 
@@ -181,9 +163,12 @@ if __name__ == "__main__":
 
         # path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
         # path_protagonist = "checkpoint/GO1/SAC/obstacles_navigation_adversarial_static/epoch_last_0"
-    path_protagonist = "/home/jose-luis/checkpoints/test/epoch_last"
-    path_protagonist = "checkpoint/GO1/SAC_base_protagonist/obstacles_navigation_adversarial_static/epoch_last_0"
-    path_protagonist = "/home/jose-luis/checkpoints/UNIFORM_rationality_False_temp_support_0_0.5_max_vel=1.5/run_0/PROTAGONIST/epoch_last"
+    # path_protagonist = "/home/jose-luis/checkpoints/test/epoch_last"
+    path_protagonist = f"/home/jose-luis/CORL_final_results/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.3/run_{0}/PROTAGONIST/epoch_last"
+    # path_protagonist = "/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_0"
+
+
+
     protagonist = Agent.load(path_protagonist)
 
     success_rate = benchmark(
@@ -192,8 +177,8 @@ if __name__ == "__main__":
         control_agent=control_agent,
         aware_rationality=False,
         max_v_antagonist=velocity,
-        n_episodes_test=50,
-        alpha=0.3,
+        n_episodes_test=1,
+        alpha=2,
         protagonist_id ="0",
         seed=run,
         # file_path=file_path,

@@ -164,7 +164,8 @@ def experiment_qarl(
         rewards=cfg_rewards,
         static_obstacles=False,
         activate_arrow=False,
-        max_antagonist_v=antagonist_velocity)
+        max_antagonist_v=antagonist_velocity,
+        safety_penalties=args.safety_penalties,)
 
     mdp = Go1(horizon,
               gamma,
@@ -479,6 +480,8 @@ def parse_args():
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="DORAEMON")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--safety_penalties", type=str2bool, nargs='?', const=False)
+
 
 
     return parser.parse_args()

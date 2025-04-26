@@ -45,7 +45,7 @@ class MujocoViewer:
 
     def __init__(self, model, dt, width=1920, height=1080, start_paused=False,
                  custom_render_callback=None, record=False, camera_params=None,
-                 default_camera_mode="follow", hide_menu_on_startup=None,
+                 default_camera_mode="top_static", hide_menu_on_startup=True,
                  geom_group_visualization_on_startup=None, headless=False):
         """
         Constructor.
@@ -679,6 +679,7 @@ class MujocoViewer:
         self._camera.distance = cam_params["distance"]
         self._camera.elevation = cam_params["elevation"]
         self._camera.azimuth = cam_params["azimuth"]
+        self._camera.orthographic = True
         if "lookat" in cam_params:
             self._camera.lookat = np.array(cam_params["lookat"])
         self._camera_mode = mode
@@ -732,7 +733,7 @@ class MujocoViewer:
 
         return dict(static=dict(distance=15.0, elevation=-45.0, azimuth=90.0, lookat=np.array([0.0, 0.0, 0.0])),
                     follow=dict(distance=5, elevation=-30.0, azimuth=0),
-                    top_static=dict(distance=5.0, elevation=-90.0, azimuth=90.0, lookat=np.array([0.0, 0.0, 0.0])))
+                    top_static=dict(distance=6.0, elevation=-90.0, azimuth=90.0, lookat=np.array([2.0, 0.0, 0.0])))
 
     def setup_opengl_backend_headless(self, width, height):
 

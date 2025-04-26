@@ -191,7 +191,13 @@ class Go1(MuJoCo):
         Constructor.
 
         """
-        self.full_obs = full_obs
+
+
+        if "safety_penalties" in cfg.keys():
+            self.safety_penalties = cfg["safety_penalties"]
+        else:
+            self.safety_penalties = False
+
         if "max_antagonist_v" in cfg.keys():
             self.max_antagonist_v = cfg["max_antagonist_v"]
         else:
@@ -272,23 +278,23 @@ class Go1(MuJoCo):
         kd = 0.5
         timestep = timestep
 
-        if task == 0:
-            xml_path = "src/envs/unitree_go1/walk_go1.xml"
-            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+        # if task == 0:
+        #     xml_path = "src/envs/unitree_go1/walk_go1.xml"
+        #     self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+        #
+        # if task == 1:
+        # #     self.xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
+        #
+        # if task == 2:
+        #     if self.behaviour_cloning:
+        #         self.xml_path = "src/envs/unitree_go1/navigation_go1_rays_behaviour_cloning.xml"
 
-        if task == 1:
-            self.xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
 
-        if task == 2:
-            if self.behaviour_cloning:
-                self.xml_path = "src/envs/unitree_go1/navigation_go1_rays_behaviour_cloning.xml"
+            # else:
+        self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
-
-            else:
-                self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
-
-        if task == 3:
-            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
+        # if task == 3:
+        #     self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
 
 
@@ -562,12 +568,12 @@ class Go1(MuJoCo):
         angular_velocity = self._data.qvel[3:6]
         obs = self.obs_helper.modify_obs(obs, "angular_velocity", angular_velocity[2])
 
-        if self.full_obs:
-            pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
-            vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
-
-            obs = self.obs_helper.modify_obs(obs, "obstacle_pose", pos_diff[:2])
-            obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", vel_diff[:2])
+        # if self.full_obs:
+        #     pos_diff = self._data.body("obstacle_1").xpos[:3] - self._data.body("trunk").xpos[:3]
+        #     vel_diff = self._data.qvel[:3] - self._data.joint("obstacle").qvel[:3]
+        #
+        #     obs = self.obs_helper.modify_obs(obs, "obstacle_pose", pos_diff[:2])
+        #     obs = self.obs_helper.modify_obs(obs, "obstacle_velocity", vel_diff[:2])
         return obs
 
     def _compute_action(self, cur_obs, action):
@@ -776,14 +782,13 @@ class Go1(MuJoCo):
 
             proximity_penalty = (distance_to_obstacle < soft_hit_condition) * np.exp(1 / distance_to_obstacle)
 
-            penalties = 1.*yaw_deviation_penalty + (np.abs(y_pos)) * (distance < -0.35) + proximity_penalty * (
-                        not self.narrow_passage and not self.no_walls) + self.collision_penalty()
+            penalties = 1.*yaw_deviation_penalty + (np.abs(y_pos)) * (distance < -0.35)
             y_bounders = 5*(np.abs(y_pos)+0.15 >= self._room_width/2)
 
             target_vel = 1
             reward = 2.5 * max(min(target_vel, global_vel[0]), 0)
 
-            return reward - penalties - y_bounders
+            return reward - self.collision_penalty() - penalties - self.safety_penalties*(y_bounders + proximity_penalty)
 
 
     def reward(self, state, action, next_state, absorbing):
@@ -918,7 +923,7 @@ class Go1(MuJoCo):
         pos_robot = self._data.body("trunk").xpos[:2]
 
         reward_collision = 10 * self.obstacle_robot_collision
-        reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])
+        reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])/self._room_width
         # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
         reward_antagonist = (reward_collision + reward_distance)
 
@@ -1019,19 +1024,19 @@ class Go1(MuJoCo):
             worldbody = spec.worldbody
             # z_wall = -2
             z_wall = 0.8
-            worldbody.add_site(
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=[5, self._room_width/2, 0.05],
-                pos=[3,0,0],
-                rgba=[0,1,0,0.1]
-            )
-            worldbody.add_site(
-                name="finish_line",
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=[1, self._room_width/2, 0.05],
-                pos=[7,0,0],
-                rgba=[1,0,0,0.1]
-            )
+            # worldbody.add_site(
+            #     type=mujoco.mjtGeom.mjGEOM_BOX,
+            #     size=[5, self._room_width/2, 0.05],
+            #     pos=[3,0,0],
+            #     rgba=[0,1,0,0.1]
+            # )
+            # worldbody.add_site(
+            #     name="finish_line",
+            #     type=mujoco.mjtGeom.mjGEOM_BOX,
+            #     size=[1, self._room_width/2, 0.05],
+            #     pos=[7,0,0],
+            #     rgba=[1,0,0,0.1]
+            # )
             # self.no_walls = np.random.uniform() < 0.5
             # self.no_walls = False
             # if self.no_walls:
@@ -1099,8 +1104,6 @@ class Go1(MuJoCo):
             self._model = model
 
             self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
-            y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
-            y_obstacle = np.random.uniform(-self.wall_pos + self._obstacle_w, self.wall_pos - self._obstacle_w)
 
 
 
@@ -1108,13 +1111,18 @@ class Go1(MuJoCo):
             self._model.opt.timestep = 0.005
             self._data = mujoco.MjData(model)
             self._data.qpos[7:19] = self.default_dof_pos.copy()
-            # x = np.random.uniform(-1.5, 1.5)
-            x = 0
-            self._data.qpos[0:3] = [x, y_robot, 0.36]
-            self.obstacle_pose_x = x + np.random.uniform(2.5, 3.5)
+            x_robot = 0
+            y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+
+            self._data.qpos[0:3] = [x_robot, y_robot, 0.36]
+            self.obstacle_pose_x = x_robot + np.random.uniform(2.5, 3.5)
+
             if self.use_heuristic:
                 self.target_pose = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
                 self._model.site("goal").pos[0] = self.obstacle_pose_x
+
+
+            y_obstacle = np.random.uniform(-self.wall_pos + self._obstacle_w, self.wall_pos - self._obstacle_w)
 
             self._data.joint("obstacle").qpos[:3] = [self.obstacle_pose_x, y_obstacle, obstacle_height]
             self._model.site("target").pos[0] = self.obstacle_pose_x + 1

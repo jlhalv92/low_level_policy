@@ -223,15 +223,21 @@ class ActorNetwork(nn.Module):
         self._h1 = nn.Linear(n_input, n_features)
         self._h2 = nn.Linear(n_features, n_features)
 
-        nn.init.xavier_uniform_(self._h1.weight,
-                                gain=nn.init.calculate_gain('relu'))
-        nn.init.xavier_uniform_(self._h2.weight,
-                                gain=nn.init.calculate_gain('relu'))
-
+        # nn.init.xavier_uniform_(self._h1.weight,
+        #                         gain=nn.init.calculate_gain('relu'))
+        # nn.init.xavier_uniform_(self._h2.weight,
+        #                         gain=nn.init.calculate_gain('relu'))
+        nn.init.uniform_(self._h1.weight, a=-0.1, b=0.1)
+        nn.init.uniform_(self._h2.weight, a=-0.1, b=0.1)
+        nn.init.zeros_(self._h1.bias)
+        nn.init.zeros_(self._h2.bias)
+        # #
         self._out = nn.Linear(n_features, n_output)
-
-        nn.init.xavier_uniform_(self._out.weight,
-                                gain=nn.init.calculate_gain('linear'))
+        nn.init.uniform_(self._out.weight, a=-0.1, b=0.1)
+        nn.init.zeros_(self._out.bias)
+        #
+        # nn.init.xavier_uniform_(self._out.weight,
+        #                         gain=nn.init.calculate_gain('linear'))
 
     def forward(self, state):
 
