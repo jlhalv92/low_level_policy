@@ -101,7 +101,8 @@ def experiment(method_name ,alg,
     cfg = dict(max_antagonist_v=velocity,
                antagonist=False,
                joystick=joystick,
-               use_heuristic=use_heuristic,)
+               use_heuristic=use_heuristic,
+               n_static_obstacles=1)
 
     multi_obstacle = True
     if multi_obstacle:

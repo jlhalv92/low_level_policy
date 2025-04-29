@@ -167,7 +167,8 @@ def experiment_qarl(
         static_obstacles=False,
         activate_arrow=False,
         max_antagonist_v=antagonist_velocity,
-        safety_penalties=args.safety_penalties,)
+        safety_penalties=args.safety_penalties,
+        n_static_obstacles=1)
 
     multiple_obstacles = True
     if multiple_obstacles:

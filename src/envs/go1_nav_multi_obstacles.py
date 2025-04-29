@@ -160,6 +160,11 @@ class Go1MultiObs(MuJoCo):
         else:
             self.antagonist = False
 
+        if "n_static_obstacles" in cfg.keys():
+            self.n_static_obstacles = cfg["n_static_obstacles"]
+        else:
+            self.n_static_obstacles = 1
+
         self.controller_pd = PDController(self)
         self.narrow_passage = False
         self.no_walls = False
@@ -589,7 +594,7 @@ class Go1MultiObs(MuJoCo):
                 obstacle_pos_diff = self.target_obstacle_pos - current_obstacle_pos
 
                 obstacle_vel = 2*(obstacle_pos_diff)
-                if obstacle_pos_diff <= 0.1:
+                if np.abs(obstacle_pos_diff) <= 0.1:
                     self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
                 clipped_obstacle_velocity = np.clip(obstacle_vel, -self.max_antagonist_v, self.max_antagonist_v)
                 self._data.ctrl[-1] = clipped_obstacle_velocity
@@ -853,7 +858,7 @@ class Go1MultiObs(MuJoCo):
         collision_robot = legs_collision_obstacles or trunk_collision_obstacles
 
 
-        if fall or collision_robot_wall or collision_robot :
+        if fall or collision_robot :
             self.terminates = True
 
     def reward_antagonist(self):
@@ -934,7 +939,7 @@ class Go1MultiObs(MuJoCo):
 
 
     def reset_states(self, task):
-        n_obstacles = 2
+        # self.n_obstacles = 1
 
 
         if task == 2:
@@ -961,12 +966,12 @@ class Go1MultiObs(MuJoCo):
                 pos = [0., 0, 0.1],
                 rgba = [1, 0, 0, 1])
             # self._room_width = np.random.uniform(low=1.2, high=6)
-            self._room_width = np.random.uniform(low=3, high=5.5)
+            self._room_width = np.random.uniform(low=4, high=5)
             self._obstacle_l = 0.5
             self._obstacle_w = 0.5
             obstacles_list = ["obstacle_1"]
 
-            for i in range(n_obstacles):
+            for i in range(self.n_static_obstacles):
                 obstacle_name =f'static_obstacle_{i}'
                 obstacles_list.append(obstacle_name)
                 sx = 0.5
@@ -1009,6 +1014,7 @@ class Go1MultiObs(MuJoCo):
                     geom.size[1] = 3
                     geom.pos[2] = z_wall
 
+            # np.random.uniform(1.5, 2.5)
             ref_obstacle_pos = np.random.uniform(1.5, 2.5)
             np.random.shuffle(obstacles_list)
 
@@ -1017,7 +1023,7 @@ class Go1MultiObs(MuJoCo):
                 if idx ==0:
                     pos_x = ref_obstacle_pos
                 else:
-                    pos_x = ref_obstacle_pos + 2
+                    pos_x = ref_obstacle_pos + np.random.uniform(1.5, 2.5)
 
                 if obstacle_id == "obstacle_1":
                     obstacle_height = 0.8
@@ -1038,7 +1044,7 @@ class Go1MultiObs(MuJoCo):
             self._data = mujoco.MjData(model)
             self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
 
-            new_obstacles = [f"static_obstacle_{i}" for i in range(n_obstacles)]
+            new_obstacles = [f"static_obstacle_{i}" for i in range(self.n_static_obstacles)]
 
             self.collision_groups_list[-1][1].extend(new_obstacles)
 

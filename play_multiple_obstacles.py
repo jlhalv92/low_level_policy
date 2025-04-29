@@ -20,7 +20,7 @@ from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
-from src.envs.go1_nav_multi_obstacles import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs as Go1
 from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
 import wandb
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
@@ -82,7 +82,8 @@ horizon=500
                activate_arrow=False,
                joystick=joystick,
                use_heuristic=False,
-               static_obstacle=False,)
+               static_obstacle=False,
+               n_static_obstacles=1)
 
     mdp = Go1(horizon,
               gamma,
@@ -160,7 +161,7 @@ if __name__ == "__main__":
         control_agent=control_agent,
         aware_rationality=False,
         max_v_antagonist=velocity,
-        n_episodes_test=1,
+        n_episodes_test=5,
         protagonist_id = str(i),
         # file_path=file_path,
         render=True,
