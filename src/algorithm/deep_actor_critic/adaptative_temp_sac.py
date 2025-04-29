@@ -60,9 +60,6 @@ class AdaptiveTempSAC(SAC):
                                         output_tensor=True, idx=1)
 
         q = torch.min(q_0, q_1)
-        # q_log =q.clone().detach().cpu().numpy().mean()
-        # entropy_loss = (self._alpha *log_prob).clone().detach().cpu().numpy().mean()
-        # print(f"INFO ACTOR LOSS, entropy {entropy_loss} and q {q_log}")
         return (self._alpha * log_prob - q).mean()
 
     def fit(self, dataset):

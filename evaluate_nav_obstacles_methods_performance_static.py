@@ -145,7 +145,8 @@ if __name__ == "__main__":
     i=0
     protagonist_paths = ["/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_1.5/obstacles_navigation_velocity_antagonist_1.5/epoch_last_{}",
                          "/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_{}",
-                         "/home/jose-luis/CORL_final_results/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.3/run_{}/PROTAGONIST/epoch_last",
+                         # "/home/jose-luis/CORL_final_results/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.3/run_{}/PROTAGONIST/epoch_last",
+                         "/home/jose-luis/experiments_different_supports/final_result_corl_not_safety_penalties/GO1/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.5/run_{}/PROTAGONIST/epoch_last"
                          "/home/jose-luis/CORL_final_results/obstacles_navigation/RARL_antagonist_velocity=1.5/run_{}/PROTAGONIST/epoch_last",
                          "/home/jose-luis/CORL_final_results/obstacles_navigation/UNIFORM_mv=1.5/run_{}/PROTAGONIST/epoch_last",
                          ]

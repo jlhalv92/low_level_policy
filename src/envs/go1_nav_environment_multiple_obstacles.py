@@ -1023,7 +1023,9 @@ class Go1(MuJoCo):
 
 
     def reset_states(self, task):
-        n_obstacles = 6
+        n_obstacles = 2
+        obstacle_max_x = 8
+        obstacle_min_x = 2
 
         if task == 2:
 
@@ -1121,7 +1123,7 @@ class Go1(MuJoCo):
                     geom.size[1] = 3
                     geom.pos[2] = z_wall
 
-            pos_x = np.linspace(2, 10, n_obstacles+1)
+            pos_x = np.linspace(obstacle_min_x, obstacle_max_x, n_obstacles+1)
             last_obstcle_pose = pos_x[-1]
             np.random.shuffle(pos_x)
 

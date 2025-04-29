@@ -42,6 +42,7 @@ def experiment(method_name,
                log=False,
                use_cuda=False,
                temperature=1.,
+               velocity=1.5,
                wandb_project=""):
 
     np.random.seed()
@@ -78,10 +79,8 @@ def experiment(method_name,
         )
     joystick = False
     cfg = dict(antagonist=True,
-               max_level=False,
-               joystick=joystick,
-               static_obstacles=False,
-               activate_arrow=False)
+               max_antagonist_v=velocity,
+               joystick=joystick)
 
 
 
@@ -120,7 +119,7 @@ def experiment(method_name,
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[-1.5, 1.5])
+                critic_fit_params=None, range=[-velocity, velocity])
 
     preprocessor = StateVariableConcatenation()
 
@@ -134,7 +133,8 @@ def experiment(method_name,
                 preprocessors = [preprocessor],
                 rationality_antagonist = True)
 
-    temps = np.random.uniform(low=0, high=temperature, size=100)
+    # temps = np.random.uniform(low=0, high=temperature, size=100)
+    temps = temperature*np.ones(100)
     core.set_variables_for_training(temps)
     dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
 
@@ -146,7 +146,8 @@ def experiment(method_name,
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
-    temps = np.random.uniform(low=0, high=temperature, size=100)
+    temps = temperature * np.ones(100)
+    # temps = np.random.uniform(low=0, high=temperature, size=100)
     core.set_variables_for_training(temps)
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
@@ -154,7 +155,8 @@ def experiment(method_name,
 
 
     for it in trange(n_epochs, leave=False):
-        temps = np.random.uniform(low=0, high=temperature, size=100)
+        # temps = np.random.uniform(low=0, high=temperature, size=100)
+        temps = temperature * np.ones(100)
         core.set_variables_for_training(temps)
 
         logger.info("Training Antagonist")
@@ -216,6 +218,8 @@ def parse_args():
     parser.add_argument("--alpha", type=float, default=1., help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--run_id", type=int, default=0)
+    parser.add_argument("--velocity", type=float, default=2., help=" antagonist vel value")
+
 
 
 
@@ -239,7 +243,8 @@ if __name__ == '__main__':
                log=args.log,
                use_cuda=args.use_cuda,
                temperature=args.alpha,
-               wandb_project=args.wandb_project)
+               wandb_project=args.wandb_project,
+               velocity=args.velocity)
 
 
 

@@ -13,6 +13,7 @@ from mushroom_rl.core import Logger
 from src.core.core_quadruped_navigation import Core
 
 from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
 
 from src.networks.nets import  CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork
 import wandb
@@ -78,7 +79,7 @@ def experiment(method_name ,alg,
     logger.strong_line()
     task_name = "obstacles_navigation"
 
-    agent_task = f"{task_name}_velocity_antagonist_{velocity}"
+    agent_task = f"{task_name}"
     logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
 
     view = False
@@ -102,13 +103,21 @@ def experiment(method_name ,alg,
                joystick=joystick,
                use_heuristic=use_heuristic,)
 
-    mdp = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name)
+    multi_obstacle = True
+    if multi_obstacle:
+        mdp = Go1MultiObs(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
+    else:
+        mdp = Go1(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
 
-    job_id =method_name + f"_heuristic_velocity_antagonist_{velocity}"
+    job_id =method_name + f"_heuristic_velocity_antagonist_{velocity}_multi_obstacles"
     print(job_id)
     if log:
         wandb.init(
@@ -158,11 +167,7 @@ def experiment(method_name ,alg,
                 actor_optimizer, critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
                 critic_fit_params=None, range=[min_a, max_a])
-    if retrain:
-        path = "checkpoint/GO1/SAC/obstacles_navigation_50_rays_new_privilege_state_network/epoch_last"
-        agent = Agent.load(path)
-        agent.reset_replay_memory(initial_replay_size,
-                max_replay_size)
+
 
     core = Core(agent,
                 mdp,

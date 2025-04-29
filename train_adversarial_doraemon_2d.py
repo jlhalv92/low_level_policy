@@ -166,7 +166,6 @@ def experiment_qarl(
 
     actor_input_shape = mdp.info.observation_space.shape
 
-
     actor_input_shape = (actor_input_shape[0],)
 
     actor_mu_params = dict(network=ActorBiNetwork,

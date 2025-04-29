@@ -300,6 +300,8 @@ class Core(object):
         robot_state = self.mdp.get_robot_observation()
 
 
+
+
         if learning:
             # navigation_state = self._state[-obs_dim:]
             if self.aware_rationality:
@@ -323,6 +325,7 @@ class Core(object):
             if self.aware_rationality:
                 action = self.agents[0].draw_action(nav_state[:-1])
             else:
+                print(self.aware_rationality, nav_state.shape)
                 action = self.agents[0].draw_action(nav_state)
 
             if self.use_antagonist:
@@ -362,6 +365,7 @@ class Core(object):
 
         if self.rationality_antagonist:
             next_state_antagonist = self._preprocess(next_state_antagonist.copy())
+
 
 
 

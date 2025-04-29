@@ -146,13 +146,16 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    velocity = 1.5
+    velocity =1.5
     model_id = "RARL_alpha"
     # level_a =0.4
     run = 4
 
     path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_0"
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/SAC_ANTAGONIST_norm_reward_alpha_1.0/run_0/ANTAGONIST/epoch_50"
+    path_antagonist = "checkpoint/GO1/obstacles_navigation/SAC_ANTAGONIST_norm_reward_alpha_2.0/run_0/ANTAGONIST/epoch_120"
+    path_protagonist = "/home/jose-luis/experiments_different_supports/final_result_corl_not_safety_penalties/GO1/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.5/run_0/ANTAGONIST/epoch_last"
+
+
 
     antagonist = Agent.load(path_antagonist)
 
@@ -165,6 +168,9 @@ if __name__ == "__main__":
         # path_protagonist = "checkpoint/GO1/SAC/obstacles_navigation_adversarial_static/epoch_last_0"
     # path_protagonist = "/home/jose-luis/checkpoints/test/epoch_last"
     path_protagonist = f"/home/jose-luis/CORL_final_results/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.3/run_{0}/PROTAGONIST/epoch_last"
+    path_protagonist = "/home/jose-luis/experiments_different_supports/final_result_corl_not_safety_penalties/GO1/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.5/run_0/PROTAGONIST/epoch_last"
+    path_protagonist = "/home/jose-luis/experiments_different_supports/final_result_corl_not_safety_penalties/GO1/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.5/run_0/PROTAGONIST/epoch_last"
+
     # path_protagonist = "/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_0"
 
 
@@ -177,13 +183,13 @@ if __name__ == "__main__":
         control_agent=control_agent,
         aware_rationality=False,
         max_v_antagonist=velocity,
-        n_episodes_test=1,
-        alpha=2,
+        n_episodes_test=2,
+        alpha=1,
         protagonist_id ="0",
         seed=run,
         # file_path=file_path,
         render=True,
-        record=False,
+        record=True,
         joystick=False,
         horizon=500,
 

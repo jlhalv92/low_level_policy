@@ -20,6 +20,8 @@ from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
 from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
+
 
 from src.networks.nets import ActorNetwork, CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, \
     PolicyNetworkStudent
@@ -137,7 +139,7 @@ def experiment_qarl(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_velocity_antagonist_{antagonist_velocity}_support={temperature_support}"
+    job_name = method_name + f"_velocity_antagonist_{antagonist_velocity}_multi_obstacles"
 
     if log:
         wandb.init(
@@ -167,12 +169,21 @@ def experiment_qarl(
         max_antagonist_v=antagonist_velocity,
         safety_penalties=args.safety_penalties,)
 
-    mdp = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name
-              )
+    multiple_obstacles = True
+    if multiple_obstacles:
+        mdp = Go1MultiObs(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
+    else:
+
+        mdp = Go1(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name
+                  )
 
     actor_input_shape = mdp.info.observation_space.shape
 
@@ -474,7 +485,7 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max", type=float, default=0.001, help="kl_max")
     parser.add_argument("--velocity", type=float, default=1.5)
-    parser.add_argument("--lower_bound", type=float, default=0.6)
+    parser.add_argument("--lower_bound", type=float, default=0.5)
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=True,
                         help="Enable logging")
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")

@@ -105,7 +105,7 @@ horizon=500
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality,
+        aware_rationality=False,
         rationality_antagonist=True)
 
 
@@ -132,21 +132,6 @@ horizon=500
         alfa=np.mean(temps)
     )
 
-    # results_dict = dict(
-    #     protagonist_id=protagonist_id,
-    #     J_online=J_online,
-    #     R_online=R_online,
-    #     success_rate=success_rate,
-    #     alfa=np.mean(temps),
-    #     antagonist_velocity=max_v_antagonist,
-    #     seed=seed,
-    #     level_antagonist=level_antagonist)
-    #
-    # if save_file:
-    #     print("writing results...")
-    #     with open(file_path, 'w') as f:
-    #         json.dump(results_dict, f, indent=4)
-
     return success_rate
 
 
@@ -168,16 +153,15 @@ if __name__ == "__main__":
     # print(f"-----------------------------------------{msg}--------------------------------------------")
     performance = []
     # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
-    temperature = 1.
+    temperature = 10.
     success_rates = []
     for i in range(1):
-        path_protagonist = f"/home/jose-luis/checkpoint_2d/DORAEMON_r_True_t_support_1.0_mv=1.0_plb=0.4_kl=0.0001/run_{run}/PROTAGONIST/epoch_last"
+        path_protagonist = f"/home/jose-luis/results_corl_2d/RARL2d_antagonist_velocity=2.0/run_0/PROTAGONIST/epoch_last"
         protagonist = Agent.load(path_protagonist)
         success_rate = benchmark(
             protagonist=protagonist,
             antagonist=antagonist,
             control_agent=control_agent,
-            aware_rationality=True,
             max_v_antagonist=velocity,
             n_episodes_test=5,
             alpha=temperature,
