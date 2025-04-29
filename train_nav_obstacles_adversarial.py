@@ -171,6 +171,7 @@ def experiment_qarl(
 
     multiple_obstacles = True
     if multiple_obstacles:
+
         mdp = Go1MultiObs(horizon,
                   gamma,
                   timestep=0.005,

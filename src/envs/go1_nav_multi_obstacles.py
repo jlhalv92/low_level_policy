@@ -150,9 +150,16 @@ class Go1MultiObs(MuJoCo):
 
 
         if "static_obstacles" in cfg.keys():
-            self.max_antagonist_v = cfg["static_obstacles"]
+            self.static_obstacles = cfg["static_obstacles"]
         else:
             self.static_obstacles = False
+
+
+        if "antagonist" in cfg.keys():
+            self.antagonist = cfg["antagonist"]
+        else:
+            self.antagonist = False
+
         self.controller_pd = PDController(self)
         self.narrow_passage = False
         self.no_walls = False
@@ -177,8 +184,6 @@ class Go1MultiObs(MuJoCo):
             pygame.display.set_caption("Keyboard Joystick Simulation")
 
         self.qpos_offset = np.array([0.1, 0.5, 0.5] * 4)
-        self.level = 0
-        self.antagonist = cfg["antagonist"]
         self.obstacle_velocity = 0
 
         # self.occupancy_grid = OccupancyGrid(15,15,0.01)
@@ -568,9 +573,11 @@ class Go1MultiObs(MuJoCo):
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
+            obstacle_vel =  np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
             self._data.ctrl[-1] = np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
             self._data.ctrl[-2] = 0
             self._data.ctrl[-3] = self.obstacle_pose_x
+
         else:
             if self.static_obstacles:
                 self._data.ctrl[-1] = 0
