@@ -706,9 +706,9 @@ class Go1MultiObs(MuJoCo):
         pos_robot = self._data.body("trunk").xpos[:2] - self._data.body("obstacle_1").xpos[:2]
         velocity_robot = self._data.qvel[:2]
         velocity_obstacle = np.array([self._data.joint("obstacle").qvel[1]])
-        distance = self._data.site("target").xpos[0] - self._data.qpos[0]
-        pass_finish_line = np.array([distance < -0.35])
-                                # 2, 2, 1, 1
+        distance = self._data.site("obstacle_1").xpos[0] - self._data.qpos[0]
+        pass_finish_line = np.array([distance + 0.5 < -0.35])
+
         return np.concatenate((pos_robot, velocity_robot, velocity_obstacle, pass_finish_line))
 
     def get_reward(self, action):
@@ -862,35 +862,18 @@ class Go1MultiObs(MuJoCo):
     def reward_antagonist(self):
 
         # Reward Antagonist
-        distance = self._data.site("target").xpos[0] - self._data.qpos[0]
-        pass_finish_line = distance < -0.35
 
-        pos_antagonist = self._data.body("obstacle_1").xpos[:2]
+        pos_antagonist = self._data.body("obstacle_1").xpos[:2].copy()
 
-        pos_robot = self._data.body("trunk").xpos[:2]
+        pos_robot = self._data.body("trunk").xpos[:2].copy()
 
         reward_collision = 10 * self.obstacle_robot_collision
         reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])
-        # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
         reward_antagonist = (reward_collision + reward_distance)
 
         return reward_antagonist
 
-    # def reward_antagonist(self):
-    #
-    #     # Reward Antagonist
-    #     distance = self._data.site("target").xpos[0] - self._data.qpos[0]
-    #     pass_finish_line = distance < -0.35
-    #
-    #     pos_antagonist = self._data.body("obstacle_1").xpos[:2]
-    #
-    #     pos_robot = self._data.body("trunk").xpos[:2]
-    #
-    #     reward_collision = 10 * self.obstacle_robot_collision
-    #     reward_distance = -np.abs(pos_robot[1] - pos_antagonist[1])
-    #     # reward_velocity = 2*np.abs(self.mdp._data.joint("obstacle").qvel[1])*np.abs(pos_robot[1] - pos_antagonist[1])
-    #     reward_antagonist = (reward_collision + reward_distance) * ( not pass_finish_line) +  -1*(pass_finish_line)
-    #     return reward_antagonist
+
 
     def is_absorbing(self, state):
 

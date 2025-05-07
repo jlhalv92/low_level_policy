@@ -299,7 +299,7 @@ def experiment(
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=10, render=view, id_agent=0, return_antagonist_state=True
+        n_episodes=10, render=False, id_agent=0, return_antagonist_state=True
     )
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
@@ -388,7 +388,6 @@ def experiment(
         core.callback_step.clean()
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-
 
         logger.epoch_info(
             it + 1,
