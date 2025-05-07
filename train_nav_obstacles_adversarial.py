@@ -96,9 +96,9 @@ def extract_temp_and_sample_return(data, gamma, temperature_support_a=0, tempera
     return temperatures, sample_returns
 
 
-def experiment_qarl(
+def experiment(
         method_name="",
-        alg=[SAC, AdaptiveTempSAC],
+        alg=None,
         n_epochs=200,
         n_steps=5000,
         n_steps_per_fit=1,
@@ -167,10 +167,10 @@ def experiment_qarl(
         static_obstacles=False,
         activate_arrow=False,
         max_antagonist_v=antagonist_velocity,
-        safety_penalties=args.safety_penalties,
         n_static_obstacles=1)
 
     multiple_obstacles = True
+
     if multiple_obstacles:
 
         mdp = Go1MultiObs(horizon,
@@ -512,7 +512,7 @@ if __name__ == "__main__":
     run_id = args.run_id
     kl_max = args.kl_max
 
-    experiment_qarl(
+    experiment(
         method_name=args.method,
         alg=[SAC, AdaptiveTempSAC],
         n_epochs=args.n_epochs,

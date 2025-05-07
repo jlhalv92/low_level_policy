@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary import Core
 
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
 
 from src.algorithm.deep_actor_critic.a_sac import SAC
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
@@ -96,26 +97,33 @@ def experiment_uniform(
             config=conf
         )
 
-
-
-
-    cfg_rewards=dict()
-
     joystick = False
-    cfg = dict(
-               antagonist=True,
+    cfg = dict(antagonist=True,
+               max_level=False,
                joystick=joystick,
-               rewards=cfg_rewards,
                static_obstacles=False,
-                activate_arrow=False,
-                max_antagonist_v=antagonist_velocity,
-                safety_penalties=args.safety_penalties)
+               activate_arrow=False,
+               max_antagonist_v=antagonist_velocity,
+               n_static_obstacles=1)
 
-    mdp = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name)
+
+    multiple_obstacles = True
+
+    if multiple_obstacles:
+
+        mdp = Go1MultiObs(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
+    else:
+
+        mdp = Go1(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name
+                  )
 
     actor_input_shape = mdp.info.observation_space.shape
 

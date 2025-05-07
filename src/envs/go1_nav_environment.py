@@ -991,11 +991,8 @@ class Go1(MuJoCo):
 
 
         if task == 2:
-            if self.behaviour_cloning:
-                spec = mujoco.MjSpec.from_file(
-                    filename="src/envs/unitree_go1/navigation_go1_rays_behaviour_cloning.xml")
-            else:
-                spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays.xml")
+
+            spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays.xml")
 
             geoms = spec.worldbody.geoms
             walls = ["wall_3", "wall_4"]

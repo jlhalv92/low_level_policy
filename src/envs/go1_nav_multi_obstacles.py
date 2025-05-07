@@ -219,16 +219,8 @@ class Go1MultiObs(MuJoCo):
         kd = 0.5
         timestep = timestep
 
-        if task == 0:
-            xml_path = "src/envs/unitree_go1/walk_go1.xml"
-            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays.xml"
 
-        if task == 1:
-            self.xml_path = "src/envs/unitree_go1/navigation_walk_go1.xml"
-
-        if task == 2:
-
-            self.xml_path = "src/envs/unitree_go1/navigation_go1_rays_multi_object.xml"
+        self.xml_path = "src/envs/unitree_go1/navigation_go1_rays_multi_object.xml"
 
 
 
@@ -593,10 +585,11 @@ class Go1MultiObs(MuJoCo):
                 current_obstacle_pos = self._data.geom("obstacle_1").xpos[1]
                 obstacle_pos_diff = self.target_obstacle_pos - current_obstacle_pos
 
-                obstacle_vel = 2*(obstacle_pos_diff)
-                if np.abs(obstacle_pos_diff) <= 0.1:
-                    self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
+                obstacle_vel = (obstacle_pos_diff)
+                if np.abs(obstacle_pos_diff) < 0.2:
+                    self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
                 clipped_obstacle_velocity = np.clip(obstacle_vel, -self.max_antagonist_v, self.max_antagonist_v)
+
                 self._data.ctrl[-1] = clipped_obstacle_velocity
                 self._data.ctrl[-2] = 0
                 self._data.ctrl[-3] = self.obstacle_pose_x
@@ -688,9 +681,15 @@ class Go1MultiObs(MuJoCo):
         trunk_collision_obstacles = self._check_collision("trunk", "obstacles")
         feet_collision_obstacles = self._check_collision("feet", "obstacles")
 
+
+        legs_collision_static_obstacles = self._check_collision("legs", "static_obstacles")
+        trunk_collision_static_obstacles = self._check_collision("trunk", "static_obstacles")
+        feet_collision_static_obstacles = self._check_collision("feet", "static_obstacles")
+
         collision_obstacle = (legs_collision_obstacles or trunk_collision_obstacles or feet_collision_obstacles)
         collision_wall = (legs_collision_walls or trunk_collision_walls or feet_collision_walls)
-        penalty = 20 * (collision_obstacle) + 10 * (collision_wall)
+        collision_static_obstacles = legs_collision_static_obstacles or trunk_collision_static_obstacles or feet_collision_static_obstacles
+        penalty = 20 * (collision_obstacle) + 10 * (collision_wall) + 10 *(collision_static_obstacles)
 
         return penalty
 
@@ -730,7 +729,6 @@ class Go1MultiObs(MuJoCo):
             forward_local_vel =  self.orientation_quat_inv.apply(global_vel)[0]
             vel_reward = 2.5*max(min(right_direction * forward_local_vel, 1), 0)
             penalties = (np.abs(y_pos)) * (distance < -0.35)
-
             return vel_reward - self.collision_penalty() - penalties
 
     def reward(self, state, action, next_state, absorbing):
@@ -920,16 +918,15 @@ class Go1MultiObs(MuJoCo):
 
         self._ts = 0
         self.episode_steps = 0
+
+
+
+        self.reset_states(self.task)
         self._data.qpos[7:19] = self.default_dof_pos.copy()
-        self._data.qpos[0:3] = [0, 0, 0.36]
+        y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
 
-        if self.task == 2 or self.task == 3 or self.task == 4:
-            self.reset_states(self.task)
-
-
-
-
-            mujoco.mj_forward(self._model, self._data)
+        self._data.qpos[0:3] = [0, y_robot, 0.36]
+        mujoco.mj_forward(self._model, self._data)
 
         self.last_action = np.zeros(12)
         self.previous_vel = np.zeros(3)
@@ -939,142 +936,137 @@ class Go1MultiObs(MuJoCo):
 
 
     def reset_states(self, task):
-        # self.n_obstacles = 1
 
 
-        if task == 2:
+        spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays_multi_object.xml")
 
-            spec = mujoco.MjSpec.from_file(filename="src/envs/unitree_go1/navigation_go1_rays_multi_object.xml")
+        geoms = spec.worldbody.geoms
+        walls = ["wall_3", "wall_4"]
+        h_walls = ["wall_1", "wall_2"]
 
-            geoms = spec.worldbody.geoms
-            walls = ["wall_3", "wall_4"]
-            h_walls = ["wall_1", "wall_2"]
+        if self.activate_arrow:
+            trunk = spec.find_body("trunk")
+            trunk.add_site(name="velocity_arrow",
+            type = mujoco.mjtGeom.mjGEOM_CAPSULE,
+            size =  [0.01, 0.1, 0],
+            euler =[0, np.pi/2, 0],
+            pos = [0.1, 0, 0.1],
+            rgba = [1, 0, 0, 1])
 
-            if self.activate_arrow:
-                trunk = spec.find_body("trunk")
-                trunk.add_site(name="velocity_arrow",
-                type = mujoco.mjtGeom.mjGEOM_CAPSULE,
-                size =  [0.01, 0.1, 0],
-                euler =[0, np.pi/2, 0],
-                pos = [0.1, 0, 0.1],
-                rgba = [1, 0, 0, 1])
+            trunk.add_site(name="velocity_base",
+            type = mujoco.mjtGeom.mjGEOM_SPHERE,
+            size =  [0.02, 0, 0],
+            euler =[0, 0, 0],
+            pos = [0., 0, 0.1],
+            rgba = [1, 0, 0, 1])
+        self._room_width = np.random.uniform(low=4, high=5)
+        self._obstacle_l = 0.5
+        self._obstacle_w = 0.5
+        obstacles_list = ["obstacle_1"]
 
-                trunk.add_site(name="velocity_base",
-                type = mujoco.mjtGeom.mjGEOM_SPHERE,
-                size =  [0.02, 0, 0],
-                euler =[0, 0, 0],
-                pos = [0., 0, 0.1],
-                rgba = [1, 0, 0, 1])
-            # self._room_width = np.random.uniform(low=1.2, high=6)
-            self._room_width = np.random.uniform(low=4, high=5)
-            self._obstacle_l = 0.5
-            self._obstacle_w = 0.5
-            obstacles_list = ["obstacle_1"]
+        for i in range(self.n_static_obstacles):
+            obstacle_name =f'static_obstacle_{i}'
+            obstacles_list.append(obstacle_name)
+            sx = 0.5
+            sy =0.5
+            sz = 0.8
 
-            for i in range(self.n_static_obstacles):
-                obstacle_name =f'static_obstacle_{i}'
-                obstacles_list.append(obstacle_name)
-                sx = 0.5
-                sy =0.5
-                sz = 0.8
+            body = spec.worldbody.add_body(
+                name=obstacle_name,
+                quat=[1, 0, 0, 0],
+            )
+            geom = body.add_geom(
+                name=obstacle_name,
+                type=mujoco.mjtGeom.mjGEOM_BOX,
+                size=[sx, sy, sz],
+                rgba=[1, 0, 0, 1],
+            )
 
-                body = spec.worldbody.add_body(
-                    name=obstacle_name,
-                    quat=[1, 0, 0, 0],
-                )
-                geom = body.add_geom(
-                    name=obstacle_name,
-                    type=mujoco.mjtGeom.mjGEOM_BOX,
-                    size=[sx, sy, sz],
-                    rgba=[1, 0, 0, 1],
-                )
-
-            self.wall_pos = self._room_width / 2
-            worldbody = spec.worldbody
-            # z_wall = -2
-            z_wall = 0.8
+        self.wall_pos = self._room_width / 2
+        worldbody = spec.worldbody
+        # z_wall = -2
+        z_wall = 0.8
 
 
-            for geom in geoms:
-                if geom.name in walls:
-                    if geom.pos[1] < 0:
-                        geom.pos[1] = -self.wall_pos - geom.size[1] / 2
-                    else:
-                        geom.pos[1] = self.wall_pos + geom.size[1] / 2
-                    geom.pos[2] = z_wall
-
-
-
-            for geom in geoms:
-                if geom.name in h_walls:
-                    if geom.pos[0] < 0:
-                        geom.pos[0] = -2
-                    else:
-                        geom.pos[0] = 18
-                    geom.size[1] = 3
-                    geom.pos[2] = z_wall
-
-            # np.random.uniform(1.5, 2.5)
-            ref_obstacle_pos = np.random.uniform(1.5, 2.5)
-            np.random.shuffle(obstacles_list)
-
-            for idx,obstacle_id in enumerate(obstacles_list):
-                obstacle = spec.find_body(obstacle_id)
-                if idx ==0:
-                    pos_x = ref_obstacle_pos
+        for geom in geoms:
+            if geom.name in walls:
+                if geom.pos[1] < 0:
+                    geom.pos[1] = -self.wall_pos - geom.size[1] / 2
                 else:
-                    pos_x = ref_obstacle_pos + np.random.uniform(1.5, 2.5)
-
-                if obstacle_id == "obstacle_1":
-                    obstacle_height = 0.8
-                    obstacle.first_geom().size = [self._obstacle_l, self._obstacle_w, obstacle_height]
-                    self.obstacle_pose_x = pos_x
-
-
-                sx,sy,sz = obstacle.first_geom().size
-
-                y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
-
-                obstacle.pos = [pos_x, y_obstacle, sz]
-                ref_obstacle_pos = pos_x
-
-            model = spec.compile()
-            self._model = model
-            self._model.opt.timestep = 0.005
-            self._data = mujoco.MjData(model)
-            self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
-
-            new_obstacles = [f"static_obstacle_{i}" for i in range(self.n_static_obstacles)]
-
-            self.collision_groups_list[-1][1].extend(new_obstacles)
-
-            self.collision_groups = self.create_collision_groups(self.collision_groups_list)
+                    geom.pos[1] = self.wall_pos + geom.size[1] / 2
+                geom.pos[2] = z_wall
 
 
 
-            self._data.qpos[7:19] = self.default_dof_pos.copy()
-
-
-
-
-            self._model.site("target").pos[0] = ref_obstacle_pos + 1.5
-            # self._model.site("target").size[0] = 2
-            # self._model.site("target").size[1] = self.wall_pos
-            # self._model.site("target").pos[-1] = 0.1
-            if self._viewer is not None:
-                self._viewer.load_new_model(self._model)
-
-
-
-            if self.task == 2:
-                if not self.antagonist:
-                    self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
-                    self._data.ctrl[-1] = 0
-
+        for geom in geoms:
+            if geom.name in h_walls:
+                if geom.pos[0] < 0:
+                    geom.pos[0] = -2
                 else:
-                    self._data.ctrl[-1] = self.obstacle_velocity
+                    geom.pos[0] = 18
+                geom.size[1] = 3
+                geom.pos[2] = z_wall
 
-                self._data.ctrl[-3] = self.obstacle_pose_x
-                self._data.ctrl[-2] = 0
+        # np.random.uniform(1.5, 2.5)
+        ref_obstacle_pos = np.random.uniform(1.5, 2.5)
+        np.random.shuffle(obstacles_list)
+
+        for idx,obstacle_id in enumerate(obstacles_list):
+            obstacle = spec.find_body(obstacle_id)
+            if idx ==0:
+                pos_x = ref_obstacle_pos
+            else:
+                pos_x = ref_obstacle_pos + np.random.uniform(1.5, 2.5)
+
+            if obstacle_id == "obstacle_1":
+                obstacle_height = 0.8
+                obstacle.first_geom().size = [self._obstacle_l, self._obstacle_w, obstacle_height]
+                self.obstacle_pose_x = pos_x
+
+
+            sx,sy,sz = obstacle.first_geom().size
+
+            y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
+
+
+            obstacle.pos = [pos_x, y_obstacle, sz]
+            ref_obstacle_pos = pos_x
+
+        model = spec.compile()
+        self._model = model
+        self._model.opt.timestep = 0.005
+        self._data = mujoco.MjData(model)
+        # self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
+
+        new_obstacles = [f"static_obstacle_{i}" for i in range(self.n_static_obstacles)]
+        new_geoms = ("static_obstacles", new_obstacles)
+        # self.collision_groups_list[-1][1].extend(new_obstacles)
+        self.collision_groups_list.append(new_geoms)
+
+        self.collision_groups = self.create_collision_groups(self.collision_groups_list)
+
+
+        self._data.qpos[7:19] = self.default_dof_pos.copy()
+
+
+        self._model.site("target").pos[0] = ref_obstacle_pos + 1.5
+        # self._model.site("target").size[0] = 2
+        # self._model.site("target").size[1] = self.wall_pos
+        # self._model.site("target").pos[-1] = 0.1
+        if self._viewer is not None:
+            self._viewer.load_new_model(self._model)
+
+
+
+
+        if not self.antagonist:
+            self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
+            self._data.ctrl[-1] = 0
+
+        else:
+            self._data.ctrl[-1] = self.obstacle_velocity
+
+        self._data.ctrl[-3] = self.obstacle_pose_x
+        self._data.ctrl[-2] = 0
 
 

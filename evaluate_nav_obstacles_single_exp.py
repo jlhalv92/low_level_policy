@@ -84,10 +84,11 @@ horizon=1000
 
 
     cfg = dict(
-               antagonist=True,
+               antagonist=False,
                joystick=joystick,
                rewards=cfg_rewards,
                static_obstacles=False,
+                use_heuristic = True,
                 activate_arrow=True,
                 max_antagonist_v=max_v_antagonist)
 
@@ -189,7 +190,7 @@ if __name__ == "__main__":
         seed=run,
         # file_path=file_path,
         render=True,
-        record=True,
+        record=False,
         joystick=False,
         horizon=500,
 

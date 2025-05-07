@@ -12,6 +12,8 @@ import wandb
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
 from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
+
 from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
@@ -83,15 +85,27 @@ def experiment(method_name,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
-               max_antagonist_v=antagonist_velocity,)
+               max_antagonist_v=antagonist_velocity,
+               n_static_obstacles=1)
 
 
+    multiple_obstacles = True
 
-    mdp = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name)
+    if multiple_obstacles:
+
+        mdp = Go1MultiObs(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
+    else:
+
+        mdp = Go1(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name
+                  )
 
     actor_input_shape  = mdp.info.observation_space.shape
 
