@@ -274,7 +274,6 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=5, help="Run ID")
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--velocity", type=float, default=1.5, help="velocity")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")

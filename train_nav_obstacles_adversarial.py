@@ -147,7 +147,7 @@ def experiment(
             project=wandb_project,
             job_type=job_name,
             name="seed_{}".format(run_id),
-            group="DORAEMON_asymetric",
+            group="Asymetric",
             config=vars(conf)
         )
 
@@ -290,16 +290,6 @@ def experiment(
         aware_rationality=aware_rationality,
         rationality_antagonist=True)
 
-    # if pre_train_adversary:
-    #     core_eval = Core(
-    #         [agent, pre_train_adversary],
-    #         mdp,
-    #         low_level_agent=control_agent,
-    #         callback_step=CollectDataset(),
-    #         preprocessors=[preprocessor],
-    #         joystick=joystick,
-    #         aware_rationality=aware_rationality,
-    #         rationality_antagonist=True)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
@@ -361,11 +351,7 @@ def experiment(
             render = False
 
         logger.info("Evaluate Protagonist")
-        if method_name == "DORAEMON":
-            temps = teacher.sample_n_temperatures(n=n_episodes_test)
-
-        else:
-            temps = np.random.uniform(0, temperature_support, n_episodes_test)
+        temps = teacher.sample_n_temperatures(n=n_episodes_test)
 
         core.set_variables_for_training(temps)
         core.callback_step.clean()
@@ -381,13 +367,10 @@ def experiment(
         E_online = antagonist.policy.entropy(s)
 
         # Update temperature distribution
-        temperatures, _ = extract_temp_and_sample_return(core.callback_step.get(),
-                                                         core.mdp.info.gamma,
-                                                         temperature_support_b=temperature_support)
+        temperatures, _ = extract_temp_and_sample_return(core.callback_step.get(), core.mdp.info.gamma,temperature_support_b=temperature_support)
 
         ##################UPDATE distribution#########################################
         success_rate_array = calculate_success_rate_array(info, last)
-
 
         temp_perf_buffer.update_buffer([temperatures, success_rate_array])
 
@@ -406,19 +389,6 @@ def experiment(
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
 
-
-
-        # if pre_train_adversary:
-        #     core_eval.set_variables_for_training(temps)
-        #     core_eval.callback_step.clean()
-        #     dataset_eval = core_eval.evaluate(
-        #         n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True
-        #     )
-        #
-        #     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_eval)
-        #     success_rate_eval = calculate_success_rate(info, last)
-        # else:
-        #     success_rate_eval = 0
 
         logger.epoch_info(
             it + 1,
@@ -491,7 +461,7 @@ def parse_args():
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=True,
                         help="Enable logging")
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
-    parser.add_argument("--method", type=str, default="DORAEMON")
+    parser.add_argument("--method", type=str, default="RAMEN")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--safety_penalties", type=str2bool, nargs='?', const=False)
 
