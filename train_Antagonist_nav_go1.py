@@ -15,6 +15,7 @@ import wandb
 from mushroom_rl.core import Logger
 from src.core.core_quadruped_adversary import Core
 from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
 from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 from src.utils.state_preprocessor import StateVariableConcatenation
@@ -78,17 +79,31 @@ def experiment(method_name,
             name="seed_{}".format(run_id)
         )
     joystick = False
-    cfg = dict(antagonist=True,
-               max_antagonist_v=velocity,
-               joystick=joystick)
+    cfg = dict(
+        antagonist=True,
+        joystick=joystick,
+        static_obstacles=False,
+        activate_arrow=False,
+        max_antagonist_v=1.5,
+        n_static_obstacles=1)
 
+    multiple_obstacles = True
 
+    if multiple_obstacles:
 
-    mdp = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name)
+        mdp = Go1MultiObs(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
+    else:
+
+        mdp = Go1(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name
+                  )
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
@@ -133,8 +148,8 @@ def experiment(method_name,
                 preprocessors = [preprocessor],
                 rationality_antagonist = True)
 
-    # temps = np.random.uniform(low=0, high=temperature, size=100)
-    temps = temperature*np.ones(100)
+    temps = np.random.uniform(low=0, high=temperature, size=100)
+    # temps = temperature*np.ones(100)
     core.set_variables_for_training(temps)
     dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
 
@@ -146,8 +161,8 @@ def experiment(method_name,
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
-    temps = temperature * np.ones(100)
-    # temps = np.random.uniform(low=0, high=temperature, size=100)
+    # temps = temperature * np.ones(100)
+    temps = np.random.uniform(low=0, high=temperature, size=100)
     core.set_variables_for_training(temps)
 
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
@@ -155,8 +170,8 @@ def experiment(method_name,
 
 
     for it in trange(n_epochs, leave=False):
-        # temps = np.random.uniform(low=0, high=temperature, size=100)
-        temps = temperature * np.ones(100)
+        temps = np.random.uniform(low=0, high=temperature, size=100)
+        # temps = temperature * np.ones(100)
         core.set_variables_for_training(temps)
 
         logger.info("Training Antagonist")
@@ -165,7 +180,7 @@ def experiment(method_name,
         # core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
 
         if it % 10==0 and view:
-            render=True
+            render=False
         else:
             render=False
 
@@ -215,7 +230,7 @@ def parse_args():
     parser.add_argument("--runs", type=int, default=5, help="Run ID")
     parser.add_argument("--log",default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--alpha", type=float, default=1., help="Alpha value")
+    parser.add_argument("--alpha", type=float, default=5., help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
     parser.add_argument("--run_id", type=int, default=0)
     parser.add_argument("--velocity", type=float, default=2., help=" antagonist vel value")
@@ -232,7 +247,7 @@ if __name__ == '__main__':
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    experiment(method_name="SAC_ANTAGONIST_norm_reward",
+    experiment(method_name="SAC_ANTAGONIST_EV",
                alg=[SAC, AdaptiveTempSAC],
                n_epochs=args.n_epochs,
                n_steps=args.n_steps,

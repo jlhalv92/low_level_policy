@@ -905,11 +905,7 @@ class Go1MultiObs(MuJoCo):
 
 
         self.reset_states(self.task)
-        self._data.qpos[7:19] = self.default_dof_pos.copy()
-        y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
 
-        self._data.qpos[0:3] = [0, y_robot, 0.36]
-        mujoco.mj_forward(self._model, self._data)
 
         self.last_action = np.zeros(12)
         self.previous_vel = np.zeros(3)
@@ -942,7 +938,7 @@ class Go1MultiObs(MuJoCo):
             euler =[0, 0, 0],
             pos = [0., 0, 0.1],
             rgba = [1, 0, 0, 1])
-        self._room_width = np.random.uniform(low=4, high=5)
+        self._room_width = np.random.uniform(low=3, high=5)
         self._obstacle_l = 0.5
         self._obstacle_w = 0.5
         obstacles_list = ["obstacle_1"]
@@ -991,7 +987,7 @@ class Go1MultiObs(MuJoCo):
                 geom.pos[2] = z_wall
 
         # np.random.uniform(1.5, 2.5)
-        ref_obstacle_pos = np.random.uniform(1.5, 2.5)
+        ref_obstacle_pos = np.random.uniform(2.5, 3.5)
         np.random.shuffle(obstacles_list)
 
         for idx,obstacle_id in enumerate(obstacles_list):
@@ -999,7 +995,7 @@ class Go1MultiObs(MuJoCo):
             if idx ==0:
                 pos_x = ref_obstacle_pos
             else:
-                pos_x = ref_obstacle_pos + np.random.uniform(1.5, 2.5)
+                pos_x = ref_obstacle_pos + np.random.uniform(2.5, 3.5)
 
             if obstacle_id == "obstacle_1":
                 obstacle_height = 0.8
@@ -1009,7 +1005,7 @@ class Go1MultiObs(MuJoCo):
 
             sx,sy,sz = obstacle.first_geom().size
 
-            y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
+            y_obstacle = np.random.uniform(-1.5 + sy, 1.5 - sy)
 
 
             obstacle.pos = [pos_x, y_obstacle, sz]
@@ -1040,7 +1036,10 @@ class Go1MultiObs(MuJoCo):
             self._viewer.load_new_model(self._model)
 
 
-
+        self._data.qpos[7:19] = self.default_dof_pos.copy()
+        y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+        self._data.qpos[0:3] = [0, y_robot, 0.36]
+        mujoco.mj_forward(self._model, self._data)
 
         if not self.antagonist:
             self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)

@@ -54,12 +54,8 @@ def benchmark(
         max_v_antagonist=1.0,
         n_episodes_test=10,
         alpha=0.5,
-        protagonist_id = "model",
-        seed=0,
-        file_path="data.json",
         render=True,
         record=False,
-        save_file=False,
     joystick=False,
 horizon=500,
         n_static_obstacles=1,
@@ -106,11 +102,11 @@ use_antagonist =False
         preprocessors=[preprocessor],
         joystick=joystick,
         aware_rationality=aware_rationality,
-        rationality_antagonist=True)
+        rationality_antagonist=False)
 
     temps = alpha * np.ones(n_episodes_test)
     core.set_variables_for_training(temps)
-    dataset = core.evaluate(n_episodes=n_episodes_test, render=render, record=record, id_agent=0 )
+    dataset = core.evaluate(n_episodes=n_episodes_test, render=render, record=record, id_agent=0)
 
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
@@ -134,21 +130,28 @@ if __name__ == "__main__":
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
     max_v_antagonist = 1.5
-    n_static_obstacles =3
+    n_static_obstacles =1
     save_results =False
 
-    alpha = 0.5
-    performance = []
-    model_ids = ["MAX_ENTROPY", "HEURISTIC"]
+    alpha = 0
+
+    model_ids = ["RAMEN", "HEURISTIC", "STATIC", "RARL",  "UNIFORM"]
 
     # path_protagonist = "/home/jose-luis/experiments_different_supports/final_result_corl_not_safety_penalties/GO1/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.5/run_{}/PROTAGONIST/epoch_last"
     #
-    path_protagonists = ["/home/jose-luis/data_partition/final_result_multi_obstacles/GO1/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_multi_obstacles/run_{}/PROTAGONIST/epoch_last",
-                         "/home/jose-luis/data_partition/final_result_multi_obstacles/GO1/SAC_heuristic_velocity_antagonist_1.5_multi_obstacles/obstacles_navigation/epoch_last_{}",
+    path_protagonists = ["/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/RAMEN_velocity_antagonist_1.5_multi_obstacles/run_{}/PROTAGONIST/epoch_last",
+                         "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/HEURISTIC_SAC_heuristic_velocity_antagonist_1.5_multi_obstacles/obstacles_navigation/epoch_last_{}",
+                         "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/STATIC_SAC_heuristic_velocity_antagonist_0.0_multi_obstacles/obstacles_navigation/epoch_last_{}",
+                         "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/RARL_antagonist_velocity=1.5/run_{}/PROTAGONIST/epoch_last",
+                         "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/UNIFORM_mv=1.5_support=0.5/run_{}/PROTAGONIST/epoch_last"
                          ]
 
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
+    # path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
+    # path_antagonist = "/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/SAC_ANTAGONIST_EV_alpha_1.0/run_0/ANTAGONIST/epoch_last"
+    path_antagonist = "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/RARL_antagonist_velocity=1.5/run_0/ANTAGONIST/epoch_last"
+
     for model_idx, model_name in enumerate(model_ids):
+        performance = []
         print("EVALUATION MODEL: {}".format(model_name))
         for i in range(5):
             path_protagonist = path_protagonists[model_idx].format(i)
@@ -160,20 +163,19 @@ if __name__ == "__main__":
                 control_agent=control_agent,
                 aware_rationality=False,
                 max_v_antagonist=max_v_antagonist,
-                n_episodes_test=1,
-                protagonist_id = str(i),
+                n_episodes_test=2,
                 antagonist= antagonist,
                 # file_path=file_path,
                 render=True,
-                record=True,
+                record=False,
                 joystick=False,
                 horizon=500,
                 alpha = alpha,
             n_static_obstacles=n_static_obstacles,
             use_antagonist=True,)
-        #
+
             performance.append(success_rate)
-        #
+
         performance_np = np.array(np.mean(performance))
         results_dir = f"results_multi_obstacles_alpha_{alpha}_velocity_{max_v_antagonist}_number_static_obstacles_{n_static_obstacles}"
 

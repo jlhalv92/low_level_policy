@@ -163,7 +163,6 @@ def experiment(
     cfg = dict(
         antagonist=True,
         joystick=joystick,
-        rewards=cfg_rewards,
         static_obstacles=False,
         activate_arrow=False,
         max_antagonist_v=antagonist_velocity,
