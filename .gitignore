@@ -10,6 +10,11 @@ wandb
 .idea
 runs
 checkpoint
+results_multi_obstacles_5
+results_multi_obstacles_alpha_0_velocity_1.5_number_static_obstacles_1
+results_heuristic
+results_multi_obstacles
+results_static
 # dotenv
 .env
 *.ipynb
