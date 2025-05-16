@@ -379,9 +379,6 @@ def parse_args():
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--method", type=str, default="FIX_TEMP")
-    parser.add_argument("--safety_penalties", type=str2bool, nargs='?', const=False)
-
-
 
     return parser.parse_args()
 

@@ -102,7 +102,7 @@ use_antagonist =False
         preprocessors=[preprocessor],
         joystick=joystick,
         aware_rationality=aware_rationality,
-        rationality_antagonist=False)
+        rationality_antagonist=True)
 
     temps = alpha * np.ones(n_episodes_test)
     core.set_variables_for_training(temps)
@@ -131,9 +131,7 @@ if __name__ == "__main__":
     control_agent = Agent.load(path)
     max_v_antagonist = 1.5
     n_static_obstacles =1
-    save_results =False
-
-    alpha = 0
+    save_results =True
 
     model_ids = ["RAMEN", "HEURISTIC", "STATIC", "RARL",  "UNIFORM"]
 
@@ -147,43 +145,46 @@ if __name__ == "__main__":
                          ]
 
     # path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
-    # path_antagonist = "/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/SAC_ANTAGONIST_EV_alpha_1.0/run_0/ANTAGONIST/epoch_last"
-    path_antagonist = "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/RARL_antagonist_velocity=1.5/run_0/ANTAGONIST/epoch_last"
+    #path_antagonist = "/home/jose-luis/Project/adversarial_locomotion/checkpoint/GO1/obstacles_navigation/SAC_ANTAGONIST_EV_alpha_1.0/run_0/ANTAGONIST/epoch_last"
+    #path_antagonist = "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/RARL_antagonist_velocity=1.5/run_0/ANTAGONIST/epoch_last"
+    path_antagonist = "/home/jose-luis/data_server/checkpoint_MULTI_OBJECTS/GO1/obstacles_navigation/UNIFORM_mv=1.5_support=0.5/run_0/ANTAGONIST/epoch_last"
+    alphas = [1, 0.5, 0.4, 0.3, 0.2, 0.1, 0]
 
-    for model_idx, model_name in enumerate(model_ids):
-        performance = []
-        print("EVALUATION MODEL: {}".format(model_name))
-        for i in range(5):
-            path_protagonist = path_protagonists[model_idx].format(i)
-            # print(path_protagonist)
-            protagonist = Agent.load(path_protagonist)
-            antagonist = Agent.load(path_antagonist)
-            success_rate = benchmark(
-                protagonist=protagonist,
-                control_agent=control_agent,
-                aware_rationality=False,
-                max_v_antagonist=max_v_antagonist,
-                n_episodes_test=2,
-                antagonist= antagonist,
-                # file_path=file_path,
-                render=True,
-                record=False,
-                joystick=False,
-                horizon=500,
-                alpha = alpha,
-            n_static_obstacles=n_static_obstacles,
-            use_antagonist=True,)
+    for alpha in alphas:
+        for model_idx, model_name in enumerate(model_ids):
+            performance = []
+            print("EVALUATION MODEL: {}".format(model_name))
+            for i in range(5):
+                path_protagonist = path_protagonists[model_idx].format(i)
+                # print(path_protagonist)
+                protagonist = Agent.load(path_protagonist)
+                antagonist = Agent.load(path_antagonist)
+                success_rate = benchmark(
+                    protagonist=protagonist,
+                    control_agent=control_agent,
+                    aware_rationality=False,
+                    max_v_antagonist=max_v_antagonist,
+                    n_episodes_test=50,
+                    antagonist= antagonist,
+                    # file_path=file_path,
+                    render=True,
+                    record=False,
+                    joystick=False,
+                    horizon=500,
+                    alpha = alpha,
+                n_static_obstacles=n_static_obstacles,
+                use_antagonist=True,)
 
-            performance.append(success_rate)
+                performance.append(success_rate)
 
-        performance_np = np.array(np.mean(performance))
-        results_dir = f"results_multi_obstacles_alpha_{alpha}_velocity_{max_v_antagonist}_number_static_obstacles_{n_static_obstacles}"
+            performance_np = np.array(np.mean(performance))
+            results_dir = f"results_multi_obstacles_alpha_{alpha}_velocity_{max_v_antagonist}_number_static_obstacles_{n_static_obstacles}"
 
-        if save_results:
-            if not os.path.isdir(results_dir):
-                os.makedirs(results_dir)
+            if save_results:
+                if not os.path.isdir(results_dir):
+                    os.makedirs(results_dir)
 
-            np.save(f'{results_dir}/performance_{model_name}.npy', performance_np)
+                np.save(f'{results_dir}/performance_{model_name}.npy', performance_np)
 
 
 

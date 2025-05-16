@@ -587,7 +587,7 @@ class Go1MultiObs(MuJoCo):
 
                 obstacle_vel = (obstacle_pos_diff)
                 if np.abs(obstacle_pos_diff) < 0.2:
-                    self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+                    self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
                 clipped_obstacle_velocity = np.clip(obstacle_vel, -self.max_antagonist_v, self.max_antagonist_v)
 
                 self._data.ctrl[-1] = clipped_obstacle_velocity
@@ -938,7 +938,8 @@ class Go1MultiObs(MuJoCo):
             euler =[0, 0, 0],
             pos = [0., 0, 0.1],
             rgba = [1, 0, 0, 1])
-        self._room_width = np.random.uniform(low=3, high=5)
+        self._room_width = np.random.uniform(low=3, high=4)
+
         self._obstacle_l = 0.5
         self._obstacle_w = 0.5
         obstacles_list = ["obstacle_1"]
@@ -987,7 +988,8 @@ class Go1MultiObs(MuJoCo):
                 geom.pos[2] = z_wall
 
         # np.random.uniform(1.5, 2.5)
-        ref_obstacle_pos = np.random.uniform(2.5, 3.5)
+        # np.random.uniform(2.5, 3.5)
+        ref_obstacle_pos = np.random.uniform(1.5, 2.5)
         np.random.shuffle(obstacles_list)
 
         for idx,obstacle_id in enumerate(obstacles_list):
@@ -995,7 +997,7 @@ class Go1MultiObs(MuJoCo):
             if idx ==0:
                 pos_x = ref_obstacle_pos
             else:
-                pos_x = ref_obstacle_pos + np.random.uniform(2.5, 3.5)
+                pos_x = ref_obstacle_pos + np.random.uniform(2, 3)
 
             if obstacle_id == "obstacle_1":
                 obstacle_height = 0.8
@@ -1003,12 +1005,13 @@ class Go1MultiObs(MuJoCo):
                 self.obstacle_pose_x = pos_x
 
 
-            sx,sy,sz = obstacle.first_geom().size
 
-            y_obstacle = np.random.uniform(-1.5 + sy, 1.5 - sy)
+            #y_obstacle = np.random.uniform(-1.5 + sy, 1.5 - sy)
 
+            #y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
+            y_obstacle = np.random.uniform(-1., 1.)
 
-            obstacle.pos = [pos_x, y_obstacle, sz]
+            obstacle.pos = [pos_x, y_obstacle, 0.8]
             ref_obstacle_pos = pos_x
 
         model = spec.compile()

@@ -148,8 +148,12 @@ class SACPolicy(Policy):
         mu = self._mu_approximator.predict(state, output_tensor=True)
         log_sigma = self._sigma_approximator.predict(state, output_tensor=True)
         # Bound the log_s
-        log_sigma = torch.clamp(log_sigma, self._log_std_min(), self._log_std_max())
-        return torch.distributions.Normal(mu, log_sigma.exp())
+        # log_sigma = torch.clamp(log_sigma, self._log_std_min(), self._log_std_max()
+        self.log_std_scale = (self._log_std_max() - self._log_std_min()) / 2.0
+        self.log_std_offset = (self._log_std_max()  + self._log_std_min()) / 2.0
+        log_std = torch.tanh(log_sigma) * self.log_std_scale + self.log_std_offset
+        std = torch.exp(log_std)
+        return torch.distributions.Normal(mu, std)
 
     def entropy(self, state=None):
         """
