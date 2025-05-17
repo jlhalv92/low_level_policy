@@ -165,6 +165,16 @@ class Go1MultiObs(MuJoCo):
         else:
             self.n_static_obstacles = 1
 
+        if "obstacle_position_x" in cfg.keys():
+            self.obstacle_position_x = cfg["obstacle_position_x"]
+        else:
+            self.obstacle_position_x = -1
+
+        if "obstacle_position_y" in cfg.keys():
+            self.obstacle_position_y = cfg["obstacle_position_y"]
+        else:
+            self.obstacle_position_y = -1
+
         self.controller_pd = PDController(self)
         self.narrow_passage = False
         self.no_walls = False
@@ -938,7 +948,11 @@ class Go1MultiObs(MuJoCo):
             euler =[0, 0, 0],
             pos = [0., 0, 0.1],
             rgba = [1, 0, 0, 1])
-        self._room_width = np.random.uniform(low=3, high=4)
+
+
+        #self._room_width = np.random.uniform(low=3, high=4)
+        self._room_width = 4
+
 
         self._obstacle_l = 0.5
         self._obstacle_w = 0.5
@@ -989,7 +1003,11 @@ class Go1MultiObs(MuJoCo):
 
         # np.random.uniform(1.5, 2.5)
         # np.random.uniform(2.5, 3.5)
-        ref_obstacle_pos = np.random.uniform(1.5, 2.5)
+
+        if self.obstacle_position_x==-1:
+            ref_obstacle_pos = np.random.uniform(1.5, 2.5)
+        else:
+            ref_obstacle_pos = self.obstacle_position_x
         np.random.shuffle(obstacles_list)
 
         for idx,obstacle_id in enumerate(obstacles_list):
@@ -1009,7 +1027,11 @@ class Go1MultiObs(MuJoCo):
             #y_obstacle = np.random.uniform(-1.5 + sy, 1.5 - sy)
 
             #y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
-            y_obstacle = np.random.uniform(-1., 1.)
+            if self.obstacle_position_y == -1:
+                y_obstacle = np.random.uniform(-1., 1.)
+            else:
+                y_obstacle = np.random.uniform(-self.obstacle_position_y, self.obstacle_position_y)
+
 
             obstacle.pos = [pos_x, y_obstacle, 0.8]
             ref_obstacle_pos = pos_x

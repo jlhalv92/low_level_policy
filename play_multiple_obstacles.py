@@ -169,7 +169,7 @@ if __name__ == "__main__":
                     # file_path=file_path,
                     render=True,
                     record=False,
-                    joystick=False,
+                    joystick=True,
                     horizon=500,
                     alpha = alpha,
                 n_static_obstacles=n_static_obstacles,
