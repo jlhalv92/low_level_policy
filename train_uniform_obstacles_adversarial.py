@@ -106,7 +106,10 @@ def experiment_uniform(
                max_antagonist_v=antagonist_velocity,
                n_static_obstacles=conf.n_static_obstacles,
                obstacle_position_x=conf.obstacle_position_x,
-               obstacle_position_y=conf.obstacle_position_y)
+               obstacle_position_y=conf.obstacle_position_y,
+               max_pos_target=conf.max_pos_target,
+                corridor_size = conf.corridor_size
+    )
 
 
     multiple_obstacles = True
@@ -233,7 +236,7 @@ def experiment_uniform(
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=10, render=view, id_agent=0, return_antagonist_state=True
+        n_episodes=10, render=False, id_agent=0, return_antagonist_state=True
     )
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
@@ -375,12 +378,11 @@ def parse_args():
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--velocity",type=float,  default=1.5)
-    parser.add_argument("--obstacle_position_x",type=float,  default=1.5)
-    parser.add_argument("--obstacle_position_y",type=float,  default=0.5)
-
-    parser.add_argument("--n_static_obstacles",type=int,  default=1)
-
-
+    parser.add_argument("--obstacle_position_x",type=float,  default=8)
+    parser.add_argument("--obstacle_position_y",type=float,  default=-1)
+    parser.add_argument("--n_static_obstacles",type=int,  default=0)
+    parser.add_argument("--corridor_size",type=float,  default=5)
+    parser.add_argument("--max_pos_target",type=float,  default=5)
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--method", type=str, default="UNIFORM")

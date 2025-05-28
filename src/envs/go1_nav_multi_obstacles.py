@@ -168,12 +168,22 @@ class Go1MultiObs(MuJoCo):
         if "obstacle_position_x" in cfg.keys():
             self.obstacle_position_x = cfg["obstacle_position_x"]
         else:
-            self.obstacle_position_x = -1
+            self.obstacle_position_x = 3
 
         if "obstacle_position_y" in cfg.keys():
             self.obstacle_position_y = cfg["obstacle_position_y"]
         else:
             self.obstacle_position_y = -1
+
+        if "corridor_size" in cfg.keys():
+            self.corridor_size = cfg["corridor_size"]
+        else:
+            self.corridor_size = 3
+
+        if "max_pos_target" in cfg.keys():
+            self.max_pos_target = cfg["max_pos_target"]
+        else:
+            self.max_pos_target = 2
 
         self.controller_pd = PDController(self)
         self.narrow_passage = False
@@ -499,6 +509,8 @@ class Go1MultiObs(MuJoCo):
         vy = linear_velocity[1]
         current_velocity = np.array([vx, vy])
         robot_orientation = self.orientation_euler.copy() # (1,)
+        relative_robot_pose = self._model.site("pos_target").pos[:2] - self._data.qpos[:2]
+        obs = self.obs_helper.modify_obs(obs, "robot_pose", relative_robot_pose)
         obs = self.obs_helper.modify_obs(obs, "current_velocity", current_velocity)
         obs = self.obs_helper.modify_obs(obs, "orientation", robot_orientation[2])
         angular_velocity = self._data.qvel[3:6]
@@ -730,16 +742,19 @@ class Go1MultiObs(MuJoCo):
         if self.task == 2 or self.task == 3 or self.task == 4:
             yaw = self.orientation_euler[2]
             global_vel = self._data.qvel[:3].copy()
+            distance = np.linalg.norm(self._data.site("pos_target").xpos[:2] - self._data.qpos[:2])
+            distance_x =self._data.site("pos_target").xpos[0] - self._data.qpos[0]
 
-            y_pos = self._data.body("trunk").xpos[1]
-            distance = self._data.site("target").xpos[0] - self._data.qpos[0]
+            sigma_hard = 0.5
+            sigma_soft = 1.5
             forward_vector = np.array([1,0,0])
             rot_forward_vector = self.orientation_quat.apply(forward_vector)
             right_direction = rot_forward_vector[0]>0
             forward_local_vel =  self.orientation_quat_inv.apply(global_vel)[0]
-            vel_reward = 2.5*max(min(right_direction * forward_local_vel, 1), 0)
-            penalties = (np.abs(y_pos)) * (distance < -0.35)
-            return vel_reward - self.collision_penalty() - penalties
+            vel_reward = 2.5*max(min(right_direction * forward_local_vel, 1), 0) * (distance_x > sigma_hard)
+            distance_reward = 1 * (distance < sigma_soft) + 10 *(distance < sigma_hard)
+            reward = vel_reward - self.collision_penalty() + distance_reward
+            return reward
 
     def reward(self, state, action, next_state, absorbing):
 
@@ -951,7 +966,8 @@ class Go1MultiObs(MuJoCo):
 
 
         #self._room_width = np.random.uniform(low=3, high=4)
-        self._room_width = 4
+        # self._room_width = 3
+        self._room_width = self.corridor_size
 
 
         self._obstacle_l = 0.5
@@ -1004,10 +1020,8 @@ class Go1MultiObs(MuJoCo):
         # np.random.uniform(1.5, 2.5)
         # np.random.uniform(2.5, 3.5)
 
-        if self.obstacle_position_x==-1:
-            ref_obstacle_pos = np.random.uniform(1.5, 2.5)
-        else:
-            ref_obstacle_pos = self.obstacle_position_x
+
+        ref_obstacle_pos = np.random.uniform(1.5, self.obstacle_position_x)
         np.random.shuffle(obstacles_list)
 
         for idx,obstacle_id in enumerate(obstacles_list):
@@ -1036,11 +1050,18 @@ class Go1MultiObs(MuJoCo):
             obstacle.pos = [pos_x, y_obstacle, 0.8]
             ref_obstacle_pos = pos_x
 
+        site = worldbody.add_site(
+            name="pos_target",
+            pos=[0,0,0.3],
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[0.4, 0.3, 0.3],
+            rgba=[1, 0, 0, 0.1],
+        )
+
         model = spec.compile()
         self._model = model
         self._model.opt.timestep = 0.005
         self._data = mujoco.MjData(model)
-        # self._model.site("obstacle_1").size[0] = 1.1 * np.sqrt((self._obstacle_l) ** 2 + (self._obstacle_w) ** 2)
 
         new_obstacles = [f"static_obstacle_{i}" for i in range(self.n_static_obstacles)]
         new_geoms = ("static_obstacles", new_obstacles)
@@ -1051,12 +1072,15 @@ class Go1MultiObs(MuJoCo):
 
 
         self._data.qpos[7:19] = self.default_dof_pos.copy()
-
-
-        self._model.site("target").pos[0] = ref_obstacle_pos + 1.5
+        pos_finish_line = ref_obstacle_pos + 1.5
+        robot_pos_target_x = min(11,pos_finish_line + np.random.uniform(1.5, self.max_pos_target))
+        robot_pos_target_y = np.random.uniform(-1, 1)
+        self._model.site("pos_target").pos = [robot_pos_target_x,robot_pos_target_y,0.3 ]
+        self._model.site("target").pos[0] = pos_finish_line
         # self._model.site("target").size[0] = 2
-        # self._model.site("target").size[1] = self.wall_pos
+        self._model.site("target").size[1] = self.wall_pos
         # self._model.site("target").pos[-1] = 0.1
+
         if self._viewer is not None:
             self._viewer.load_new_model(self._model)
 

@@ -20,7 +20,7 @@ from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
-from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
 
 from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
 import wandb
@@ -78,23 +78,27 @@ horizon=500
     gamma = 0.99
 
 
-
-
-    cfg_rewards=dict()
-
-
-    cfg = dict(
-               antagonist=True,
+    joystick = False
+    cfg = dict(antagonist=True,
+               max_level=False,
                joystick=joystick,
-               rewards=cfg_rewards,
-                max_antagonist_v=max_v_antagonist)
+               static_obstacles=False,
+               activate_arrow=False,
+               max_antagonist_v=max_v_antagonist,
+               n_static_obstacles=0,
+               obstacle_position_x=8,
+               obstacle_position_y=-1,
+                corridor_size = 4)
 
 
-    mdp = Go1(horizon,
-              gamma,
-              timestep=0.005,
-              cfg=cfg,
-              task_name=task_name)
+    multiple_obstacles = True
+
+
+    mdp = Go1MultiObs(horizon,
+                  gamma,
+                  timestep=0.005,
+                  cfg=cfg,
+                  task_name=task_name)
 
 
     # Algorithm
@@ -134,20 +138,6 @@ horizon=500
         alfa=np.mean(temps)
     )
 
-    # results_dict = dict(
-    #     protagonist_id=protagonist_id,
-    #     J_online=J_online,
-    #     R_online=R_online,
-    #     success_rate=success_rate,
-    #     alfa=np.mean(temps),
-    #     antagonist_velocity=max_v_antagonist,
-    #     seed=seed,
-    #     level_antagonist=level_antagonist)
-    #
-    # if save_file:
-    #     print("writing results...")
-    #     with open(file_path, 'w') as f:
-    #         json.dump(results_dict, f, indent=4)
 
     return success_rate
 
@@ -160,50 +150,34 @@ if __name__ == "__main__":
 
     velocity = 1.5
 
-    temperatures = np.linspace(0.5, 0, num=5)
-    # level_a =0.4
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_alpha_1.0/run_0/ANTAGONIST/epoch_last"
-    # path_protagonist = f"/home/jose-luis/CORL_final_results/obstacles_navigation/DORAEMON_velocity_antagonist_1.5_support=0.3/run_{i}/PROTAGONIST/epoch_las
+    path_antagonist = "checkpoint/GO1/obstacles_navigation/UNIFORM_mv=1.5_support=0.5/run_0/ANTAGONIST/epoch_last"
     antagonist = Agent.load(path_antagonist)
 
-    # protagonist_id =f"{model_id}_{temperature}"
-    # msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist temperature {temperature} max velocity {velocity}"
-    # print(f"-----------------------------------------{msg}--------------------------------------------")
     performance = []
-    # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
-    # path_protagonist = f"checkpoint/GO1/obstacles_navigation/FIX_Temp_linear_curriculum_alpha_1.0/run_{i}/PROTAGONIST/epoch_last"
+
     model_id = "MAX_ENTROPY"
-    model_id = "RARL"
-    print(model_id)
-    for temperature in temperatures:
-        success_rates = []
-        for i in range(5):
-            path_protagonist = f"/home/jose-luis/CORL_final_results/obstacles_navigation/RARL_antagonist_velocity=1.5/run_{i}/PROTAGONIST/epoch_last"
+    success_rates = []
+    path_protagonist =  "checkpoint/GO1/obstacles_navigation/UNIFORM_mv=1.5_support=0.5/run_0/PROTAGONIST/epoch_last"
 
             # path_protagonist = f"/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_{i}"
-            protagonist = Agent.load(path_protagonist)
-            success_rate = benchmark(
+    protagonist = Agent.load(path_protagonist)
+    success_rate = benchmark(
                 protagonist=protagonist,
                 antagonist=antagonist,
                 control_agent=control_agent,
                 aware_rationality=False,
                 max_v_antagonist=velocity,
                 n_episodes_test=50,
-                alpha=temperature,
-                protagonist_id = str(i),
+                alpha=1.,
+                protagonist_id = 0,
                 # file_path=file_path,
-                render=False,
+                render=True,
                 record=False,
                 joystick=False,
                 horizon=500,
 
             )
-            success_rates.append(success_rate)
-        mean_success_rate = np.mean(success_rates)
-        performance.append(mean_success_rate)
 
-    performance_np = np.array(performance)
-    np.save(f'results/performance_{model_id}.npy', performance_np)
 
 
 
