@@ -147,7 +147,6 @@ def experiment(
             project=wandb_project,
             job_type=job_name,
             name="seed_{}".format(run_id),
-            group="Asymetric",
             config=vars(conf)
         )
 
@@ -157,16 +156,21 @@ def experiment(
 
     n_samples_for_dist_update = update
 
-    cfg_rewards = dict()
+
 
     joystick = False
-    cfg = dict(
-        antagonist=True,
-        joystick=joystick,
-        static_obstacles=False,
-        activate_arrow=False,
-        max_antagonist_v=antagonist_velocity,
-        n_static_obstacles=1)
+    cfg = dict(antagonist=True,
+               max_level=False,
+               joystick=joystick,
+               static_obstacles=False,
+               activate_arrow=False,
+               max_antagonist_v=antagonist_velocity,
+               n_static_obstacles=conf.n_static_obstacles,
+               obstacle_position_x=conf.obstacle_position_x,
+               obstacle_position_y=conf.obstacle_position_y,
+               max_pos_target=conf.max_pos_target,
+                corridor_size = conf.corridor_size
+    )
 
     multiple_obstacles = True
 
@@ -455,6 +459,11 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
     parser.add_argument("--kl_max", type=float, default=0.001, help="kl_max")
     parser.add_argument("--velocity", type=float, default=1.5)
+    parser.add_argument("--obstacle_position_x",type=float,  default=8)
+    parser.add_argument("--obstacle_position_y",type=float,  default=-1)
+    parser.add_argument("--n_static_obstacles",type=int,  default=0)
+    parser.add_argument("--corridor_size",type=float,  default=5)
+    parser.add_argument("--max_pos_target",type=float,  default=5)
     parser.add_argument("--lower_bound", type=float, default=0.5)
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=True,
                         help="Enable logging")

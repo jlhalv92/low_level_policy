@@ -1021,7 +1021,7 @@ class Go1MultiObs(MuJoCo):
         # np.random.uniform(2.5, 3.5)
 
 
-        ref_obstacle_pos = np.random.uniform(1.5, self.obstacle_position_x)
+        ref_obstacle_pos = np.random.uniform(2.5, self.obstacle_position_x)
         np.random.shuffle(obstacles_list)
 
         for idx,obstacle_id in enumerate(obstacles_list):

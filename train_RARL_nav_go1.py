@@ -41,7 +41,7 @@ def experiment(method_name,
                use_cuda=False,
                wandb_project="",
                antagonist_velocity=1.5,
-               configs=None,
+               conf=None,
                checkpoint_dir = ""):
 
 
@@ -77,7 +77,7 @@ def experiment(method_name,
             group=task_name,
             job_type=job_name,
             name="seed_{}".format(run_id),
-            config=configs
+            config=vars(conf)
         )
     joystick = False
     cfg = dict(antagonist=True,
@@ -86,7 +86,12 @@ def experiment(method_name,
                static_obstacles=False,
                activate_arrow=False,
                max_antagonist_v=antagonist_velocity,
-               n_static_obstacles=1)
+               n_static_obstacles=conf.n_static_obstacles,
+               obstacle_position_x=conf.obstacle_position_x,
+               obstacle_position_y=conf.obstacle_position_y,
+               max_pos_target=conf.max_pos_target,
+                corridor_size = conf.corridor_size
+    )
 
 
     multiple_obstacles = True
@@ -275,8 +280,13 @@ def parse_args():
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--velocity", type=float, default=1.5, help="velocity")
+    parser.add_argument("--obstacle_position_x",type=float,  default=8)
+    parser.add_argument("--obstacle_position_y",type=float,  default=-1)
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--n_static_obstacles",type=int,  default=0)
+    parser.add_argument("--corridor_size",type=float,  default=5)
+    parser.add_argument("--max_pos_target",type=float,  default=5)
 
 
 
@@ -302,7 +312,7 @@ if __name__ == '__main__':
                wandb_project=args.wandb_project,
                antagonist_velocity = args.velocity,
                checkpoint_dir=args.checkpoint_dir,
-               configs=vars(args))
+               conf=args)
 
 
 
