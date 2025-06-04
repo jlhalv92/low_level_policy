@@ -1,9 +1,9 @@
 import argparse
 
 import numpy as np
-# from src.teachers.self_paced_gamma_teacher_fixed_beta import (
-#     SelfPaced,
-# )
+
+from datetime import datetime
+
 from src.teachers.doraemon3 import Doraemon
 from src.utils.buffer import Buffer
 from src.utils.state_preprocessor import StateVariableConcatenation
@@ -21,7 +21,20 @@ from mushroom_rl.core import Logger
 
 from src.envs.go1_nav_environment import Go1
 from src.envs.go1_nav_multi_obstacles import Go1MultiObs
+import hashlib
+import json
 
+
+def generate_config_hash(config: dict, algo='sha256', length=8) -> str:
+    # Ensure consistent key order for hashing
+    config_str = json.dumps(config, sort_keys=True)
+
+    # Choose a hashing algorithm
+    hash_func = getattr(hashlib, algo)
+    hash_object = hash_func(config_str.encode())
+
+    # Return the shortened hex digest
+    return hash_object.hexdigest()[:length]
 
 from src.networks.nets import ActorNetwork, CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, \
     PolicyNetworkStudent
@@ -139,13 +152,17 @@ def experiment(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_velocity_antagonist_{antagonist_velocity}_multi_obstacles_temp_{temperature_support}"
+
+    hash_id = generate_config_hash(vars(conf))
+
+
+    job_name = method_name + f"-{hash_id}"
 
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
             project=wandb_project,
-            job_type=job_name,
+            job_type=method_name,
             name="seed_{}".format(run_id),
             config=vars(conf)
         )
@@ -428,6 +445,7 @@ def experiment(
 
     agent.save(
         f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+
     antagonist.save(
         f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
