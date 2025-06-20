@@ -518,7 +518,6 @@ if __name__ == "__main__":
         use_cuda=args.use_cuda,
         update=args.n_episodes_test,
         kl=kl_max,
-        aware_rationality=args.aware_rationality,
         view=False,
         wandb_project=args.wandb_project,
         checkpoint_dir=args.checkpoint_dir,
