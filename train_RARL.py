@@ -250,7 +250,7 @@ def experiment(method_name,
                             entropy_antagonist=E_a)
             wandb.log(log_dict, step=it)
 
-        if it % 10 == 0:
+        if it % 50 == 0:
             agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
             antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 

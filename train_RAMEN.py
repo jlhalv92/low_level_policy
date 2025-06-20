@@ -436,7 +436,7 @@ def experiment(
 
             wandb.log(log_dict, step=it)
 
-        if it % 10 == 0:
+        if it % 50 == 0:
             agent.save(
                 f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
             antagonist.save(
