@@ -1,4 +1,5 @@
 import argparse
+from copy import deepcopy
 
 import numpy as np
 
@@ -124,7 +125,6 @@ def experiment(
         use_cuda=False,
         update=10,
         kl=0.5,
-        aware_rationality=False,
         view=False,
         wandb_project="",
         checkpoint_dir="",
@@ -153,7 +153,9 @@ def experiment(
     tau = 0.005
     lr_alpha = 3e-4
 
-    hash_id = generate_config_hash(vars(conf))
+    config_hash = deepcopy(vars(conf))
+    config_hash.pop("run_id")
+    hash_id = generate_config_hash(config_hash)
 
 
     job_name = method_name + f"-{hash_id}"
@@ -209,9 +211,6 @@ def experiment(
 
     actor_input_shape = mdp.info.observation_space.shape
 
-    # if aware_rationality:
-    #     actor_input_shape = (actor_input_shape[0] + 1,)
-    # else:
     actor_input_shape = (actor_input_shape[0],)
 
 
@@ -307,7 +306,7 @@ def experiment(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=aware_rationality,
+        aware_rationality=True,
         rationality_antagonist=True)
 
 
@@ -467,24 +466,22 @@ def str2bool(value):
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=400, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=20, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
                         help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=3., help="Alpha value")
     parser.add_argument("--kl_max", type=float, default=0.001, help="kl_max")
     parser.add_argument("--velocity", type=float, default=1.5)
-    parser.add_argument("--obstacle_position_x",type=float,  default=8)
+    parser.add_argument("--obstacle_position_x",type=float,  default=5)
     parser.add_argument("--obstacle_position_y",type=float,  default=-1)
     parser.add_argument("--n_static_obstacles",type=int,  default=0)
-    parser.add_argument("--corridor_size",type=float,  default=5)
-    parser.add_argument("--max_pos_target",type=float,  default=5)
+    parser.add_argument("--corridor_size",type=float,  default=3)
+    parser.add_argument("--max_pos_target",type=float,  default=3)
     parser.add_argument("--lower_bound", type=float, default=0.5)
-    parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=True,
-                        help="Enable logging")
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="RAMEN")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")

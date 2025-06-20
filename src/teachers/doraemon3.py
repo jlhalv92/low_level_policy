@@ -168,7 +168,7 @@ class Doraemon:
 
         if self.compute_target_temp_kl() > self.target_kl_threshold:
             lb = np.array([0.05, 0.05])
-            ub = np.array([50., 50.])
+            ub = np.array([10., 10.])
             bounds = Bounds(lb, ub, keep_feasible=self.keep_feasible)
 
             # If the bounds are active, clip the standard deviation to be in bounds (because we may re-introduce
@@ -223,7 +223,7 @@ class Doraemon:
             elif perf_constraint_func(x0) < self.perf_lb and self.above_perf_lb:
                 print(f"Performance {perf_constraint_func(x0)} dropped below {self.perf_lb},Return to save region")
                 lb = np.array([0.1, 0.1])
-                ub = np.array([5., 1.])
+                ub = np.array([6., 6.])
                 kl_reverse = 0.001 # 0.005
                 bounds_reverse = Bounds(lb, ub, keep_feasible=self.keep_feasible)
                 kl_constraint_r = NonlinearConstraint(

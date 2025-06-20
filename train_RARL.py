@@ -272,7 +272,7 @@ def str2bool(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs")
+    parser.add_argument("--n_epochs", type=int, default=400, help="Number of training epochs")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
@@ -280,13 +280,13 @@ def parse_args():
     parser.add_argument("--log",type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
     parser.add_argument("--velocity", type=float, default=1.5, help="velocity")
-    parser.add_argument("--obstacle_position_x",type=float,  default=8)
+    parser.add_argument("--obstacle_position_x",type=float,  default=5)
     parser.add_argument("--obstacle_position_y",type=float,  default=-1)
     parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--n_static_obstacles",type=int,  default=0)
-    parser.add_argument("--corridor_size",type=float,  default=5)
-    parser.add_argument("--max_pos_target",type=float,  default=5)
+    parser.add_argument("--corridor_size",type=float,  default=3)
+    parser.add_argument("--max_pos_target",type=float,  default=3)
 
 
 

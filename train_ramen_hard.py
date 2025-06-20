@@ -117,7 +117,7 @@ def experiment_qarl(
     logger.strong_line()
     task_name = "obstacles_navigation"
 
-    agent_task = f"{task_name}"
+    agent_task = f"{task_name}_hard"
     logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
 
     # MDP
@@ -136,7 +136,7 @@ def experiment_qarl(
         wandb.init(
             # set the wandb project where this run will be logged
             project=wandb_project,
-            group=task_name,
+            group=agent_task,
             job_type=job_name,
             name="seed_{}".format(run_id),
             config=conf,
@@ -206,7 +206,7 @@ def experiment_qarl(
                 critic_fit_params=None, range=[min_a, max_a])
 
     # Adversary
-    obs_antagonist =7
+    obs_antagonist =7 + 1
     adversary_actor_input_shape = (obs_antagonist,)
     antagonist_mu_params = dict(
         network=ActorNetwork,
@@ -235,7 +235,7 @@ def experiment_qarl(
         use_cuda=use_cuda,
     )
     min_a = -np.array([antagonist_velocity,antagonist_velocity])
-    max_a = np.array([0, antagonist_velocity])
+    max_a = np.array([antagonist_velocity, antagonist_velocity])
     antagonist = alg[1](
         mdp.info,
         antagonist_mu_params,
@@ -262,7 +262,7 @@ def experiment_qarl(
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
-        aware_rationality=True,
+        aware_rationality=aware_rationality,
         rationality_antagonist=True)
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
@@ -426,7 +426,7 @@ def str2bool(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--method", type=str, default="DORAEMON_BACKUP",choices=["DORAEMON_BACKUP"],help="DORAEMON or UNIFORM")
+    parser.add_argument("--method", type=str, default="RAMEN",choices=["RAMEN"],help="DORAEMON or UNIFORM")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
@@ -434,13 +434,13 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", default=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=6, help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=4, help="Alpha value")
     parser.add_argument("--kl_max",type=float,  default=0.001,  help="kl_max")
-    parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
+    parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=True,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
     parser.add_argument("--velocity", type=float, default=2., help=" antagonist vel value")
-    parser.add_argument("--lower_bound", type=float, default=0.4, help=" performance lower bound")
+    parser.add_argument("--lower_bound", type=float, default=0.5, help=" performance lower bound")
 
 
 

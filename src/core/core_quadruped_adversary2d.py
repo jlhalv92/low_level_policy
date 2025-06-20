@@ -325,7 +325,6 @@ class Core(object):
             if self.aware_rationality:
                 action = self.agents[0].draw_action(nav_state[:-1])
             else:
-                print(self.aware_rationality, nav_state.shape)
                 action = self.agents[0].draw_action(nav_state)
 
             if self.use_antagonist:
@@ -368,8 +367,10 @@ class Core(object):
 
 
 
-
-        next_nav_state = self._preprocess(next_state.copy())
+        if self.aware_rationality:
+            next_nav_state = self._preprocess(next_state.copy())
+        else:
+            next_nav_state = next_state.copy()
 
         self._state = next_nav_state.copy()
 

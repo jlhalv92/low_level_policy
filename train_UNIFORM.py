@@ -1,10 +1,11 @@
 import argparse
+from copy import deepcopy
 
 import numpy as np
-# from src.teachers.self_paced_gamma_teacher_fixed_beta import (
-#     SelfPaced,
-# )
-from src.teachers.doraemon import Doraemon
+
+from datetime import datetime
+
+from src.teachers.doraemon3 import Doraemon
 from src.utils.buffer import Buffer
 from src.utils.state_preprocessor import StateVariableConcatenation
 import torch
@@ -13,8 +14,6 @@ import torch.nn.functional as F
 from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary import Core
 
-from src.envs.go1_nav_multi_obstacles import Go1MultiObs
-
 from src.algorithm.deep_actor_critic.a_sac import SAC
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
 
@@ -22,12 +21,34 @@ from mushroom_rl.core import Agent
 from mushroom_rl.core import Logger
 
 from src.envs.go1_nav_environment import Go1
+from src.envs.go1_nav_multi_obstacles import Go1MultiObs
+import hashlib
+import json
 
-from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, PolicyNetworkStudent
+
+def generate_config_hash(config: dict, algo='sha256', length=8) -> str:
+    # Ensure consistent key order for hashing
+    config_str = json.dumps(config, sort_keys=True)
+
+    # Choose a hashing algorithm
+    hash_func = getattr(hashlib, algo)
+    hash_object = hash_func(config_str.encode())
+
+    # Return the shortened hex digest
+    return hash_object.hexdigest()[:length]
+
+from src.networks.nets import ActorNetwork, CriticNetwork, ValueNetwork, ActorBiNetwork, PolicyNetwork, \
+    PolicyNetworkStudent
 import wandb
-from src.mushroom.dataset.dataset import compute_J,parse_dataset
+from src.mushroom.dataset.dataset import compute_J, parse_dataset
 
 from tqdm import trange
+
+def calculate_success_rate_array(info, last):
+    last_idxs = [i for i, x in enumerate(last) if x]
+    success = np.array([element['success'] for element in info])
+    return success[last_idxs]
+
 
 
 
@@ -38,19 +59,22 @@ def calculate_success_rate(info, last):
     success_rate = success_cnt / last_cnt
     return success_rate
 
+
 def extract_temp_and_sample_return(data, gamma, temperature_support_a=0, temperature_support_b=1):
     temperatures = list()
     for i in range(len(data)):
         if data[i][-1] or i == len(data) - 1:
-            temperatures.append((data[i][0][-1]-temperature_support_a)/(temperature_support_b-temperature_support_a))
+            temperatures.append(
+                (data[i][0][-1] - temperature_support_a) / (temperature_support_b - temperature_support_a))
 
     sample_returns = compute_J(data, gamma)
 
     return temperatures, sample_returns
 
-def experiment_uniform(
+
+def experiment(
         method_name="",
-        alg=[SAC, AdaptiveTempSAC],
+        alg=None,
         n_epochs=200,
         n_steps=5000,
         n_steps_per_fit=1,
@@ -60,11 +84,12 @@ def experiment_uniform(
         log=False,
         temperature_support=1,
         use_cuda=False,
+        update=10,
         view=False,
         wandb_project="",
         checkpoint_dir="",
         antagonist_velocity=1.5,
-        conf=None,):
+        conf=None):
 
     np.random.seed()
 
@@ -73,29 +98,38 @@ def experiment_uniform(
     task_name = "obstacles_navigation"
 
     agent_task = f"{task_name}"
-    logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
+    logger.info('Experiment Algorithm: ' + method_name + " task " + agent_task)
 
     # MDP
     horizon = 500
     gamma = 0.99
     n_features = 256
     warmup_transitions = 5000
-    batch_size = 256 #256
+    batch_size = 256  # 256
     initial_replay_size = 5000
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_mv={antagonist_velocity}_support={temperature_support}"
-    print(job_name)
+
+    config_hash = deepcopy(vars(conf))
+    config_hash.pop("run_id")
+    hash_id = generate_config_hash(config_hash)
+
+
+    job_name = method_name + f"-{hash_id}"
+
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
             project=wandb_project,
-            group=task_name,
-            job_type=job_name,
+            job_type=method_name,
             name="seed_{}".format(run_id),
-            config=conf
+            config=vars(conf)
         )
+
+    n_samples_for_dist_update = update
+
+
 
     joystick = False
     cfg = dict(antagonist=True,
@@ -110,7 +144,6 @@ def experiment_uniform(
                max_pos_target=conf.max_pos_target,
                 corridor_size = conf.corridor_size
     )
-
 
     multiple_obstacles = True
 
@@ -135,6 +168,7 @@ def experiment_uniform(
 
     actor_input_shape = (actor_input_shape[0],)
 
+
     actor_mu_params = dict(network=ActorBiNetwork,
                            n_features=n_features,
                            input_shape=actor_input_shape,
@@ -148,7 +182,6 @@ def experiment_uniform(
                               output_shape=(3,),
                               size_propioception=6,
                               use_cuda=use_cuda)
-
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
@@ -165,15 +198,15 @@ def experiment_uniform(
 
     # Agent
 
-    min_a = -np.array([1.5,1,1.5])
+    min_a = -np.array([1.5, 1, 1.5])
     max_a = np.array([1.5, 1, 1.5])
     agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
-                actor_optimizer, critic_params, batch_size, initial_replay_size,
-                max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[min_a, max_a])
+                   actor_optimizer, critic_params, batch_size, initial_replay_size,
+                   max_replay_size, warmup_transitions, tau, lr_alpha,
+                   critic_fit_params=None, range=[min_a, max_a])
 
     # Adversary
-    obs_antagonist =6 + 1
+    obs_antagonist = 6 + 1
     adversary_actor_input_shape = (obs_antagonist,)
     antagonist_mu_params = dict(
         network=ActorNetwork,
@@ -191,7 +224,7 @@ def experiment_uniform(
         use_cuda=use_cuda,
     )
 
-    antagonist_critic_input_shape = (adversary_actor_input_shape[0] +1,)
+    antagonist_critic_input_shape = (adversary_actor_input_shape[0] + 1,)
     antagonist_critic_params = dict(
         network=CriticNetwork,
         optimizer={"class": optim.Adam, "params": {"lr": 3e-4}},
@@ -232,9 +265,11 @@ def experiment_uniform(
         rationality_antagonist=True)
 
 
-    temps = np.random.uniform(0, temperature_support, 100)
+    # evaluation_temp = teacher.teacher.temp_dist.mean()
 
-    core.set_variables_for_training(temps)
+    warmpup_temps = np.random.uniform(0,temperature_support,100)
+
+    core.set_variables_for_training(warmpup_temps)
     dataset_online = core.evaluate(
         n_episodes=10, render=False, id_agent=0, return_antagonist_state=True
     )
@@ -248,15 +283,12 @@ def experiment_uniform(
         0,
         J_online=J_online,
         R_online=R_online,
-        entropy=E_online,
+        entropy_antagonist=E_online,
         success_rate=success_rate,
-        temperature=np.mean(temps)
+        alfa=np.mean(warmpup_temps)
     )
 
-    sampled_temperatures = np.random.uniform(0, temperature_support, 100)
-
-
-    core.set_variables_for_training(sampled_temperatures)
+    core.set_variables_for_training(warmpup_temps)
 
     logger.info("warm-up transitions  Antagonist")
     core.learn(
@@ -268,11 +300,9 @@ def experiment_uniform(
         n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=0
     )
 
-
     for it in trange(n_epochs, leave=False):
 
-
-        sampled_temperatures = np.random.uniform(0, temperature_support, 100)
+        sampled_temperatures = np.random.uniform(0,temperature_support,100)
 
         core.set_variables_for_training(sampled_temperatures)
 
@@ -291,11 +321,9 @@ def experiment_uniform(
             render = False
 
         logger.info("Evaluate Protagonist")
+        evaluation_temps = np.random.uniform(0,temperature_support,n_episodes_test)
 
-        temps = np.random.uniform(0, temperature_support, n_episodes_test)
-
-
-        core.set_variables_for_training(temps)
+        core.set_variables_for_training(evaluation_temps)
         core.callback_step.clean()
 
         dataset_online = core.evaluate(
@@ -310,10 +338,10 @@ def experiment_uniform(
 
 
 
+        ##################Evaluation 2#########################################
 
-        ###########Evaluation 2#########################################
         logger.info("Evaluate Antagonist")
-        core.set_variables_for_training(temps)
+        core.set_variables_for_training(evaluation_temps)
         core.callback_step.clean()
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
@@ -324,38 +352,39 @@ def experiment_uniform(
             R_online=R_online,
             success_rate=success_rate,
             E_antagonist=E_online,
-            mean_temperature=np.mean(temps),
+            mean_temperature=np.mean(evaluation_temps),
             r_antagonist=R_antagonist
         )
 
         if log:
 
-            entropy_distribution  = np.log(temperature_support)  # Natural logarithm
 
-            a_dist = 1
-            b_dist = 1
+
 
             log_dict = dict(J=J_online,
                             R=R_online,
                             success_rate=success_rate,
-                            temperature=np.mean(temps),
+                            temperature=np.mean(evaluation_temps),
                             r_antagonist=R_antagonist,
-                            entropy_antagonist=E_online,
-                            entropy_distribution=entropy_distribution,
-                            a_dist= a_dist,
-                            b_dist = b_dist)
+                            entropy_antagonist=E_online)
 
             wandb.log(log_dict, step=it)
 
         if it % 10 == 0:
-            agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
-            antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+            agent.save(
+                f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            antagonist.save(
+                f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
-    agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
-    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    agent.save(
+        f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
+
+    antagonist.save(
+        f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
+
 
 def str2bool(value):
     if isinstance(value, bool):
@@ -367,33 +396,35 @@ def str2bool(value):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=400, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
-    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--n_episodes_test", type=int, default=20, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
-    parser.add_argument("--log",type=str2bool, nargs='?', const=False,  help="Enable logging")
-    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=0.5, help="Alpha value")
-    parser.add_argument("--velocity",type=float,  default=1.5)
-    parser.add_argument("--obstacle_position_x",type=float,  default=8)
+    parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
+    parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
+                        help="Use CUDA for computation")
+    parser.add_argument("--temperature", type=float, default=3., help="Alpha value")
+    parser.add_argument("--velocity", type=float, default=1.5)
+    parser.add_argument("--obstacle_position_x",type=float,  default=5)
     parser.add_argument("--obstacle_position_y",type=float,  default=-1)
     parser.add_argument("--n_static_obstacles",type=int,  default=0)
-    parser.add_argument("--corridor_size",type=float,  default=5)
-    parser.add_argument("--max_pos_target",type=float,  default=5)
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_DOMAIN_RANDOMIZATION")
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--corridor_size",type=float,  default=3)
+    parser.add_argument("--max_pos_target",type=float,  default=3)
+    parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="UNIFORM")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
 
 
 
     return parser.parse_args()
 
+
 if __name__ == "__main__":
     args = parse_args()
-
 
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
@@ -401,7 +432,7 @@ if __name__ == "__main__":
     temperature = args.temperature
     run_id = args.run_id
 
-    experiment_uniform(
+    experiment(
         method_name=args.method,
         alg=[SAC, AdaptiveTempSAC],
         n_epochs=args.n_epochs,
@@ -413,11 +444,9 @@ if __name__ == "__main__":
         log=args.log,
         temperature_support=temperature,
         use_cuda=args.use_cuda,
+        update=args.n_episodes_test,
         view=False,
         wandb_project=args.wandb_project,
-        checkpoint_dir = args.checkpoint_dir,
+        checkpoint_dir=args.checkpoint_dir,
         antagonist_velocity=args.velocity,
         conf=args)
-
-
-

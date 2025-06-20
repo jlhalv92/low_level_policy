@@ -1,4 +1,5 @@
 import argparse
+from copy import deepcopy
 
 import numpy as np
 
@@ -26,7 +27,20 @@ import wandb
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
 from tqdm import trange
+import hashlib
+import json
 
+
+def generate_config_hash(config: dict, algo='sha256', length=8) -> str:
+    # Ensure consistent key order for hashing
+    config_str = json.dumps(config, sort_keys=True)
+
+    # Choose a hashing algorithm
+    hash_func = getattr(hashlib, algo)
+    hash_object = hash_func(config_str.encode())
+
+    # Return the shortened hex digest
+    return hash_object.hexdigest()[:length]
 
 
 def calculate_success_rate(info, last):
@@ -63,7 +77,7 @@ def experiment(
     logger.strong_line()
     task_name = "obstacles_navigation"
 
-    agent_task = f"{task_name}"
+    agent_task = f"{task_name}_hard"
     logger.info('Experiment Algorithm: ' +method_name+ " task " + agent_task )
 
     # MDP
@@ -76,15 +90,21 @@ def experiment(
     max_replay_size = int(1e6)
     tau = 0.005
     lr_alpha = 3e-4
-    job_name = method_name + f"_rationality_{aware_rationality}_t_{temperature_support}_mv={antagonist_velocity}"
+    config_hash = deepcopy(conf)
+    config_hash.pop("run_id")
+    hash_id = generate_config_hash(config_hash)
+    job_name = method_name + f"_{hash_id}"
     print(job_name)
+
+
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
             project=wandb_project,
             group=task_name,
             job_type=job_name,
-            name="seed_{}".format(run_id)
+            name="seed_{}".format(run_id),
+            config=conf
         )
 
 
@@ -147,7 +167,7 @@ def experiment(
                 critic_fit_params=None, range=[min_a, max_a])
 
     # Adversary
-    obs_antagonist =7
+    obs_antagonist = 7 + 1
     adversary_actor_input_shape = (obs_antagonist,)
     antagonist_mu_params = dict(
         network=ActorNetwork,
@@ -176,7 +196,7 @@ def experiment(
         use_cuda=use_cuda,
     )
     min_a = -np.array([antagonist_velocity,antagonist_velocity])
-    max_a = np.array([0, antagonist_velocity])
+    max_a = np.array([antagonist_velocity, antagonist_velocity])
     antagonist = alg[1](
         mdp.info,
         antagonist_mu_params,
@@ -207,10 +227,10 @@ def experiment(
         rationality_antagonist=True)
 
 
-    temps = np.random.uniform(0, temperature_support, 100)
+    warmup_temps = np.random.uniform(0, temperature_support, 100)
 
 
-    core.set_variables_for_training(temps)
+    core.set_variables_for_training(warmup_temps)
     dataset_online = core.evaluate(
         n_episodes=10, render=view, id_agent=0, return_antagonist_state=True
     )
@@ -226,12 +246,11 @@ def experiment(
         R_online=R_online,
         entropy=E_online,
         success_rate=success_rate,
-        alfa=np.mean(temps)
+        alfa=np.mean(warmup_temps)
     )
-    sampled_temperatures = np.random.uniform(0, temperature_support, 100)
 
 
-    core.set_variables_for_training(sampled_temperatures)
+    core.set_variables_for_training(warmup_temps)
 
     logger.info("warm-up transitions  Antagonist")
     core.learn(
@@ -266,10 +285,10 @@ def experiment(
             render = False
 
 
-        temps = np.random.uniform(0, temperature_support, n_episodes_test)
+        evaluation_temp = np.random.uniform(0, temperature_support, n_episodes_test)
 
 
-        core.set_variables_for_training(temps)
+        core.set_variables_for_training(evaluation_temp)
         core.callback_step.clean()
 
         dataset_online = core.evaluate(
@@ -287,7 +306,7 @@ def experiment(
         ##################Evaluation 2#########################################
 
         logger.info("Evaluate Antagonist")
-        core.set_variables_for_training(temps)
+        core.set_variables_for_training(evaluation_temp)
         core.callback_step.clean()
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
@@ -298,7 +317,7 @@ def experiment(
             R_online=R_online,
             success_rate=success_rate,
             E_antagonist=E_online,
-            mean_temperature=np.mean(temps),
+            mean_temperature=np.mean(evaluation_temp),
             r_antagonist=R_antagonist
         )
 
@@ -312,7 +331,7 @@ def experiment(
             log_dict = dict(J=J_online,
                             R=R_online,
                             success_rate=success_rate,
-                            temperature=np.mean(temps),
+                            temperature=np.mean(evaluation_temp),
                             r_antagonist=R_antagonist,
                             entropy_antagonist=E_online,
                             entropy_distribution=entropy_distribution,
@@ -351,11 +370,11 @@ def parse_args():
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=6, help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=4, help="Alpha value")
     parser.add_argument("--aware_rationality", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="2D_Adversary")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
-    parser.add_argument("--velocity", type=float, default=2., help=" antagonist vel value")
+    parser.add_argument("--velocity", type=float, default=1.5, help=" antagonist vel value")
 
 
 

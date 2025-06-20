@@ -965,8 +965,6 @@ class Go1MultiObs(MuJoCo):
             rgba = [1, 0, 0, 1])
 
 
-        #self._room_width = np.random.uniform(low=3, high=4)
-        # self._room_width = 3
         self._room_width = self.corridor_size
 
 
@@ -1042,7 +1040,7 @@ class Go1MultiObs(MuJoCo):
 
             #y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
             if self.obstacle_position_y == -1:
-                y_obstacle = np.random.uniform(-1., 1.)
+                y_obstacle =np.random.uniform(-self.wall_pos + 0.6, self.wall_pos - 0.6)
             else:
                 y_obstacle = np.random.uniform(-self.obstacle_position_y, self.obstacle_position_y)
 

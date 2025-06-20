@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 
 import torch.optim as optim
@@ -20,7 +22,20 @@ from src.mushroom.dataset.dataset import compute_J,parse_dataset
 from src.utils.state_preprocessor import StateVariableConcatenation
 
 from tqdm import trange
+import hashlib
+import json
 
+
+def generate_config_hash(config: dict, algo='sha256', length=8) -> str:
+    # Ensure consistent key order for hashing
+    config_str = json.dumps(config, sort_keys=True)
+
+    # Choose a hashing algorithm
+    hash_func = getattr(hashlib, algo)
+    hash_object = hash_func(config_str.encode())
+
+    # Return the shortened hex digest
+    return hash_object.hexdigest()[:length]
 
 
 def calculate_success_rate(info, last):
@@ -43,18 +58,21 @@ def experiment(method_name,
                use_cuda=False,
                temperature=1.,
                wandb_project="",
-               max_v=2):
+               max_v=2,
+               config=None):
 
     np.random.seed()
 
     logger = Logger("EXP", results_dir=None)
     logger.strong_line()
     task_name = "obstacles_navigation"
-    agent_task = "{}".format(task_name)
+    agent_task = "{}_hard".format(task_name)
     logger.info('Experiment Algorithm: ' + " task " + agent_task )
 
 
-    view = False
+
+
+    view = True
     # MDP
     horizon = 500
     gamma = 0.99
@@ -68,8 +86,10 @@ def experiment(method_name,
     lr_alpha = 3e-4
 
 
-
-    job_name = method_name + f"_temperature_{temperature}_2d_max_v={max_v}"
+    config_hash = deepcopy(config)
+    config_hash.pop("run_id")
+    hash_id = generate_config_hash(config_hash)
+    job_name = method_name + f"_{hash_id}"
     print(job_name)
     if log:
         wandb.init(
@@ -97,7 +117,7 @@ def experiment(method_name,
                        'params': {'lr': 3e-4}}
 
 
-    antagonist_input_shape = (7,)
+    antagonist_input_shape = (7 + 1,)
     antagonist_mu_params = dict(network=ActorNetwork,
                            n_features=n_features,
                            input_shape=antagonist_input_shape,
@@ -120,7 +140,7 @@ def experiment(method_name,
                          output_shape=(1,),
                          use_cuda=use_cuda)
     min_a = -np.array([max_v, max_v])
-    max_a = np.array([0, max_v])
+    max_a = np.array([max_v, max_v])
     antagonist = alg[1](mdp.info, antagonist_mu_params, antagonist_sigma_params,
                 actor_optimizer, antagonist_critic_params, batch_size, initial_replay_size,
                 max_replay_size, warmup_transitions, tau, lr_alpha,
@@ -128,18 +148,22 @@ def experiment(method_name,
 
     preprocessor = StateVariableConcatenation()
 
-    path_protagonist = "src/nominal_models/nominal_test_protagonist/model"
+    # path_protagonist = "checkpoint/GO1/obstacles_navigation/UNIFORM_rationality_False_t_6_mv=2.0/run_0/PROTAGONIST/epoch_10"
+    # path_protagonist = 'checkpoint/GO1/obstacles_navigation_hard/UNIFORM_rationality_False_t_6_mv=1.5/run_0/PROTAGONIST/epoch_10'
+    path_protagonist = 'checkpoint/GO1/obstacles_navigation/RAMEN_r_True_t_support_4.0_mv=2.0_plb=0.5_kl=0.001/run_0/PROTAGONIST/epoch_190'
     protagonist = Agent.load(path_protagonist)
+
 
     core = Core([protagonist, antagonist],
                 mdp,
                 low_level_agent=control_agent, joystick=joystick,
                 preprocessors = [preprocessor],
+                aware_rationality=False,
                 rationality_antagonist = True)
 
     temps = np.random.uniform(low=0, high=temperature, size=(100,))
     core.set_variables_for_training(temps)
-    dataset = core.evaluate(n_episodes=5, render=False, id_agent=0)
+    dataset = core.evaluate(n_episodes=5, render=True, id_agent=0)
 
     s,a, r, s1, absorbing, info, last = parse_dataset(dataset)
 
@@ -181,7 +205,7 @@ def experiment(method_name,
         success_rate = calculate_success_rate(info, last)
 
         core.set_variables_for_training(temps_eval)
-        dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=1)
+        dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
         E_a=antagonist.policy.entropy(s)
@@ -226,13 +250,12 @@ def parse_args():
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
-    parser.add_argument("--runs", type=int, default=5, help="Run ID")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=False, help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=2., help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=5, help="Alpha value")
     parser.add_argument("--wandb_project",type=str,default="Max Temperature Analysis Antagonist 2D")
-    parser.add_argument("--run_id", type=int, default=0)
-    parser.add_argument("--velocity", type=float, default=2.)
+    parser.add_argument("--run_id", type=int, default=2)
+    parser.add_argument("--velocity", type=float, default=1.5)
 
 
 
@@ -243,7 +266,7 @@ if __name__ == '__main__':
     args = parse_args()
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-    experiment(method_name="Antagonist_2d",
+    experiment(method_name="ANTAGONIST_FIX_TEMP",
                alg=[SAC, AdaptiveTempSAC],
                n_epochs=args.n_epochs,
                n_steps=args.n_steps,
@@ -255,7 +278,8 @@ if __name__ == '__main__':
                use_cuda=args.use_cuda,
                temperature=args.temperature,
                wandb_project=args.wandb_project,
-               max_v=args.velocity)
+               max_v=args.velocity,
+               config=vars(args))
 
 
 
