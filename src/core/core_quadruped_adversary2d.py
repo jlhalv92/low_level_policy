@@ -360,39 +360,35 @@ class Core(object):
             self._episode_steps < self.mdp.info.horizon and not absorbing)
 
 
-        state_antagonist = self._adversary_state
+        state_antagonist = self._adversary_state.copy()
 
         if self.rationality_antagonist:
             next_state_antagonist = self._preprocess(next_state_antagonist.copy())
 
 
-
         if self.aware_rationality:
             next_nav_state = self._preprocess(next_state.copy())
+
         else:
             next_nav_state = next_state.copy()
 
         self._state = next_nav_state.copy()
+        self._adversary_state = next_state_antagonist.copy()
 
-        self._adversary_state = next_state_antagonist
+
 
         # Reward Antagonist
         reward_antagonist = self.mdp.reward_antagonist()
         if return_antagonist_state and self.agent_id == 0:
 
             tr_protagonist =(state_antagonist, self.action, reward, next_state_antagonist, absorbing, info, last)
-
             return tr_protagonist
 
-
         if self.agent_id == 0:
-
-
             return nav_state,  self.action, reward, next_nav_state, absorbing, info, last
 
 
         if self.agent_id == 1:
-
             return state_antagonist, action_antagonist, reward_antagonist, next_state_antagonist, absorbing, info, last
 
     def reset(self, initial_states=None, initial_conditions=None):

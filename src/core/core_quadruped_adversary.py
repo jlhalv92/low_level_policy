@@ -1,5 +1,4 @@
-
-
+from torch.utils.hipify.hipify_python import preprocessor
 from tqdm import tqdm
 import numpy as np
 from collections import deque
@@ -30,7 +29,8 @@ class Core(object):
                  preprocessors=None, low_level_agent=None,
                  record_dictionary=None, joystick=False,
                  aware_rationality=False,
-                 rationality_antagonist=False):
+                 rationality_antagonist=False,
+                 heuristic=False):
         """
         Constructor.
 
@@ -53,7 +53,7 @@ class Core(object):
         self.joystick=joystick
         self.history = HistoryStore(5)
         self.use_history = True
-
+        self.heuristic = heuristic
         self.use_antagonist = True
 
         self.agents = agents
@@ -301,17 +301,20 @@ class Core(object):
 
 
         if learning:
-            # navigation_state = self._state[-obs_dim:]
             if self.aware_rationality:
                 action = self.agents[0].draw_noisy_action(nav_state[:-1])
             else:
                 action = self.agents[0].draw_noisy_action(nav_state)
 
-            action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+            if not self.heuristic:
 
-            if self.use_antagonist:
+                if self.use_antagonist:
+                    action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+                    self.mdp.obstacle_velocity = action_antagonist
+            else:
 
-                self.mdp.obstacle_velocity = action_antagonist
+                self.mdp.antagonist_temperature = self._preprocessors[0].variables[self._total_episodes_counter]
+                action_antagonist = 0
 
             if not self.joystick:
                 robot_state[-3:] =  action
@@ -322,17 +325,21 @@ class Core(object):
 
 
         else: # Default
+
             if self.aware_rationality:
                 action = self.agents[0].draw_action(nav_state[:-1])
             else:
                 action = self.agents[0].draw_action(nav_state)
 
+            if not self.heuristic:
 
-            action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+                if self.use_antagonist:
+                    action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+                    self.mdp.obstacle_velocity = action_antagonist
+            else:
 
-            if self.use_antagonist:
-
-                self.mdp.obstacle_velocity = action_antagonist
+                self.mdp.antagonist_temperature = self._preprocessors[0].variables[self._total_episodes_counter]
+                action_antagonist = 0
 
             if not self.joystick:
                 robot_state[-3:] =  action

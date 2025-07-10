@@ -47,7 +47,7 @@ def experiment(method_name,
     logger = Logger("RARL", results_dir=None)
     logger.strong_line()
     task_name = "obstacles_navigation"
-    agent_task = "{}".format(task_name)
+    agent_task = "{}_hard".format(task_name)
     logger.info('Experiment Algorithm: ' + "RARL" + " task " + agent_task )
 
 
@@ -66,7 +66,7 @@ def experiment(method_name,
 
 
 
-    job_name = method_name + f"2d_antagonist_velocity={antagonist_velocity}"
+    job_name = method_name + f"_max_v={antagonist_velocity}"
     if log:
         wandb.init(
             project=wandb_project,
@@ -124,7 +124,7 @@ def experiment(method_name,
                          use_cuda=use_cuda)
 
     # Agent
-    antagonist_input_shape = (6,)
+    antagonist_input_shape = (7,)
     min_a = -np.array([1.5,1,1.5])
     max_a = np.array([1.5, 1, 1.5])
 
@@ -177,7 +177,8 @@ def experiment(method_name,
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
-    E = agent.policy.entropy(s)
+    E = agent.policy.entropy_s(s,a)
+
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
@@ -208,14 +209,14 @@ def experiment(method_name,
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
-        E = agent.policy.entropy(s)
+        E = agent.policy.entropy_s(s, a)
         success_rate = calculate_success_rate(info, last)
 
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, id_agent=1)
-        s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
+        s_a, a_a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
         alfa = antagonist._alpha_np
-        E_a=antagonist.policy.entropy(s)
+        E_a=antagonist.policy.entropy_s(s_a, a_a)
 
         logger.epoch_info(it+1,
                           J=J,

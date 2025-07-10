@@ -206,7 +206,7 @@ def experiment(method_name ,alg,
 
 
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit)
-        loss_mean = np.mean((agent._critic_approximator[0]._last_loss, agent._critic_approximator[1]._last_loss))
+        # loss_mean = np.mean((agent._critic_approximator[0]._last_loss, agent._critic_approximator[1]._last_loss))
 
 
         if (it+1) % 10==0 and view:
@@ -218,7 +218,7 @@ def experiment(method_name ,alg,
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render)
 
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
-        Q = np.mean(agent._critic_approximator.predict(s, a, prediction='min', output_tensor=False))
+        # Q = np.mean(agent._critic_approximator.predict(s, a, prediction='min', output_tensor=False))
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy(s)
@@ -280,14 +280,7 @@ def parse_args():
     return parser.parse_args()
 if __name__ == '__main__':
     args = parse_args()
-
-    # path = "src/nominal_models/go1/epoch_last"
-    # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_50"
-    # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT_vx=2_wz=2/epoch_15"
     path = "src/nominal_models/low_level/policy"
-
-    # path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_student/epoch_70"
-
     control_agent = Agent.load(path)
 
     experiment(method_name=args.method,

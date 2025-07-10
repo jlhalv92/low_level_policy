@@ -47,11 +47,11 @@ def experiment(method_name,
 
     np.random.seed()
 
-    logger = Logger("RARL", results_dir=None)
+    logger = Logger(conf.method, results_dir=None)
     logger.strong_line()
     task_name = "obstacles_navigation"
     agent_task = "{}".format(task_name)
-    logger.info('Experiment Algorithm: ' + "RARL" + " task " + agent_task )
+    logger.info('Experiment Algorithm: ' + conf.method + " task " + agent_task )
 
 
     view = False
@@ -80,7 +80,7 @@ def experiment(method_name,
             config=vars(conf)
         )
     joystick = False
-    cfg = dict(antagonist=True,
+    cfg = dict(antagonist=not conf.heuristic,
                max_level=False,
                joystick=joystick,
                static_obstacles=False,
@@ -90,8 +90,10 @@ def experiment(method_name,
                obstacle_position_x=conf.obstacle_position_x,
                obstacle_position_y=conf.obstacle_position_y,
                max_pos_target=conf.max_pos_target,
-                corridor_size = conf.corridor_size
-    )
+                corridor_size = conf.corridor_size,
+               heuristic=conf.heuristic,
+
+               )
 
 
     multiple_obstacles = True
@@ -111,6 +113,9 @@ def experiment(method_name,
                   cfg=cfg,
                   task_name=task_name
                   )
+
+    if conf.heuristic:
+        mdp.antagonist_temperature = 0
 
     actor_input_shape  = mdp.info.observation_space.shape
 
@@ -198,16 +203,20 @@ def experiment(method_name,
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
 
 
+    if not conf.heuristic:
 
-    core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
+        core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1)
+
     core.learn(n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=0)
 
 
     for it in trange(n_epochs, leave=False):
+        #
+        #
+        if not conf.heuristic:
+            logger.info("Training Antagonist")
+            core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
 
-
-        logger.info("Training Antagonist")
-        core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit,  id_agent=1)
         logger.info("Training Protagonist")
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
 
@@ -229,8 +238,15 @@ def experiment(method_name,
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, id_agent=1)
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset_antagonist)
         R_antagonist = np.mean(compute_J(dataset_antagonist))
-        alfa = antagonist._alpha_np
-        E_a=antagonist.policy.entropy(s)
+
+
+        if not conf.heuristic:
+            E_a=antagonist.policy.entropy(s)
+            alfa = antagonist._alpha_np
+
+        else:
+            E_a = mdp.heuristic_policy.mean_entropy(np.zeros(n_episodes_test))
+            alfa = 0
 
         logger.epoch_info(it+1,
                           J=J,
@@ -251,11 +267,13 @@ def experiment(method_name,
             wandb.log(log_dict, step=it)
 
         if it % 50 == 0:
-            agent.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
-            antagonist.save(f"checkpoint/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+            agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
+            if not conf.heuristic:
+                antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
     agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
-    antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    if not conf.heuristic:
+        antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -272,7 +290,7 @@ def str2bool(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--n_epochs", type=int, default=400, help="Number of training epochs")
+    parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
@@ -287,6 +305,10 @@ def parse_args():
     parser.add_argument("--n_static_obstacles",type=int,  default=0)
     parser.add_argument("--corridor_size",type=float,  default=3)
     parser.add_argument("--max_pos_target",type=float,  default=3)
+    parser.add_argument("--heuristic", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--method", type=str, default="RARL")
+
+
 
 
 
@@ -299,7 +321,7 @@ if __name__ == '__main__':
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
-    experiment(method_name="RARL",
+    experiment(method_name=args.method,
                alg=[SAC, SAC],
                n_epochs=args.n_epochs,
                n_steps=args.n_steps,

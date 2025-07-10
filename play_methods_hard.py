@@ -1,11 +1,19 @@
-
+import argparse
 
 import numpy as np
 
+from src.teachers.self_paced_gamma_teacher_fixed_beta import (
+    SelfPaced,
+)
+from src.utils.buffer import Buffer
 from src.utils.state_preprocessor import StateVariableConcatenation
-
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
 from mushroom_rl.utils.callbacks import CollectDataset
 from src.core.core_quadruped_adversary2d import Core
+import json
+
 
 from src.algorithm.deep_actor_critic.sac import  SAC
 from src.algorithm.deep_actor_critic.adaptative_temp_sac import AdaptiveTempSAC
@@ -19,6 +27,7 @@ from src.networks.nets import  ActorNetwork ,CriticNetwork, ValueNetwork, ActorB
 import wandb
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
+from tqdm import trange
 
 
 def calculate_success_rate(info, last):
@@ -43,16 +52,12 @@ def benchmark(
         antagonist=None,
         control_agent=None,
         aware_rationality=False,
-        max_v_antagonist=1,
+        max_v_antagonist=1.0,
         n_episodes_test=10,
         alpha=0.5,
-        protagonist_id = "model",
-        seed=0,
-        file_path="data.json",
         render=True,
-        record=True,
-        save_file=False,
-    joystick=False,
+        use_antagonist=False,
+        joystick=False,
 horizon=500
 ):
 
@@ -71,22 +76,13 @@ horizon=500
 
 
 
-
-    cfg_rewards=dict()
-
-
     cfg = dict(
-               antagonist=True,
-               max_level=True,
-               curriculum=False,
+               antagonist=False,
                joystick=joystick,
-               resample=False,
                domain_randomization=False,
-               rewards=cfg_rewards,
                static_obstacles=False,
-                activate_arrow=True,
-                max_antagonist_v=max_v_antagonist)
-
+                activate_arrow=False,
+                max_antagonist_v=max_v_antagonist,)
 
     mdp = Go1(horizon,
               gamma,
@@ -99,22 +95,28 @@ horizon=500
     preprocessor = StateVariableConcatenation()
 
     core = Core(
-        [protagonist, antagonist],
+        [protagonist, None],
         mdp,
         low_level_agent=control_agent,
         callback_step=CollectDataset(),
         preprocessors=[preprocessor],
         joystick=joystick,
         aware_rationality=False,
-        rationality_antagonist=True)
+        rationality_antagonist=False,
+    use_antagonist=False)
 
 
 
+    # temps = alpha*np.ones(n_episodes_test)
     temps = alpha*np.ones(n_episodes_test)
 
     core.set_variables_for_training(temps)
     dataset_online = core.evaluate(
-        n_episodes=n_episodes_test, render=render, id_agent=0, return_antagonist_state=True, record=record
+        n_episodes=n_episodes_test,
+        render=render,
+        id_agent=0,
+        return_antagonist_state=True,
+        record=False
     )
 
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
@@ -132,6 +134,7 @@ horizon=500
         alfa=np.mean(temps)
     )
 
+
     return success_rate
 
 
@@ -140,43 +143,37 @@ if __name__ == "__main__":
     # print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-
-    velocity = 2.
-    model_id = "RARL_alpha"
-    run=0
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/Antagonist_FIX_Temp_uniform_temperature_2.0_2d_max_v=2/run_0/ANTAGONIST/epoch_50"
-
-    antagonist = Agent.load(path_antagonist)
-
-    # protagonist_id =f"{model_id}_{temperature}"
-    # msg =f"RUNNING_EXPERIMENT {protagonist_id}, seed {run} with antagonist temperature {temperature} max velocity {velocity}"
-    # print(f"-----------------------------------------{msg}--------------------------------------------")
+    model_ids = ["UNIFORM", "QARL", "RARL", "RAMEN"]
+    velocity = 1.
+    temperature = 0
     performance = []
-    # file_path = f"results_exp/{protagonist_id}_seed_{run}_antagonist_level_{alpha}_velocity_{velocity}.json"
-    temperature = 10.
-    success_rates = []
-    for i in range(1):
-        path_protagonist = f"/home/jose-luis/results_corl_2d/RARL2d_antagonist_velocity=2.0/run_0/PROTAGONIST/epoch_last"
-        protagonist = Agent.load(path_protagonist)
-        success_rate = benchmark(
-            protagonist=protagonist,
-            antagonist=antagonist,
-            control_agent=control_agent,
-            max_v_antagonist=velocity,
-            n_episodes_test=5,
-            alpha=temperature,
-            protagonist_id = str(i),
-            seed=run,
-            # file_path=file_path,
-            render=True,
-            record=False,
-            joystick=False,
-            horizon=500,
 
-        )
-        success_rates.append(success_rate)
-        mean_success_rate = np.mean(success_rates)
-        performance.append(mean_success_rate)
+    path_antagonist = "checkpoint_strong_antagonist/GO1/obstacles_navigation/SAC_ANTAGONIST-cd0316c4/run_0/ANTAGONIST/epoch_150"
+
+
+
+    success_rates_list = []
+    antagonist = Agent.load(path_antagonist)
+    path_protagonist = "checkpoint/GO1/obstacles_navigation/Heuristic_hard_antagonist_heurisitic_antagonist_mv=1.0/run_0/PROTAGONIST/epoch_last"
+
+    protagonist = Agent.load(path_protagonist)
+    success_rate = benchmark(
+                protagonist=protagonist,
+                antagonist=antagonist,
+                control_agent=control_agent,
+                aware_rationality=False,
+                max_v_antagonist=velocity,
+                n_episodes_test=10,
+                alpha=temperature,
+                render=True,
+                use_antagonist=False,
+                joystick=False,
+                horizon=500
+
+            )
+    success_rates_list.append(success_rate)
+
+
 
 
 

@@ -54,13 +54,9 @@ def benchmark(
         max_v_antagonist=1.0,
         n_episodes_test=10,
         alpha=0.5,
-        protagonist_id = "model",
-        seed=0,
-        file_path="data.json",
         render=True,
-        record=True,
-        save_file=False,
-    joystick=False,
+        use_antagonist=False,
+        joystick=False,
 horizon=500
 ):
 
@@ -79,20 +75,17 @@ horizon=500
 
 
     joystick = False
-    cfg = dict(antagonist=True,
+    cfg = dict(antagonist=use_antagonist,
                max_level=False,
                joystick=joystick,
                static_obstacles=False,
                activate_arrow=False,
                max_antagonist_v=max_v_antagonist,
                n_static_obstacles=0,
-               obstacle_position_x=8,
+               obstacle_position_x=5,
                obstacle_position_y=-1,
-                corridor_size = 4)
-
-
-    multiple_obstacles = True
-
+               max_pos_target=3,
+                corridor_size = 3)
 
     mdp = Go1MultiObs(horizon,
                   gamma,
@@ -147,36 +140,40 @@ if __name__ == "__main__":
     # print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-
-    velocity = 1.5
-
-    path_antagonist = "checkpoint/GO1/obstacles_navigation/UNIFORM_mv=1.5_support=0.5/run_0/ANTAGONIST/epoch_last"
-    antagonist = Agent.load(path_antagonist)
-
+    model_ids = ["UNIFORM", "QARL", "RARL", "RAMEN"]
+    velocities = [1, 1.5, 2, 2.5]
+    use_antagonist = True
+    temperatures = [2, 1.5, 1, 0.5, 0.1, 0]
     performance = []
 
-    model_id = "MAX_ENTROPY"
-    success_rates = []
-    path_protagonist =  "checkpoint/GO1/obstacles_navigation/UNIFORM_mv=1.5_support=0.5/run_0/PROTAGONIST/epoch_last"
+    path_antagonist = "/home/jose-luis/models_for_eval/velocity_1/UNIFORM/run_0/ANTAGONIST/epoch_200"
+    for velocity in velocities:
+        for model_id in model_ids:
+            for temperature in temperatures:
+                success_rates_list = []
+                for agent_id in range(5):
+                    print(f"Model {model_id} with temperature {temperature} and velocity {velocity}")
+                    antagonist = Agent.load(path_antagonist)
+                    path_protagonist =  f"/home/jose-luis/models_for_eval/velocity_{velocity}/{model_id}/run_{agent_id}/PROTAGONIST/epoch_250"
 
-            # path_protagonist = f"/home/jose-luis/CORL_final_results/SAC_heuristic_velocity_antagonist_0.0/obstacles_navigation_velocity_antagonist_0.0/epoch_last_{i}"
-    protagonist = Agent.load(path_protagonist)
-    success_rate = benchmark(
-                protagonist=protagonist,
-                antagonist=antagonist,
-                control_agent=control_agent,
-                aware_rationality=False,
-                max_v_antagonist=velocity,
-                n_episodes_test=50,
-                alpha=1.,
-                protagonist_id = 0,
-                # file_path=file_path,
-                render=True,
-                record=False,
-                joystick=False,
-                horizon=500,
+                    protagonist = Agent.load(path_protagonist)
+                    success_rate = benchmark(
+                                protagonist=protagonist,
+                                antagonist=antagonist,
+                                control_agent=control_agent,
+                                aware_rationality=False,
+                                max_v_antagonist=velocity,
+                                n_episodes_test=10,
+                                alpha=temperature,
+                                render=False,
+                                use_antagonist=use_antagonist,
+                                joystick=False,
+                                horizon=500,
 
-            )
+                            )
+                    success_rates_list.append(success_rate)
+
+                np.save(f"eval_results/performance_{model_id}_velocity_{velocity}_temperature_{temperature}_use_antagonist_{use_antagonist}.npy", np.array(success_rates_list))
 
 
 

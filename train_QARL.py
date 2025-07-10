@@ -180,7 +180,7 @@ def experiment(
 
 
     joystick = False
-    cfg = dict(antagonist=True,
+    cfg = dict(antagonist=not conf.heuristic,
                max_level=False,
                joystick=joystick,
                static_obstacles=False,
@@ -190,7 +190,8 @@ def experiment(
                obstacle_position_x=conf.obstacle_position_x,
                obstacle_position_y=conf.obstacle_position_y,
                max_pos_target=conf.max_pos_target,
-                corridor_size = conf.corridor_size
+                corridor_size = conf.corridor_size,
+               heuristic=conf.heuristic,
     )
 
     multiple_obstacles = True
@@ -253,52 +254,54 @@ def experiment(
                    max_replay_size, warmup_transitions, tau, lr_alpha,
                    critic_fit_params=None, range=[min_a, max_a])
 
-    # Adversary
-    obs_antagonist = 6 + 1
-    adversary_actor_input_shape = (obs_antagonist,)
-    antagonist_mu_params = dict(
-        network=ActorNetwork,
-        n_features=n_features,
-        input_shape=adversary_actor_input_shape,
-        output_shape=(1,),
-        use_cuda=use_cuda,
-    )
+    if not conf.heuristic:
+        # Adversary
+        obs_antagonist = 6 + 1
+        adversary_actor_input_shape = (obs_antagonist,)
+        antagonist_mu_params = dict(
+            network=ActorNetwork,
+            n_features=n_features,
+            input_shape=adversary_actor_input_shape,
+            output_shape=(1,),
+            use_cuda=use_cuda,
+        )
 
-    antagonist_sigma_params = dict(
-        network=ActorNetwork,
-        n_features=n_features,
-        input_shape=adversary_actor_input_shape,
-        output_shape=(1,),
-        use_cuda=use_cuda,
-    )
+        antagonist_sigma_params = dict(
+            network=ActorNetwork,
+            n_features=n_features,
+            input_shape=adversary_actor_input_shape,
+            output_shape=(1,),
+            use_cuda=use_cuda,
+        )
 
-    antagonist_critic_input_shape = (adversary_actor_input_shape[0] + 1,)
-    antagonist_critic_params = dict(
-        network=CriticNetwork,
-        optimizer={"class": optim.Adam, "params": {"lr": 3e-4}},
-        loss=F.mse_loss,
-        n_features=n_features,
-        input_shape=antagonist_critic_input_shape,
-        output_shape=(1,),
-        use_cuda=use_cuda,
-    )
+        antagonist_critic_input_shape = (adversary_actor_input_shape[0] + 1,)
+        antagonist_critic_params = dict(
+            network=CriticNetwork,
+            optimizer={"class": optim.Adam, "params": {"lr": 3e-4}},
+            loss=F.mse_loss,
+            n_features=n_features,
+            input_shape=antagonist_critic_input_shape,
+            output_shape=(1,),
+            use_cuda=use_cuda,
+        )
 
-    antagonist = alg[1](
-        mdp.info,
-        antagonist_mu_params,
-        antagonist_sigma_params,
-        actor_optimizer,
-        antagonist_critic_params,
-        batch_size,
-        initial_replay_size,
-        max_replay_size,
-        warmup_transitions,
-        tau,
-        lr_alpha,
-        critic_fit_params=None,
-        range=[-antagonist_velocity, antagonist_velocity],
-    )
-
+        antagonist = alg[1](
+            mdp.info,
+            antagonist_mu_params,
+            antagonist_sigma_params,
+            actor_optimizer,
+            antagonist_critic_params,
+            batch_size,
+            initial_replay_size,
+            max_replay_size,
+            warmup_transitions,
+            tau,
+            lr_alpha,
+            critic_fit_params=None,
+            range=[-antagonist_velocity, antagonist_velocity],
+        )
+    else:
+        antagonist = None
     # Algorithm
     preprocessor = StateVariableConcatenation()
 
@@ -310,16 +313,16 @@ def experiment(
         preprocessors=[preprocessor],
         joystick=joystick,
         aware_rationality=True,
-        rationality_antagonist=True)
+        rationality_antagonist=True,
+        heuristic=conf.heuristic)
 
 
     temp_perf_buffer = Buffer(2, 100, reset_on_query=True)
 
-    # evaluation_temp = teacher.teacher.temp_dist.mean()
 
-    temps = teacher.sample_n_temperatures(n=100)
+    warmpup_temps = teacher.sample_n_temperatures(n=100)
 
-    core.set_variables_for_training(temps)
+    core.set_variables_for_training(warmpup_temps)
     dataset_online = core.evaluate(
         n_episodes=10, render=False, id_agent=0, return_antagonist_state=True
     )
@@ -327,7 +330,10 @@ def experiment(
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
     R_online = np.mean(compute_J(dataset_online))
     success_rate = calculate_success_rate(info, last)
-    E_online = antagonist.policy.entropy(s)
+    if not conf.heuristic:
+        E_online = antagonist.policy.entropy(s)
+    else:
+        E_online = mdp.heuristic_policy.mean_entropy(warmpup_temps)
 
     logger.epoch_info(
         0,
@@ -335,17 +341,18 @@ def experiment(
         R_online=R_online,
         entropy_antagonist=E_online,
         success_rate=success_rate,
-        alfa=np.mean(temps)
+        alfa=np.mean(warmpup_temps)
     )
 
     sampled_temperatures = teacher.sample_n_temperatures(n=100)
 
     core.set_variables_for_training(sampled_temperatures)
 
-    logger.info("warm-up transitions  Antagonist")
-    core.learn(
-        n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1
-    )
+    if not conf.heuristic:
+        logger.info("warm-up transitions  Antagonist")
+        core.learn(
+            n_steps=warmup_transitions, n_steps_per_fit=warmup_transitions, id_agent=1
+        )
 
     logger.info("warm-up transitions  Protagonist")
     core.learn(
@@ -355,11 +362,11 @@ def experiment(
     for it in trange(n_epochs, leave=False):
 
         sampled_temperatures = teacher.sample_n_temperatures(n=100)
+        if not conf.heuristic:
+            core.set_variables_for_training(sampled_temperatures)
 
-        core.set_variables_for_training(sampled_temperatures)
-
-        logger.info("Training Antagonist")
-        core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=1)
+            logger.info("Training Antagonist")
+            core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=1)
 
         core.set_variables_for_training(sampled_temperatures)
 
@@ -373,9 +380,9 @@ def experiment(
             render = False
 
         logger.info("Evaluate Protagonist")
-        temps = teacher.sample_n_temperatures(n=n_episodes_test)
+        evaluation_temps = teacher.sample_n_temperatures(n=n_episodes_test)
 
-        core.set_variables_for_training(temps)
+        core.set_variables_for_training(evaluation_temps)
         core.callback_step.clean()
 
         dataset_online = core.evaluate(
@@ -386,7 +393,11 @@ def experiment(
         J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
         R_online = np.mean(compute_J(dataset_online))
         success_rate = calculate_success_rate(info, last)
-        E_online = antagonist.policy.entropy(s)
+        if not conf.heuristic:
+            E_online = antagonist.policy.entropy(s)
+
+        else:
+            E_online = mdp.heuristic_policy.mean_entropy(evaluation_temps)
 
         # Update temperature distribution
         temperatures, _ = extract_temp_and_sample_return(core.callback_step.get(), core.mdp.info.gamma,temperature_support_b=temperature_support)
@@ -404,12 +415,15 @@ def experiment(
                 temps_perfs[0], temps_perfs[1], it
             )
         ##################Evaluation 2#########################################
+        if not conf.heuristic:
 
-        logger.info("Evaluate Antagonist")
-        core.set_variables_for_training(temps)
-        core.callback_step.clean()
-        dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
-        R_antagonist = np.mean(compute_J(dataset_antagonist))
+            logger.info("Evaluate Antagonist")
+            core.set_variables_for_training(evaluation_temps)
+            core.callback_step.clean()
+            dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, render=False, id_agent=1)
+            R_antagonist = np.mean(compute_J(dataset_antagonist))
+        else:
+            R_antagonist = 0
 
         logger.epoch_info(
             it + 1,
@@ -417,10 +431,8 @@ def experiment(
             R_online=R_online,
             success_rate=success_rate,
             E_antagonist=E_online,
-            mean_temperature=np.mean(temps),
-            r_antagonist=R_antagonist,
-            # success_rate_antagonist=success_rate_eval,
-        )
+            mean_temperature=np.mean(evaluation_temps),
+            r_antagonist=R_antagonist)
 
         if log:
             entropy_distribution = teacher.teacher.temp_dist.entropy()[0]
@@ -430,7 +442,7 @@ def experiment(
             log_dict = dict(J=J_online,
                             R=R_online,
                             success_rate=success_rate,
-                            temperature=np.mean(temps),
+                            temperature=np.mean(evaluation_temps),
                             r_antagonist=R_antagonist,
                             entropy_antagonist=E_online,
                             entropy_distribution=entropy_distribution,
@@ -442,14 +454,17 @@ def experiment(
         if it % save_fq == 0:
             agent.save(
                 f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
-            antagonist.save(
-                f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
+            if not conf.heuristic:
+                antagonist.save(
+                    f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
 
     agent.save(
         f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{'last'}")
 
-    antagonist.save(
-        f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
+    if not conf.heuristic:
+
+        antagonist.save(
+            f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{'last'}")
 
     if log:
         wandb.finish()
@@ -469,7 +484,7 @@ def str2bool(value):
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=400, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=250, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=20, help="Number of test episodes")
     parser.add_argument("--run_id", type=int, default=0, help="Run ID")
@@ -477,7 +492,7 @@ def parse_args():
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
                         help="Use CUDA for computation")
     parser.add_argument("--temperature", type=float, default=3., help="Alpha value")
-    parser.add_argument("--kl_max", type=float, default=0.01, help="kl_max")
+    parser.add_argument("--kl_max", type=float, default=0.05, help="kl_max")
     parser.add_argument("--velocity", type=float, default=1.5)
     parser.add_argument("--obstacle_position_x",type=float,  default=5)
     parser.add_argument("--obstacle_position_y",type=float,  default=-1)
@@ -488,6 +503,8 @@ def parse_args():
     parser.add_argument("--wandb_project", type=str, default="ADVERSARIAL_LOCOMOTION")
     parser.add_argument("--method", type=str, default="QARL")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoint")
+    parser.add_argument("--heuristic", type=str2bool, nargs='?', const=True, default=False)
+
 
 
 

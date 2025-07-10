@@ -9,6 +9,41 @@ import json  # Function to read the JSON file
 import pygame
 from collections import deque
 
+def determinist_policy(data, kp, kd):
+    error_pos = data.qpos[1] - data.joint("obstacle").qpos[1]
+    pos_control = kp * error_pos - kd * data.joint("obstacle").qvel[1]
+
+    return pos_control
+
+class DeterministPolicy:
+    def __init__(self, noise_gain=100, temperature=2):
+        """
+        base_policy: function s -> a_mean (np.array of shape (d,))
+        alpha: noise scale
+        cov: (d,d) covariance matrix; if None, uses identity
+        """
+        self.base = determinist_policy
+        self.temperature = temperature
+        self.noise = np.random.normal
+        self.noise_gain = noise_gain
+
+    def __call__(self, data, kp=50, kd=5, temperature=2):
+        a_mean = self.base(data, kp=kp, kd=kd)
+        self.temperature = temperature
+
+        return a_mean + self.temperature * self.noise_gain * self.noise()
+
+    def mean_entropy(self, temperatures):
+        sigma = 1
+        normal_entropy = 0.5 * np.log(2 * np.pi * np.e * sigma ** 2)
+        entropies = []
+        for temp in temperatures:
+            scaled_sigma = temp * self.noise_gain * sigma + 1e-6
+            entropies.append(normal_entropy + np.log(scaled_sigma))
+
+        return np.mean(entropies)
+
+
 class PDController:
     def __init__(self, env, control_frequency_hz=50, p_gain=20, d_gain=0.5, scaling_factor=0.25):
         self.env = env
@@ -184,6 +219,13 @@ class Go1MultiObs(MuJoCo):
             self.max_pos_target = cfg["max_pos_target"]
         else:
             self.max_pos_target = 2
+
+        if "heuristic" in cfg.keys():
+            self.heuristic = cfg["heuristic"]
+            self.heuristic_policy = DeterministPolicy()
+            self.antagonist_temperature = 2
+        else:
+            self.heuristic = False
 
         self.controller_pd = PDController(self)
         self.narrow_passage = False
@@ -592,16 +634,29 @@ class Go1MultiObs(MuJoCo):
         # self._data.site("velocity_arrow").euler[2] = angle + angle_rate
 
         if self.antagonist:
-            obstacle_vel =  np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
-            self._data.ctrl[-1] = np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
+            vel_antagonist = np.clip(self.obstacle_velocity, -self.max_antagonist_v, self.max_antagonist_v)
+            self._data.actuator("thrust2").ctrl = vel_antagonist
             self._data.ctrl[-2] = 0
             self._data.ctrl[-3] = self.obstacle_pose_x
 
+
         else:
             if self.static_obstacles:
-                self._data.ctrl[-1] = 0
+                self._data.actuator("thrust2").ctrl = 0
                 self._data.ctrl[-2] = 0
                 self._data.ctrl[-3] = self.obstacle_pose_x
+
+            elif self.heuristic:
+
+                noisy_a_antagonist = self.heuristic_policy(self._data, temperature=self.antagonist_temperature)
+
+
+                vel_antagonist = np.clip(noisy_a_antagonist, -self.max_antagonist_v, self.max_antagonist_v)
+                self._data.actuator("thrust2").ctrl = vel_antagonist
+                self._data.ctrl[-2] = 0
+                self._data.ctrl[-3] = self.obstacle_pose_x
+
+
 
             else:
                 current_obstacle_pos = self._data.geom("obstacle_1").xpos[1]
@@ -612,7 +667,7 @@ class Go1MultiObs(MuJoCo):
                     self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
                 clipped_obstacle_velocity = np.clip(obstacle_vel, -self.max_antagonist_v, self.max_antagonist_v)
 
-                self._data.ctrl[-1] = clipped_obstacle_velocity
+                self._data.actuator("thrust2").ctrl = clipped_obstacle_velocity
                 self._data.ctrl[-2] = 0
                 self._data.ctrl[-3] = self.obstacle_pose_x
 
@@ -776,6 +831,10 @@ class Go1MultiObs(MuJoCo):
         obs = rf_readings_f
         return obs
 
+    def get_heuristic_entropy(self, sigma=1, noise_gain=50):
+        normal_entropy = 0.5 * np.log(2 * np.pi * np.e * sigma**2)
+        scaled_sigma = self.antagonist_temperature * noise_gain * sigma + 1e-6
+        return normal_entropy(sigma) + np.log(scaled_sigma)
     # def render(self, record=False, depth=False):
     #
     #     if self.use_mujoco_renderer:
@@ -1090,10 +1149,10 @@ class Go1MultiObs(MuJoCo):
 
         if not self.antagonist:
             self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
-            self._data.ctrl[-1] = 0
+            self._data.actuator("thrust2").ctrl = 0
 
         else:
-            self._data.ctrl[-1] = self.obstacle_velocity
+            self._data.actuator("thrust2").ctrl = self.obstacle_velocity
 
         self._data.ctrl[-3] = self.obstacle_pose_x
         self._data.ctrl[-2] = 0

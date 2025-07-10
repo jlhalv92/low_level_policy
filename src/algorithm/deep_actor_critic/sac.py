@@ -122,16 +122,16 @@ class SACPolicy(Policy):
         dist = self.distribution(state)
 
         a_raw = dist.rsample()
-        a = torch.tanh(a_raw)
+        a_tanh = torch.tanh(a_raw)
 
-        a_true = a * self._delta_a + self._central_a
+        a_scale = a_tanh * self._delta_a + self._central_a
 
         if compute_log_prob:
             log_prob = dist.log_prob(a_raw).sum(dim=1)
-            log_prob -= torch.log(1. - a.pow(2) + self._eps_log_prob).sum(dim=1)
-            return a_true, log_prob
+            log_prob -= torch.log(1. - a_tanh.pow(2) + self._eps_log_prob).sum(dim=1)
+            return a_scale, log_prob
         else:
-            return a_true
+            return a_scale
 
     def distribution(self, state):
         """
@@ -168,6 +168,26 @@ class SACPolicy(Policy):
         """
 
         return torch.mean(self.distribution(state).entropy()).detach().cpu().numpy().item()
+
+    def entropy_s(self, state):
+        """
+        Compute the entropy of the policy.
+
+        Args:
+            state (np.ndarray): the set of states to consider.
+            action
+        Returns:
+            The value of the entropy of the policy.
+
+        """
+        dist = self.distribution(state)
+        a_raw = dist.rsample()
+        a_tanh = torch.tanh(a_raw)
+        log_prob = dist.log_prob(a_raw).sum(dim=1)
+        log_prob -= torch.log(1. - a_tanh.pow(2) + self._eps_log_prob).sum(dim=1)
+        entropy = -log_prob.mean().detach().cpu().numpy().item()
+
+        return entropy
 
     def reset(self):
         pass

@@ -629,11 +629,22 @@ class Go1(MuJoCo):
             pos_obstacle_x = self._data.body("obstacle_1").xpos[0]
             pos_robot_y = self._data.qpos[1]
             pos_obstacle_y = self._data.body("obstacle_1").xpos[1]
-            module_x = np.clip((pos_robot_x - pos_obstacle_x), -self.max_antagonist_v,self.max_antagonist_v)
-            module_y = np.clip((pos_robot_y - pos_obstacle_y),-self.max_antagonist_v,self.max_antagonist_v)
-
-            self._data.actuator("thrust1").ctrl =module_x
-            self._data.actuator("thrust2").ctrl =module_y
+            # kp = 10
+            # kv = 5
+            kp = 10
+            kv = 5
+            temperature = 0
+            noise_gain = 50
+            error_x = pos_robot_x - pos_obstacle_x
+            error_y = pos_robot_y - pos_obstacle_y
+            vel_x = kp * error_x - kv*self._data.joint("obstacle").qvel[0]
+            vel_y = kp * error_y - kv*self._data.joint("obstacle").qvel[1]
+            # module_x = np.clip(vel_x , -self.max_antagonist_v,self.max_antagonist_v)
+            # module_y = np.clip(vel_y ,-self.max_antagonist_v,self.max_antagonist_v)
+            induced_noise_x =temperature * noise_gain * np.random.normal()
+            induced_noise_y =temperature * noise_gain * np.random.normal()
+            self._data.actuator("thrust1").ctrl =np.clip(vel_x + induced_noise_x, -self.max_antagonist_v,self.max_antagonist_v)
+            self._data.actuator("thrust2").ctrl =np.clip(vel_y + induced_noise_y, -self.max_antagonist_v,self.max_antagonist_v)
             self._data.actuator("rotation_z").ctrl = 0
 
     def check_any_collision(self, groups):

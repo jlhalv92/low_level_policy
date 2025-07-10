@@ -165,7 +165,7 @@ def experiment(
 
 
     dataset_online = core.evaluate(
-        n_episodes=10, render=False, id_agent=0, return_antagonist_state=True
+        n_episodes=10, render=True, id_agent=0, return_antagonist_state=True
     )
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset_online)
     J_online = np.mean(compute_J(dataset_online, mdp.info.gamma))
@@ -270,7 +270,7 @@ if __name__ == "__main__":
 
 
     experiment(
-        method_name="Heuristic_antagonist_2D",
+        method_name="Heuristic_hard_antagonist",
         alg=[SAC, None],
         n_epochs=args.n_epochs,
         n_steps=args.n_steps,
