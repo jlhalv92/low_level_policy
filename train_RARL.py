@@ -290,7 +290,7 @@ def str2bool(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
-    parser.add_argument("--n_epochs", type=int, default=200, help="Number of training epochs")
+    parser.add_argument("--n_epochs", type=int, default=250, help="Number of training epochs")
     parser.add_argument("--n_steps", type=int, default=5000, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")

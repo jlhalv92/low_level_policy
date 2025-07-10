@@ -491,7 +491,7 @@ def parse_args():
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False, help="Enable logging")
     parser.add_argument("--use_cuda", type=str2bool, nargs='?', const=True, default=True,
                         help="Use CUDA for computation")
-    parser.add_argument("--temperature", type=float, default=3., help="Alpha value")
+    parser.add_argument("--temperature", type=float, default=2., help="Alpha value")
     parser.add_argument("--kl_max", type=float, default=0.05, help="kl_max")
     parser.add_argument("--velocity", type=float, default=1.5)
     parser.add_argument("--obstacle_position_x",type=float,  default=5)
