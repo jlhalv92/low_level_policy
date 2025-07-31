@@ -4,7 +4,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 
+from src.algorithm.deep_actor_critic.asymetric_sac_v2 import  ASAC
 from src.algorithm.deep_actor_critic.sac import  SAC
+
 
 from mushroom_rl.core import Agent
 import wandb
@@ -14,7 +16,7 @@ from src.core.core_quadruped_adversary import Core
 from src.envs.go1_nav_environment import Go1
 from src.envs.go1_nav_multi_obstacles import Go1MultiObs
 
-from src.networks.nets import ActorNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
+from src.networks.nets import  PolicyNavHistoryNetwork,ActorNetwork,PolicyNavNetwork, CriticNetwork,PolicyNetwork, ValueNetwork, ActorBiNetwork, PolicyNetworkStudent
 from src.mushroom.dataset.dataset import compute_J,parse_dataset
 
 from tqdm import trange
@@ -53,8 +55,7 @@ def experiment(method_name,
     agent_task = "{}".format(task_name)
     logger.info('Experiment Algorithm: ' + conf.method + " task " + agent_task )
 
-
-    view = False
+    view = True
     # MDP
     horizon = 500
     gamma = 0.99
@@ -71,6 +72,7 @@ def experiment(method_name,
 
     job_name = method_name + f"_antagonist_velocity={antagonist_velocity}"
     print(job_name)
+    print(vars(conf))
     if log:
         wandb.init(
             project=wandb_project,
@@ -96,49 +98,72 @@ def experiment(method_name,
                )
 
 
-    multiple_obstacles = True
 
-    if multiple_obstacles:
 
-        mdp = Go1MultiObs(horizon,
+    mdp = Go1MultiObs(horizon,
                   gamma,
                   timestep=0.005,
                   cfg=cfg,
                   task_name=task_name)
-    else:
 
-        mdp = Go1(horizon,
-                  gamma,
-                  timestep=0.005,
-                  cfg=cfg,
-                  task_name=task_name
-                  )
 
     if conf.heuristic:
         mdp.antagonist_temperature = 0
 
-    actor_input_shape  = mdp.info.observation_space.shape
 
 
-    actor_mu_params = dict(network=ActorBiNetwork,
-                           n_features=n_features,
-                           input_shape=actor_input_shape,
-                           output_shape=(3,),
-                           size_propioception=6,
-                           use_cuda=use_cuda)
+    if conf.use_history:
+        actor_obs_shape = mdp.info.observation_space.shape
+        history_size = 5
+        propioception = 9
 
-    actor_sigma_params = dict(network=ActorBiNetwork,
-                              n_features=n_features,
-                              input_shape=actor_input_shape,
-                              output_shape=(3,),
-                              size_propioception=6,
-                              use_cuda=use_cuda)
+        actor_input_shape = (history_size * (actor_obs_shape[0] + 3),)
+        actor_mu_params = dict(network=PolicyNavHistoryNetwork,
+                               n_features=n_features,
+                               input_shape=actor_input_shape,
+                               output_shape=(3,),
+                               propioception=propioception,
+                               history=history_size,
+                               # size_propioception=6,
+                               use_cuda=use_cuda)
+
+        actor_sigma_params = dict(network=PolicyNavHistoryNetwork,
+                                  n_features=n_features,
+                                  input_shape=actor_input_shape,
+                                  output_shape=(3,),
+                                  history=history_size,
+                                  propioception=propioception,
+                                  # size_propioception=6,
+                                  use_cuda=use_cuda)
+    else:
+
+        propioception = 6
+        actor_input_shape  = mdp.info.observation_space.shape
+        actor_mu_params = dict(network=PolicyNavNetwork,
+                               n_features=n_features,
+                               input_shape=actor_input_shape,
+                               output_shape=(3,),
+                               propioception=propioception,
+                               use_cuda=use_cuda)
+
+        actor_sigma_params = dict(network=PolicyNavNetwork,
+                                  n_features=n_features,
+                                  input_shape=actor_input_shape,
+                                  output_shape=(3,),
+                                  propioception=propioception,
+                                  use_cuda=use_cuda)
 
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
 
-    critic_input_shape = (actor_input_shape[0] + 3,)
+    if conf.use_asymetric_ac:
+        critic_obs_size = mdp.info.observation_space.shape[0]
+
+    else:
+        critic_obs_size = actor_input_shape[0]
+
+    critic_input_shape = (critic_obs_size + 3,)
     critic_params = dict(network=CriticNetwork,
                          optimizer={'class': optim.Adam,
                                     'params': {'lr': 3e-4}},
@@ -149,14 +174,22 @@ def experiment(method_name,
                          use_cuda=use_cuda)
 
     # Agent
-    antagonist_input_shape = (6,)
     min_a = -np.array([1.5,1,1.5])
     max_a = np.array([1.5, 1, 1.5])
-    agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
-                actor_optimizer, critic_params, batch_size, initial_replay_size,
-                max_replay_size, warmup_transitions, tau, lr_alpha,
-                critic_fit_params=None, range=[min_a, max_a])
+    if conf.use_asymetric_ac:
+        agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
+                    actor_optimizer, critic_params, batch_size, initial_replay_size,
+                    max_replay_size, warmup_transitions, tau, lr_alpha,
+                    critic_fit_params=None, range=[min_a, max_a],
+                       critic_obs_size=critic_obs_size,)
+    else:
+        agent = alg[0](mdp.info, actor_mu_params, actor_sigma_params,
+                    actor_optimizer, critic_params, batch_size, initial_replay_size,
+                    max_replay_size, warmup_transitions, tau, lr_alpha,
+                    critic_fit_params=None, range=[min_a, max_a])
 
+    # Antagonist
+    antagonist_input_shape = (6,)
     antagonist_mu_params = dict(network=ActorNetwork,
                            n_features=n_features,
                            input_shape=antagonist_input_shape,
@@ -189,7 +222,9 @@ def experiment(method_name,
     core = Core([agent, antagonist],
                 mdp,
                 low_level_agent=control_agent,
-                joystick=joystick)
+                joystick=joystick,
+                use_history=conf.use_history,
+                asymetric_ac=conf.use_asymetric_ac)
 
 
     dataset = core.evaluate(n_episodes=10, render=False, id_agent=0)
@@ -197,7 +232,12 @@ def experiment(method_name,
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
-    E = agent.policy.entropy(s)
+
+    if conf.use_asymetric_ac:
+        E = agent.policy.entropy(s[:,:-critic_obs_size])
+    else:
+        E = agent.policy.entropy(s)
+
     success_rate = calculate_success_rate(info, last)
 
     logger.epoch_info(0, J=J, R=R, entropy=E, succes_rate=success_rate)
@@ -220,11 +260,10 @@ def experiment(method_name,
         logger.info("Training Protagonist")
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit, id_agent=0)
 
-        if it % 2==0 and view:
+        if it % 10==0 and view:
             render=True
         else:
             render=False
-
 
 
         dataset = core.evaluate(n_episodes=n_episodes_test, render=render, id_agent=0)
@@ -232,7 +271,10 @@ def experiment(method_name,
         s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
-        E = agent.policy.entropy(s)
+        if conf.use_asymetric_ac:
+            E = agent.policy.entropy(s[:,:-critic_obs_size])
+        else:
+            E = agent.policy.entropy(s)
         success_rate = calculate_success_rate(info, last)
 
         dataset_antagonist = core.evaluate(n_episodes=n_episodes_test, id_agent=1)
@@ -253,20 +295,23 @@ def experiment(method_name,
                           R=R,
                           entropy=E,
                           success_rate=success_rate,
-                          antagonist_temperature=alfa,
+                          temperature=alfa,
                           r_antagonist=R_antagonist,
                           entropy_antagonist=E_a)
 
 
 
         if log:
-            log_dict = dict(J=J, R=R, entropy=E,
+            log_dict = dict(J=J,
+                            R=R,
+                            entropy=E,
                             success_rate=success_rate,
-                            antagonist_temperature=alfa, r_antagonist=R_antagonist,
+                            temperature=alfa,
+                            r_antagonist=R_antagonist,
                             entropy_antagonist=E_a)
             wandb.log(log_dict, step=it)
 
-        if it % 50 == 0:
+        if it % 5 == 0:
             agent.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'PROTAGONIST'}/epoch_{it}")
             if not conf.heuristic:
                 antagonist.save(f"{checkpoint_dir}/{'GO1'}/{agent_task}/{job_name}/run_{run_id}/{'ANTAGONIST'}/epoch_{it}")
@@ -307,10 +352,8 @@ def parse_args():
     parser.add_argument("--max_pos_target",type=float,  default=3)
     parser.add_argument("--heuristic", type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument("--method", type=str, default="RARL")
-
-
-
-
+    parser.add_argument("--use_history", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--use_asymetric_ac", type=str2bool, nargs='?', const=True, default=False)
 
 
     return parser.parse_args()
@@ -321,8 +364,13 @@ if __name__ == '__main__':
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
 
+    if args.use_asymetric_ac:
+        model_protagonist = ASAC
+    else:
+        model_protagonist = SAC
+
     experiment(method_name=args.method,
-               alg=[SAC, SAC],
+               alg=[model_protagonist, SAC],
                n_epochs=args.n_epochs,
                n_steps=args.n_steps,
                n_steps_per_fit=args.n_steps_per_fit,

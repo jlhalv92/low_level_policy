@@ -2,18 +2,19 @@
 
   <worldbody>
 
-    <body name="obstacle" >
-        <freejoint name="obstacle_joint"/>
-      <geom  name="obstacle" type="box" mass="60" size="0.5 0.5 0.8" rgba=".1 .4 .4 1" conaffinity="1" priority="1" friction="0.01" condim="1"/>
-      <site name="obstacle" type="sphere" size=".1"  />
-    </body>
+    <body name="obstacle" pos="0 0 0.8" >
+        <freejoint name="obstacle"/>
+      <geom  name="obstacle" type="cylinder" mass="60" size="0.5 0.8" rgba=".1 .4 .4 1" conaffinity="1" priority="1" friction="0.01" condim="1"/>
+      <site name="obstacle" type="sphere" size=".1 .1" rgba=".6 .3 .3 0.1"  />
+
+       </body>
 
   </worldbody>
 
     <actuator>
-        <position name="position_x" site="obstacle"  gear="1 0 0 0 0 0" kp="200" dampratio="1" />
-        <position name="rotation_z" site="obstacle"  gear="0 0 0 0 0 1" kp="200" dampratio="1" ctrlrange="-1.571 1.571"/>
-        <velocity name="move_y" site="obstacle" gear="0 1 0 0 0 0" ctrlrange="-1 1" kv="20" />
+        <velocity name="thrustx" site="obstacle" gear="1 0 0 0 0 0" kv="100" />
+        <velocity name="thrusty" site="obstacle" gear="0 1 0 0 0 0" kv="100" />
+<!--        <position name="rotation_z" site="obstacle" refsite="reference" gear="0 0 0 0 0 1" kp="200" dampratio="1" ctrlrange="-1.571 1.571"/>-->
     </actuator>
 
 </mujoco>

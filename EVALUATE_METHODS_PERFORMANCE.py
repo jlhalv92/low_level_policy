@@ -57,7 +57,8 @@ def benchmark(
         render=True,
         use_antagonist=False,
         joystick=False,
-horizon=500
+horizon=500,
+        heuristic=False,
 ):
 
     np.random.seed()
@@ -85,7 +86,8 @@ horizon=500
                obstacle_position_x=5,
                obstacle_position_y=-1,
                max_pos_target=3,
-                corridor_size = 3)
+                corridor_size = 3,
+               heuristic=heuristic)
 
     mdp = Go1MultiObs(horizon,
                   gamma,
@@ -105,7 +107,8 @@ horizon=500
         preprocessors=[preprocessor],
         joystick=joystick,
         aware_rationality=aware_rationality,
-        rationality_antagonist=True)
+        rationality_antagonist=True,
+         heuristic=heuristic)
 
 
 
@@ -138,23 +141,24 @@ horizon=500
 if __name__ == "__main__":
     # args = parse_args()
     # print(args)
+    heuristic = False
+    use_antagonist = not heuristic
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-    model_ids = ["UNIFORM", "QARL", "RARL", "RAMEN"]
-    velocities = [1, 1.5, 2, 2.5]
-    use_antagonist = True
-    temperatures = [2, 1.5, 1, 0.5, 0.1, 0]
+    model_ids = ["STATIC","RARL", "RAMEN", "QARL", "UNIFORM"]
+    velocities = [0, 1, 1.5, 2.5]
+    temperatures = [2, 1.5, 1, 0.5, 0]
     performance = []
-
-    path_antagonist = "/home/jose-luis/models_for_eval/velocity_1/UNIFORM/run_0/ANTAGONIST/epoch_200"
+    # models_for_eval_heuristic
+    path_antagonist = "checkpoint_antagonist/strong_antagonist/GO1/obstacles_navigation/SAC_ANTAGONIST-353fb3da/run_0/ANTAGONIST/epoch_last"
     for velocity in velocities:
         for model_id in model_ids:
             for temperature in temperatures:
                 success_rates_list = []
                 for agent_id in range(5):
-                    print(f"Model {model_id} with temperature {temperature} and velocity {velocity}")
+                    print(f"Model {model_id}-{agent_id} with temperature {temperature} and velocity {velocity}")
                     antagonist = Agent.load(path_antagonist)
-                    path_protagonist =  f"/home/jose-luis/models_for_eval/velocity_{velocity}/{model_id}/run_{agent_id}/PROTAGONIST/epoch_250"
+                    path_protagonist =  f"/home/jose-luis/models_for_eval_antagonist/velocity_{velocity}/{model_id}/run_{agent_id}/PROTAGONIST/epoch_last" #250
 
                     protagonist = Agent.load(path_protagonist)
                     success_rate = benchmark(
@@ -163,17 +167,18 @@ if __name__ == "__main__":
                                 control_agent=control_agent,
                                 aware_rationality=False,
                                 max_v_antagonist=velocity,
-                                n_episodes_test=10,
+                                n_episodes_test=20,
                                 alpha=temperature,
                                 render=False,
                                 use_antagonist=use_antagonist,
                                 joystick=False,
                                 horizon=500,
+                        heuristic=heuristic
 
                             )
                     success_rates_list.append(success_rate)
 
-                np.save(f"eval_results/performance_{model_id}_velocity_{velocity}_temperature_{temperature}_use_antagonist_{use_antagonist}.npy", np.array(success_rates_list))
+                np.save(f"eval_result_antagonist/performance_{model_id}_velocity_{velocity}_temperature_{temperature}_use_antagonist_{use_antagonist}.npy", np.array(success_rates_list))
 
 
 

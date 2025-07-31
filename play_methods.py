@@ -59,6 +59,7 @@ def benchmark(
         joystick=False,
 horizon=500,
 heuristic=False,
+multi_mdp = None
 ):
 
     np.random.seed()
@@ -108,7 +109,9 @@ heuristic=False,
         joystick=joystick,
         aware_rationality=aware_rationality,
         rationality_antagonist=True,
-        heuristic=heuristic)
+        heuristic=heuristic,
+        multi_mdp=multi_mdp
+    )
 
 
 
@@ -154,40 +157,68 @@ if __name__ == "__main__":
     # print(args)
     path = "src/nominal_models/low_level/policy"
     control_agent = Agent.load(path)
-    model_ids = ["UNIFORM", "QARL", "RARL", "RAMEN"]
-    velocity = 1.5
-    temperature = 0.1
+    model_id = "RAMEN"
+    agent_id = 4
+    velocity = 1
+    temperature = 0.25
     performance = []
 
     # path_antagonist = "checkpoint_strong_antagonist/GO1/obstacles_navigation/SAC_ANTAGONIST-cd0316c4/run_0/ANTAGONIST/epoch_150"
     # path_antagonist = "checkpoint_temp=0/GO1/obstacles_navigation/SAC_ANTAGONIST-fed9b1c9/run_0/ANTAGONIST/epoch_10"
     # path_antagonist = "checkpoint_temp=1/GO1/obstacles_navigation/SAC_ANTAGONIST-ac1f2b37/run_0/ANTAGONIST/epoch_10"
-    path_antagonist = "checkpoint_antagonist/GO1/obstacles_navigation/SAC_ANTAGONIST-0d7ac2e6/run_0/ANTAGONIST/epoch_last"
+   # path_antagonist = "checkpoint_antagonist/GO1/obstacles_navigation/SAC_ANTAGONIST-0d7ac2e6/run_0/ANTAGONIST/epoch_last"
+    path_antagonist = "checkpoint_antagonist/strong_antagonist/GO1/obstacles_navigation/SAC_ANTAGONIST-353fb3da/run_0/ANTAGONIST/epoch_last"
+
     antagonist = Agent.load(path_antagonist)
 
 
-    success_rates_list = []
 
     # path_protagonist = "checkpoint/GO1/obstacles_navigation/RARL_antagonist_velocity=1.5/run_5/PROTAGONIST/epoch_50"
-    path_protagonist = f"/home/jose-luis/models_for_eval/velocity_{velocity}/UNIFORM/run_0/PROTAGONIST/epoch_200"
+    # path_protagonist = f"/home/jose-luis/models_for_eval/velocity_{velocity}/UNIFORM/run_0/PROTAGONIST/epoch_200"
 
-
+    path_protagonist = f"/home/jose-luis/models_for_eval_heuristic/velocity_{velocity}/{model_id}/run_{agent_id}/PROTAGONIST/epoch_last"  # 250
+    heuristic = True
     protagonist = Agent.load(path_protagonist)
-    success_rate = benchmark(
-                protagonist=protagonist,
-                antagonist=antagonist,
-                control_agent=control_agent,
-                aware_rationality=False,
-                max_v_antagonist=velocity,
-                n_episodes_test=5,
-                alpha=temperature,
-                render=False,
-                joystick=False,
-                horizon=500,
-                heuristic=True
+    cfg = dict(antagonist=not heuristic,
+               max_level=False,
+               heuristic=heuristic,
+               joystick=False,
+               static_obstacles=False,
+               activate_arrow=False,
+               max_antagonist_v=velocity,
+               n_static_obstacles=0,
+               obstacle_position_x=5,
+               obstacle_position_y=-1,
+               max_pos_target=3,
+                corridor_size = 3)
 
-            )
-    success_rates_list.append(success_rate)
+    n_episodes_test = 10
+    mdps = []
+    for _id in range(n_episodes_test):
+        cfg["env_id"] = _id
+        mdp = Go1MultiObs(500,
+                      0.99,
+                      timestep=0.005,
+                      cfg=cfg,
+                      task_name='obstacles_navigation')
+        mdps.append(mdp)
+
+    for i in range(5):
+        success_rate = benchmark(
+                    protagonist=protagonist,
+                    antagonist=antagonist,
+                    control_agent=control_agent,
+                    aware_rationality=False,
+                    max_v_antagonist=velocity,
+                    n_episodes_test=n_episodes_test,
+                    alpha=temperature,
+                    render=False,
+                    joystick=False,
+                    horizon=500,
+                    heuristic=heuristic,
+                    multi_mdp=None
+
+                )
 
 
 

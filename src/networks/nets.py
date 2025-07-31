@@ -31,6 +31,31 @@ class PolicyNetwork(nn.Module):
         return a
 
 
+# class ActorNetwork(nn.Module):
+#     def __init__(self, input_shape, output_shape, n_features, **kwargs):
+#         super().__init__()
+#
+#         n_input = input_shape[-1]
+#         n_output = output_shape[0]
+#
+#         self._h1 = nn.Linear(n_input, n_features)
+#         self._h2 = nn.Linear(n_features, n_features)
+#         self._h3 = nn.Linear(n_features, n_output)
+#
+#         nn.init.xavier_uniform_(self._h1.weight,
+#                                 gain=nn.init.calculate_gain('relu'))
+#         nn.init.xavier_uniform_(self._h2.weight,
+#                                 gain=nn.init.calculate_gain('relu'))
+#         nn.init.xavier_uniform_(self._h3.weight,
+#                                 gain=nn.init.calculate_gain('linear'))
+#
+#     def forward(self, state):
+#         features1 = F.relu(self._h1(state))
+#         features2 = F.relu(self._h2(features1))
+#         actions = self._h3(features2)
+#
+#         return actions
+
 class ValueNetwork(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):
         super().__init__()
@@ -247,7 +272,137 @@ class ActorNetwork(nn.Module):
 
         return a
 
+class PolicyNavHistoryNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, exteroception=50, history=5, propioception=9, **kwargs):
+        super(PolicyNavHistoryNetwork, self).__init__()
+        self.exteroception = exteroception
+        self.history = history
+        self.propioception = propioception
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+        embedded_propio = 10
+        embeded_extero = 20
 
+        self.n_input_propioception = propioception*history
+        self.n_input_exteroception = exteroception*history
+
+        self._propioception_h1 = nn.Linear(self.n_input_propioception, n_features)
+        self._propioception_h2 = nn.Linear(n_features, embedded_propio)
+
+        nn.init.xavier_uniform_(self._propioception_h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._propioception_h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._exteroception_h1 = nn.Linear(self.n_input_exteroception, n_features)
+        self._exteroception_h2 = nn.Linear(n_features, embeded_extero)
+
+        nn.init.xavier_uniform_(self._exteroception_h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._exteroception_h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._common_h1 = nn.Linear(embedded_propio + embeded_extero, n_features)
+        self._common_h2 = nn.Linear(n_features, n_features)
+
+        nn.init.xavier_uniform_(self._common_h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        nn.init.xavier_uniform_(self._common_h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._out = nn.Linear(n_features, n_output)
+
+        nn.init.xavier_uniform_(self._out.weight,
+                                gain=nn.init.calculate_gain('linear'))
+
+    def forward(self, state):
+
+        batch_size = state.shape[0]
+        # if batch_size > 1:
+        #     print(batch_size)
+        size_obs = self.exteroception + self.propioception
+        propio_state = state.view(batch_size, self.history, size_obs)[:, :, :self.propioception].flatten(start_dim=1)
+        extero_state = state.view(batch_size, self.history, size_obs)[:, :, self.propioception:].flatten(start_dim=1)
+
+        emb_propioception_1 = F.relu(self._propioception_h1(torch.squeeze(propio_state, 1).float()))
+        emb_propioception_2 = F.relu(self._propioception_h2(emb_propioception_1))
+
+        emb_exteroception_1 = F.relu(self._exteroception_h1(torch.squeeze(extero_state, 1).float()))
+        emb_exteroception_2 = F.relu(self._exteroception_h2(emb_exteroception_1))
+
+        state_embedding = torch.cat((emb_propioception_2.float(), emb_exteroception_2.float()), dim=1)
+
+        features1 = F.relu(self._common_h1(torch.squeeze(state_embedding, 1).float()))
+        features2 = F.relu(self._common_h2(features1))
+
+        a = self._out(features2)
+
+        return a
+
+class PolicyNavNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, n_features, exteroception=50, propioception=6, **kwargs):
+        super(PolicyNavNetwork, self).__init__()
+        self.exteroception = exteroception
+        self.propioception = propioception
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+        embedded_propio = 10
+        embeded_extero = 20
+
+        self.n_input_propioception = propioception
+        self.n_input_exteroception = exteroception
+
+        self._propioception_h1 = nn.Linear(self.n_input_propioception, n_features)
+        self._propioception_h2 = nn.Linear(n_features, embedded_propio)
+
+        nn.init.xavier_uniform_(self._propioception_h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._propioception_h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._exteroception_h1 = nn.Linear(self.n_input_exteroception, n_features)
+        self._exteroception_h2 = nn.Linear(n_features, embeded_extero)
+
+        nn.init.xavier_uniform_(self._exteroception_h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self._exteroception_h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._common_h1 = nn.Linear(embedded_propio + embeded_extero, n_features)
+        self._common_h2 = nn.Linear(n_features, n_features)
+
+        nn.init.xavier_uniform_(self._common_h1.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        nn.init.xavier_uniform_(self._common_h2.weight,
+                                gain=nn.init.calculate_gain('relu'))
+
+        self._out = nn.Linear(n_features, n_output)
+
+        nn.init.xavier_uniform_(self._out.weight,
+                                gain=nn.init.calculate_gain('linear'))
+
+    def forward(self, state):
+
+
+        propio_state = state[:, :self.propioception]
+        extero_state = state[:, self.propioception:]
+
+        emb_propioception_1 = F.relu(self._propioception_h1(torch.squeeze(propio_state, 1).float()))
+        emb_propioception_2 = F.relu(self._propioception_h2(emb_propioception_1))
+
+        emb_exteroception_1 = F.relu(self._exteroception_h1(torch.squeeze(extero_state, 1).float()))
+        emb_exteroception_2 = F.relu(self._exteroception_h2(emb_exteroception_1))
+
+        state_embedding = torch.cat((emb_propioception_2.float(), emb_exteroception_2.float()), dim=1)
+
+        features1 = F.relu(self._common_h1(torch.squeeze(state_embedding, 1).float()))
+        features2 = F.relu(self._common_h2(features1))
+
+        a = self._out(features2)
+
+        return a
 
 class ActorObstacleNetwork(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):

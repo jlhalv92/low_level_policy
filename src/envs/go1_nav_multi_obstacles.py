@@ -16,7 +16,7 @@ def determinist_policy(data, kp, kd):
     return pos_control
 
 class DeterministPolicy:
-    def __init__(self, noise_gain=100, temperature=2):
+    def __init__(self, noise_gain=100, temperature=2, rng=None):
         """
         base_policy: function s -> a_mean (np.array of shape (d,))
         alpha: noise scale
@@ -24,7 +24,7 @@ class DeterministPolicy:
         """
         self.base = determinist_policy
         self.temperature = temperature
-        self.noise = np.random.normal
+        self.noise = rng.normal
         self.noise_gain = noise_gain
 
     def __call__(self, data, kp=50, kd=5, temperature=2):
@@ -172,6 +172,14 @@ class Go1MultiObs(MuJoCo):
         Constructor.
 
         """
+        seed = 42
+        self.rng = np.random.default_rng(seed)
+
+        if "env_id" in cfg.keys():
+            env_id = cfg["env_id"]
+            self.env_id = f"ENV_{env_id}"
+        else:
+            self.env_id = f"ENV_{self.rng.integers(0, 100, 1)[0]}"
 
         if "max_antagonist_v" in cfg.keys():
             self.max_antagonist_v = cfg["max_antagonist_v"]
@@ -222,7 +230,7 @@ class Go1MultiObs(MuJoCo):
 
         if "heuristic" in cfg.keys():
             self.heuristic = cfg["heuristic"]
-            self.heuristic_policy = DeterministPolicy()
+            self.heuristic_policy = DeterministPolicy(rng=self.rng)
             self.antagonist_temperature = 2
         else:
             self.heuristic = False
@@ -664,7 +672,7 @@ class Go1MultiObs(MuJoCo):
 
                 obstacle_vel = (obstacle_pos_diff)
                 if np.abs(obstacle_pos_diff) < 0.2:
-                    self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
+                    self.target_obstacle_pos = self.rng.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
                 clipped_obstacle_velocity = np.clip(obstacle_vel, -self.max_antagonist_v, self.max_antagonist_v)
 
                 self._data.actuator("thrust2").ctrl = clipped_obstacle_velocity
@@ -863,11 +871,11 @@ class Go1MultiObs(MuJoCo):
 
     def get_robot_observation(self):
 
-        noise_joint_angles = np.random.uniform(low=-0.03, high=0.03, size=12)
-        noise_joint_vel = np.random.uniform(low=-1.5, high=1.5, size=12)
-        vel_noise = np.random.uniform(low=-0.1, high=0.1, size=3)
-        ang_vel_noise = np.random.uniform(low=-0.2, high=0.2, size=3)
-        gravity_noise = np.random.uniform(low=-0.05, high=0.05, size=3)
+        noise_joint_angles = self.rng.uniform(low=-0.03, high=0.03, size=12)
+        noise_joint_vel = self.rng.uniform(low=-1.5, high=1.5, size=12)
+        vel_noise = self.rng.uniform(low=-0.1, high=0.1, size=3)
+        ang_vel_noise = self.rng.uniform(low=-0.2, high=0.2, size=3)
+        gravity_noise = self.rng.uniform(low=-0.05, high=0.05, size=3)
 
         qpos = (self._data.qpos[7:19].copy() + noise_joint_angles) - self.default_dof_pos  # (12)
         qvel = self._data.qvel[6:18] + noise_joint_vel  # (12)
@@ -1074,19 +1082,19 @@ class Go1MultiObs(MuJoCo):
                 geom.size[1] = 3
                 geom.pos[2] = z_wall
 
-        # np.random.uniform(1.5, 2.5)
-        # np.random.uniform(2.5, 3.5)
+        # self.rng.uniform(1.5, 2.5)
+        # self.rng.uniform(2.5, 3.5)
 
 
-        ref_obstacle_pos = np.random.uniform(2.5, self.obstacle_position_x)
-        np.random.shuffle(obstacles_list)
+        ref_obstacle_pos = self.rng.uniform(2.5, self.obstacle_position_x)
+        self.rng.shuffle(obstacles_list)
 
         for idx,obstacle_id in enumerate(obstacles_list):
             obstacle = spec.find_body(obstacle_id)
             if idx ==0:
                 pos_x = ref_obstacle_pos
             else:
-                pos_x = ref_obstacle_pos + np.random.uniform(2, 3)
+                pos_x = ref_obstacle_pos + self.rng.uniform(2, 3)
 
             if obstacle_id == "obstacle_1":
                 obstacle_height = 0.8
@@ -1095,13 +1103,13 @@ class Go1MultiObs(MuJoCo):
 
 
 
-            #y_obstacle = np.random.uniform(-1.5 + sy, 1.5 - sy)
+            #y_obstacle = self.rng.uniform(-1.5 + sy, 1.5 - sy)
 
-            #y_obstacle = np.random.uniform(-self.wall_pos + sy, self.wall_pos - sy)
+            #y_obstacle = self.rng.uniform(-self.wall_pos + sy, self.wall_pos - sy)
             if self.obstacle_position_y == -1:
-                y_obstacle =np.random.uniform(-self.wall_pos + 0.6, self.wall_pos - 0.6)
+                y_obstacle =self.rng.uniform(-self.wall_pos + 0.6, self.wall_pos - 0.6)
             else:
-                y_obstacle = np.random.uniform(-self.obstacle_position_y, self.obstacle_position_y)
+                y_obstacle = self.rng.uniform(-self.obstacle_position_y, self.obstacle_position_y)
 
 
             obstacle.pos = [pos_x, y_obstacle, 0.8]
@@ -1130,8 +1138,8 @@ class Go1MultiObs(MuJoCo):
 
         self._data.qpos[7:19] = self.default_dof_pos.copy()
         pos_finish_line = ref_obstacle_pos + 1.5
-        robot_pos_target_x = min(11,pos_finish_line + np.random.uniform(1.5, self.max_pos_target))
-        robot_pos_target_y = np.random.uniform(-1, 1)
+        robot_pos_target_x = min(11,pos_finish_line + self.rng.uniform(1.5, self.max_pos_target))
+        robot_pos_target_y = self.rng.uniform(-1, 1)
         self._model.site("pos_target").pos = [robot_pos_target_x,robot_pos_target_y,0.3 ]
         self._model.site("target").pos[0] = pos_finish_line
         # self._model.site("target").size[0] = 2
@@ -1143,12 +1151,12 @@ class Go1MultiObs(MuJoCo):
 
 
         self._data.qpos[7:19] = self.default_dof_pos.copy()
-        y_robot = np.random.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
+        y_robot = self.rng.uniform(-self.wall_pos + 0.3, self.wall_pos - 0.3)
         self._data.qpos[0:3] = [0, y_robot, 0.36]
         mujoco.mj_forward(self._model, self._data)
 
         if not self.antagonist:
-            self.target_obstacle_pos = np.random.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
+            self.target_obstacle_pos = self.rng.uniform(-self.wall_pos + 0.5, self.wall_pos - 0.5)
             self._data.actuator("thrust2").ctrl = 0
 
         else:

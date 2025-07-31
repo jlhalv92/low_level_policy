@@ -1,3 +1,5 @@
+import copy
+
 from torch.utils.hipify.hipify_python import preprocessor
 from tqdm import tqdm
 import numpy as np
@@ -6,7 +8,7 @@ from src.utils.record.record import VideoRecorder
 
 np.random.seed()
 
-class HistoryStore:
+class History:
     def __init__(self, max_size):
         # Initialize with a maximum size and a deque to store the history
         self.max_size = max_size
@@ -15,6 +17,10 @@ class HistoryStore:
     def add_sample(self, sample):
         # Add a new sample to the history
         self.history.append(sample)
+
+    def init_history(self, shape_sample):
+        for i in range(self.max_size):
+            self.add_sample(np.zeros(shape_sample))
 
     def get_history(self):
         # Return the current history as a list
@@ -30,7 +36,10 @@ class Core(object):
                  record_dictionary=None, joystick=False,
                  aware_rationality=False,
                  rationality_antagonist=False,
-                 heuristic=False):
+                 heuristic=False, multi_mdp=None,
+                 history_size=5,
+                 use_history=False,
+                 asymetric_ac=False):
         """
         Constructor.
 
@@ -43,29 +52,32 @@ class Core(object):
             preprocessors (list): list of state preprocessors to be
                 applied to state variables before feeding them to the
                 agent.
-            prior_pretrain_only (bool): tells us whether to only pretrain a policy with samples from a prior
-            use_data_prior (bool): tells us whether to use a prior from mdp for biasing data collection
+
 
         """
+        # self.multi_mdp = multi_mdp
         self.rationality_antagonist =rationality_antagonist
         self.aware_rationality = aware_rationality
+        self.asymetric_ac = asymetric_ac
         self.agent_id = 0
         self.joystick=joystick
-        self.history = HistoryStore(5)
-        self.use_history = True
+        self.history = History(history_size)
+        self.use_history = use_history
         self.heuristic = heuristic
         self.use_antagonist = True
 
         self.agents = agents
 
-        self.action = None
+        self.action = np.zeros(3)
+        self.action_antagonist = None
         self.command = np.zeros(3)
         self.low_level_agent = low_level_agent
         self.mdp = mdp
         self.callbacks_fit = callbacks_fit if callbacks_fit is not None else list()
         self.callback_step = callback_step if callback_step is not None else lambda x: None
         self._preprocessors = preprocessors if preprocessors is not None else list()
-
+        self.state_critic = None
+        self.next_state_critic = None
         self._state = None
 
 
@@ -235,8 +247,9 @@ class Core(object):
         while move_condition():
             if last:
                 self.t_i = 0
+                # if self.multi_mdp:
+                #     self.mdp = copy.deepcopy(self.multi_mdp[self._current_episodes_counter])
                 self.reset(initial_states, initial_conditions)
-
 
             sample = self._step(render, get_renders, learning, return_antagonist_state)
 
@@ -295,26 +308,42 @@ class Core(object):
             of the reached state and the last step flag.
 
         """
+        action_antagonist = 0
+        if self.use_history:
+            state_action = np.append(self._state, self.action)
+            self.history.add_sample(state_action)
+            state_protagonist = self.history.get_history().copy()
 
-        nav_state = self._state.copy()
+            if self.asymetric_ac:
+                if self.aware_rationality:
+                    state_critic = self._preprocess(self._state.copy())
+                else:
+                    state_critic = self._state.copy()
+                # state_critic = np.append(state_rationality, self.action)
+
+        else:
+            state_protagonist = self._state.copy()
+            if self.asymetric_ac:
+                if self.aware_rationality:
+                    state_critic = self._preprocess(state_protagonist.copy())
+                else:
+                    state_critic = state_protagonist.copy()
+
+
         robot_state = self.mdp.get_robot_observation()
 
 
         if learning:
-            if self.aware_rationality:
-                action = self.agents[0].draw_noisy_action(nav_state[:-1])
-            else:
-                action = self.agents[0].draw_noisy_action(nav_state)
 
+            action = self.agents[0].draw_noisy_action(state_protagonist)
             if not self.heuristic:
 
-                if self.use_antagonist:
-                    action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
-                    self.mdp.obstacle_velocity = action_antagonist
+                action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+                self.mdp.obstacle_velocity = action_antagonist
             else:
 
                 self.mdp.antagonist_temperature = self._preprocessors[0].variables[self._total_episodes_counter]
-                action_antagonist = 0
+
 
             if not self.joystick:
                 robot_state[-3:] =  action
@@ -326,20 +355,15 @@ class Core(object):
 
         else: # Default
 
-            if self.aware_rationality:
-                action = self.agents[0].draw_action(nav_state[:-1])
-            else:
-                action = self.agents[0].draw_action(nav_state)
+            action = self.agents[0].draw_action(state_protagonist)
 
             if not self.heuristic:
 
-                if self.use_antagonist:
-                    action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
-                    self.mdp.obstacle_velocity = action_antagonist
+                action_antagonist = self.agents[1].draw_noisy_action(self._adversary_state)
+                self.mdp.obstacle_velocity = action_antagonist
             else:
 
                 self.mdp.antagonist_temperature = self._preprocessors[0].variables[self._total_episodes_counter]
-                action_antagonist = 0
 
             if not self.joystick:
                 robot_state[-3:] =  action
@@ -355,10 +379,8 @@ class Core(object):
 
         self._episode_steps += 1
 
-        if self.agent_id ==1:
-            self.action = action_antagonist
-        else:
-            self.action = action
+        self.action = action.copy()
+        self.action_antagonist = action_antagonist.copy()
 
         if render:
 
@@ -376,34 +398,59 @@ class Core(object):
             next_state_antagonist = self._preprocess(next_state_antagonist.copy())
 
 
+        if self.use_history:
+            self._state = next_state.copy()
+            next_nav_state_action = np.append(next_state, self.action)
+            self.history.add_sample(next_nav_state_action)
+            next_state_protagonist = self.history.get_history().copy()
 
-        if self.aware_rationality:
-            next_nav_state = self._preprocess(next_state.copy())
+            if self.asymetric_ac:
+                if self.aware_rationality:
+                    next_state_critic = self._preprocess(next_state.copy())
+                    # next_state_critic = np.append(state_rationality, self.action)
+
+                else:
+                    next_state_critic = next_state.copy()
+
         else:
-            next_nav_state = next_state.copy()
+            self._state = next_state.copy()
+            next_state_protagonist = next_state.copy()
 
-        self._state = next_nav_state
+            if self.asymetric_ac:
+                if self.aware_rationality:
+                    next_state_critic = self._preprocess(next_state_protagonist.copy())
+                else:
+                    next_state_critic = next_state_protagonist.copy()
+
+
+
+
+
 
         self._adversary_state = next_state_antagonist
 
         # Reward Antagonist
         reward_antagonist = self.mdp.reward_antagonist()
+
         if return_antagonist_state and self.agent_id == 0:
 
             tr_protagonist =(state_antagonist, self.action, reward, next_state_antagonist, absorbing, info, last)
 
             return tr_protagonist
 
-
         if self.agent_id == 0:
 
+            if self.asymetric_ac:
+                return np.append(state_protagonist, state_critic),self.action, reward, np.append(
+                    next_state_protagonist, next_state_critic), absorbing, info, last
+            else:
+                return state_protagonist,  self.action, reward, next_state_protagonist, absorbing, info, last
 
-            return nav_state,  self.action, reward, next_nav_state, absorbing, info, last
 
 
         if self.agent_id == 1:
 
-            return state_antagonist, action_antagonist, reward_antagonist, next_state_antagonist, absorbing, info, last
+            return state_antagonist,  self.action_antagonist , reward_antagonist, next_state_antagonist, absorbing, info, last
 
     def reset(self, initial_states=None, initial_conditions=None):
         """
@@ -426,16 +473,21 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        if self.aware_rationality:
-            self._state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
-        else:
-            self._state = self.mdp.reset(initial_state, initial_condition).copy()
-        #
-        #
-        # pos_antagonist = self.mdp._data.body("obstacle_1").xpos[:2]
-        # pos_robot = self.mdp._data.body("trunk").xpos[:2]
-        # adversary_state = np.concatenate((pos_antagonist, pos_robot))
 
+        # if self.aware_rationality:
+        #     state = self._preprocess(self.mdp.reset(initial_state, initial_condition).copy())
+        # else:
+        state = self.mdp.reset(initial_state, initial_condition).copy()
+
+        if self.use_history:
+            self.history.init_history((state.shape[0] + 3,))
+            # state_action = np.append(state, self.action)
+            # self.history.add_sample(state_action)
+            # self._state =  self.history.get_history()
+
+        # else:
+        self._state = state
+        self.action = np.zeros(3)
         adversary_state = self.mdp.obs_antagonist()
 
         if self.rationality_antagonist:
