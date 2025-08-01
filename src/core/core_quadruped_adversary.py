@@ -65,6 +65,7 @@ class Core(object):
         self.use_history = use_history
         self.heuristic = heuristic
         self.use_antagonist = True
+        self.history_size = history_size
 
         self.agents = agents
 

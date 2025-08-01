@@ -340,7 +340,8 @@ def experiment(
         rationality_antagonist=True,
         heuristic=conf.heuristic,
         use_history=conf.use_history,
-        asymetric_ac=conf.use_asymetric_ac
+        asymetric_ac=conf.use_asymetric_ac,
+        history_size=conf.history_size,
     )
 
 
