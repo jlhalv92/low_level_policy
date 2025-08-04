@@ -39,7 +39,9 @@ class Core(object):
                  heuristic=False, multi_mdp=None,
                  history_size=5,
                  use_history=False,
-                 asymetric_ac=False):
+                 asymetric_ac=False,
+                 aware_rationality_actor=False,
+                 privileged_critic_obs=False,):
         """
         Constructor.
 
@@ -58,6 +60,7 @@ class Core(object):
         # self.multi_mdp = multi_mdp
         self.rationality_antagonist =rationality_antagonist
         self.aware_rationality = aware_rationality
+        self.aware_rationality_actor = aware_rationality_actor
         self.asymetric_ac = asymetric_ac
         self.agent_id = 0
         self.joystick=joystick
@@ -66,6 +69,7 @@ class Core(object):
         self.heuristic = heuristic
         self.use_antagonist = True
         self.history_size = history_size
+        self.privileged_critic_obs = privileged_critic_obs
 
         self.agents = agents
 
@@ -310,25 +314,42 @@ class Core(object):
 
         """
         action_antagonist = 0
+
         if self.use_history:
             state_action = np.append(self._state, self.action)
             self.history.add_sample(state_action)
             state_protagonist = self.history.get_history().copy()
 
             if self.asymetric_ac:
-                if self.aware_rationality:
-                    state_critic = self._preprocess(self._state.copy())
+
+                if self.privileged_critic_obs:
+                    obs = self.mdp.privileged_observation()
                 else:
-                    state_critic = self._state.copy()
+                    obs = self._state.copy()
+
+
+
+                if self.aware_rationality:
+                    state_critic = self._preprocess(obs.copy())
+                else:
+                    state_critic = obs.copy()
                 # state_critic = np.append(state_rationality, self.action)
 
         else:
-            state_protagonist = self._state.copy()
+            if self.aware_rationality_actor:
+                state_protagonist = self._preprocess(self._state.copy())
+            else:
+                state_protagonist = self._state.copy()
+
             if self.asymetric_ac:
-                if self.aware_rationality:
-                    state_critic = self._preprocess(state_protagonist.copy())
+                if self.privileged_critic_obs:
+                    obs = self.mdp.privileged_observation()
                 else:
-                    state_critic = state_protagonist.copy()
+                    obs = state_protagonist.copy()
+                if self.aware_rationality:
+                    state_critic = self._preprocess(obs.copy())
+                else:
+                    state_critic = obs.copy()
 
 
         robot_state = self.mdp.get_robot_observation()
@@ -406,32 +427,47 @@ class Core(object):
             next_state_protagonist = self.history.get_history().copy()
 
             if self.asymetric_ac:
+                # print(self.mdp.privileged_observation().shape)
+                if self.privileged_critic_obs:
+                    next_obs = self.mdp.privileged_observation()
+                else:
+                    next_obs = next_state.copy()
                 if self.aware_rationality:
-                    next_state_critic = self._preprocess(next_state.copy())
+
+                    next_state_critic = self._preprocess(next_obs.copy())
                     # next_state_critic = np.append(state_rationality, self.action)
 
                 else:
-                    next_state_critic = next_state.copy()
+                    next_state_critic = next_obs.copy()
 
         else:
-            self._state = next_state.copy()
-            next_state_protagonist = next_state.copy()
+            if self.aware_rationality_actor:
+                self._state = next_state.copy()
+                next_state_protagonist = self._preprocess(next_state.copy())
+
+            else:
+                self._state = next_state.copy()
+                next_state_protagonist = next_state.copy()
 
             if self.asymetric_ac:
-                if self.aware_rationality:
-                    next_state_critic = self._preprocess(next_state_protagonist.copy())
+                if self.privileged_critic_obs:
+                    next_obs = self.mdp.privileged_observation()
+
                 else:
-                    next_state_critic = next_state_protagonist.copy()
+                    next_obs = next_state.copy()
 
-
-
-
+                if self.aware_rationality:
+                    next_state_critic = self._preprocess(next_obs.copy())
+                else:
+                    next_state_critic = next_obs.copy()
 
 
         self._adversary_state = next_state_antagonist
 
         # Reward Antagonist
         reward_antagonist = self.mdp.reward_antagonist()
+        # print("state shape", state_protagonist.shape, next_state_protagonist.shape)
+        # print(state_critic.shape, next_state_critic.shape)
 
         if return_antagonist_state and self.agent_id == 0:
 
@@ -442,11 +478,11 @@ class Core(object):
         if self.agent_id == 0:
 
             if self.asymetric_ac:
+
                 return np.append(state_protagonist, state_critic),self.action, reward, np.append(
                     next_state_protagonist, next_state_critic), absorbing, info, last
             else:
                 return state_protagonist,  self.action, reward, next_state_protagonist, absorbing, info, last
-
 
 
         if self.agent_id == 1:

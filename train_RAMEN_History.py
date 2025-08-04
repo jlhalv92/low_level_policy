@@ -227,12 +227,20 @@ def experiment(
     else:
 
         propioception = 6
-        actor_input_shape  = mdp.info.observation_space.shape
+        if conf.aware_rationality_actor:
+            actor_input_shape = (mdp.info.observation_space.shape[0]+1,)
+            exteroception=51
+        else:
+            exteroception=50
+
+            actor_input_shape  = mdp.info.observation_space.shape
         actor_mu_params = dict(network=PolicyNavNetwork,
                                n_features=n_features,
                                input_shape=actor_input_shape,
                                output_shape=(3,),
                                propioception=propioception,
+                               exteroception=exteroception,
+
                                use_cuda=use_cuda)
 
         actor_sigma_params = dict(network=PolicyNavNetwork,
@@ -240,16 +248,21 @@ def experiment(
                                   input_shape=actor_input_shape,
                                   output_shape=(3,),
                                   propioception=propioception,
+                                  exteroception=exteroception,
                                   use_cuda=use_cuda)
 
     actor_optimizer = {'class': optim.Adam,
                        'params': {'lr': 3e-4}}
 
-    if conf.use_asymetric_ac:
+    if conf.use_asymetric_ac or conf.aware_rationality_actor:
         critic_obs_size = mdp.info.observation_space.shape[0] + 1
 
     else:
         critic_obs_size = actor_input_shape[0]
+
+    if conf.privileged_critic_obs:
+        critic_obs_size += 4
+
 
     critic_input_shape = (critic_obs_size + 3,)
     critic_params = dict(network=CriticNetwork,
@@ -341,7 +354,10 @@ def experiment(
         heuristic=conf.heuristic,
         use_history=conf.use_history,
         asymetric_ac=conf.use_asymetric_ac,
+        aware_rationality_actor=conf.aware_rationality_actor,
         history_size=conf.history_size,
+        privileged_critic_obs=conf.privileged_critic_obs,
+
     )
 
 
@@ -535,6 +551,8 @@ def parse_args():
     parser.add_argument("--heuristic", type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument("--use_history", type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument("--use_asymetric_ac", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--aware_rationality_actor", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--privileged_critic_obs", type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument("--history_size", type=int, default=5)
 
 

@@ -551,6 +551,41 @@ class Go1MultiObs(MuJoCo):
     #
     #     return obs
 
+    def privileged_observation(self):
+        linear_velocity = self.orientation_quat_inv.apply(self._data.qvel[:3])
+        current_velocity = linear_velocity[:2].copy()
+        robot_orientation = self.orientation_euler.copy() # (1,)
+        relative_robot_pose = self._model.site("pos_target").pos[:2] - self._data.qpos[:2]
+        angular_velocity = self._data.qvel[3:6]
+        limit_distance = 5  # 20
+        rf_readings = np.array([self._data.sensor("rf_{}".format(i + 1)).data.copy()[0] for i in range(50)])
+        rf_readings = np.where(rf_readings == -1, limit_distance, rf_readings)
+        rf_readings_2 = np.clip(rf_readings, 0.01, limit_distance)
+        rays = np.log2(rf_readings_2)
+
+        pos_obstacle = self._data.joint("obstacle").qpos[:2] - self._data.qpos[:2]
+        vel_obstacle = self._data.joint("obstacle").qvel[:2]
+
+        # print(current_velocity.shape,
+        #                 np.array([robot_orientation[2]]).shape,
+        #                 relative_robot_pose.shape,
+        #                 rays.shape,
+        #                 pos_obstacle.shape,
+        #                 vel_obstacle.shape)
+        # current_velocity +  # (2,)
+        # angular_velocity +  # (1,)
+        # robot_orientation +  # (1,)
+        # robot_pos +  # (2,)
+        # rays
+        obs = np.concatenate([current_velocity,
+                              np.array([angular_velocity[2]]),
+                        np.array([robot_orientation[2]]),
+                        relative_robot_pose,
+                        rays,
+                        pos_obstacle,
+                        vel_obstacle])
+        return obs
+
     def _modify_observation(self, obs):
 
 
