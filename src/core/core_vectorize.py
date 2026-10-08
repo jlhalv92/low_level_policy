@@ -58,7 +58,7 @@ class Core(object):
 
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, vectorize=False):
+                 preprocessors=None, vectorize=False, asymetric=False):
         """
         Constructor.
 
@@ -75,6 +75,7 @@ class Core(object):
             use_data_prior (bool): tells us whether to use a prior from mdp for biasing data collection
 
         """
+        self.asymetric = asymetric
         self.agent = agent
         self.mdp = mdp
         self.vectorize = vectorize
@@ -231,7 +232,13 @@ class Core(object):
             self._current_steps_counter += 1
             steps_progress_bar.update(1)
 
-            actions = self.agent.draw_noisy_action(self._state)
+            actor_state = self._state.copy()
+            if self.asymetric:
+                idxs = [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
+                            17, 18, 19, 20, 21, 22, 23, 53, 54, 55, 24, 25, 26, 27, 28, 29, 30,
+                            31, 32, 33, 34, 35, 44, 45, 46, 47, 48, 49, 50, 51, 52]
+                actor_state = self._state[:,idxs].copy()
+            actions = self.agent.draw_noisy_action(actor_state)
 
             next_state, reward, terminated, truncated, info = self.mdp.step(actions)
             done = terminated | truncated
@@ -257,6 +264,7 @@ class Core(object):
                 dataset = []
                 for trj in datasets:
                     dataset.extend(trj)
+
 
                 self.agent.fit(dataset)
                 self._current_episodes_counter = 0
@@ -293,8 +301,10 @@ class Core(object):
         """
 
         if learning:
+
             action = self.agent.draw_noisy_action(self._state)
             next_state, reward, absorbing, truncated, info = self.mdp.step(action)
+
         else: # Default
 
             action = self.agent.draw_action(self._state)

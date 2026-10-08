@@ -86,7 +86,7 @@ class PDController:
     def __init__(self, env, control_frequency_hz=50, p_gain=20, d_gain=0.5, scaling_factor=0.25):
         self.env = env #20, 0.5
         self.control_frequency_hz = control_frequency_hz
-        self.apply_scale_shoulder = True
+        self.apply_scale_shoulder = False
         self.scaling_factor = scaling_factor
         self.kp_noise_factor = 1.0
         self.kd_noise_factor = 1.0
@@ -127,7 +127,9 @@ class UnitreeGo1(gym.Env):
     SHORT_NAME = "go1"
 
 
-    def __init__(self, seed,
+    def __init__(self,
+                 seed,
+                 env_id=0,
                  timestep=0.005,
                  episode_length_in_seconds=20,
                  total_nr_envs=100,
@@ -140,6 +142,10 @@ class UnitreeGo1(gym.Env):
         if cpu_id is not None:
             p = psutil.Process()
             p.cpu_affinity([cpu_id, ])
+
+        self.env_id = env_id
+        print("Created env {}".format(self.env_id))
+        self._n_episode = 0
         self.episode_step = 0
         self.resampling_command_steps = 500 # 500
         self.joystick = joystick
@@ -148,20 +154,21 @@ class UnitreeGo1(gym.Env):
         self.track_velocities = False
         if self.joystick:
             pygame.init()
-            screen_width, screen_height = 300, 300
+            screen_width, screen_height = 200, 200
             screen = pygame.display.set_mode((screen_width, screen_height))
             pygame.display.set_caption("Keyboard Joystick Simulation")
         self.x_limit =  env_args["vx_limit"]# 1.2, 3.5
         self.y_limit = env_args["vy_limit"]
         self.wz_limit =  env_args["wz_limit"] #1.5, 5.5
-        self.vel_curriculum = RewardThresholdCurriculum(100,
-                                                        x=(-5, 5, 21),
-                                                        y=(-1 , 1 ,5),
-                                                        z=(-5, 5,21))
+        self.vel_curriculum = RewardThresholdCurriculum(42,
+                                                        x=(-5, 5, 51),
+                                                        y=(-0.6 , 0.6 ,2),
+                                                        z=(-5, 5,51))
 
-        # low, high = np.array([-1, -0.6, -1]), np.array([1, 0.6, 1])
-        # low, high = np.array([-0.6, -0.6, -1]), np.array([0.6, 0.6, 1])
-        low, high = np.array([-2, -1, -2]), np.array([2, 1, 2])
+
+        # low, high = np.array([-1, -1, -1]), np.array([1, 1, 1])
+        low, high = np.array([-1, -1, -1]), np.array([1, 1, 1])
+
 
 
 
@@ -185,7 +192,7 @@ class UnitreeGo1(gym.Env):
         self.nr_envs_per_type = nr_envs_per_type
         self.eval = False
         self.np_rng = np.random.default_rng(self.seed)
-        self.nominal_height = 0.3 #0.325
+        self.nominal_height = 0.34 #0.325  0.3
         # self.nominal_joint_positions = np.array([
         #     -0.2, -0.7, 1.25,
         #     0.2, 0.7, -1.25,
@@ -193,14 +200,14 @@ class UnitreeGo1(gym.Env):
         #     -0.2, 1, -1.35,
         # ])
         self.nominal_joint_positions = np.array([
-            -0.1, -0.8, 1.5,
-            0.1, 0.8, -1.5,
-            0.1, -1.0, 1.5,
-            -0.1, 1.0, -1.5,
+            -0.2, -0.75, 1.5,
+            0.2, 0.75, -1.5,
+            0.2, -1.0, 1.5,
+            -0.2, 1.0, -1.5,
         ])
 
         self.max_joint_velocities = np.array([30.1, 30.1, 20.06] * 4)
-        self.initial_drop_height = 0.34 #0.325
+        self.initial_drop_height = 0.30 #0.325 0.34
 
         self.total_timesteps = 0
 
@@ -291,14 +298,31 @@ class UnitreeGo1(gym.Env):
         self.damping_max = 130
         self.stiffness_min = 500
         self.stiffness_max = 1500
+        self.kick = np.zeros(3)
+
+        tangential_friction = self.model.geom_friction[0][0]
+        stiffness = -self.model.geom_solref[:, 0][0]
+        damping = -self.model.geom_solref[:, 1][0]
+
+        self.friction = tangential_friction
+        self.stiffness = stiffness
+        self.damping = damping
+
+
 
         collision_groups = [("floor", ["floor"]),
                             ("feet", ["FR_foot", "FL_foot", "RR_foot", "RL_foot"]),
                             ("FL_foot", ["FL_foot"]), ("FR_foot", ["FR_foot"]), ("RL_foot", ["RL_foot"]),
                             ("RR_foot", ["RR_foot"]),
-                            ("FR_calf1", ["FR_calf1"]), ("FL_calf1", ["FL_calf1"]), ("RR_calf1", ["RR_calf1"]),
-                            ("RL_calf1", ["RL_calf1"]),
-                            ("trunk", ["trunk_1", "trunk_2", "trunk_3"]),
+                            ("FR_calf", ["FR_calf1"]),
+                            ("FL_calf", ["FL_calf1"]),
+                            ("RR_calf", ["RR_calf1"]),
+                            ("RL_calf", ["RL_calf1"]),
+                            ("FR_thigh", ["FR_thigh1","FR_thigh2","FR_thigh3"]),
+                            ("FL_thigh", ["FL_thigh1","FL_thigh2","FL_thigh3"]),
+                            ("RR_thigh", ["RR_thigh1","RR_thigh2","RR_thigh3"]),
+                            ("RL_thigh", ["RL_thigh1","RL_thigh2","RL_thigh3"]),
+                            ("trunk", ["trunk_1", "trunk_2", "trunk_3", "trunk_4", "trunk_5", "trunk_6", "trunk_7", "trunk_8"]),
                             ("trunk_1", ["trunk_1"]), ("trunk_2", ["trunk_2"]), ("trunk_3", ["trunk_3"])]
         self.collision_groups = {}
         if collision_groups is not None:
@@ -344,6 +368,7 @@ class UnitreeGo1(gym.Env):
         self.observation_space, self.observation_name_to_id = self.get_observation_space()
 
         self.current_action = np.zeros(self.model.nu)
+        self.last_action = np.zeros(self.model.nu)
 
         self.initial_observation = self.get_initial_observation()
 
@@ -384,8 +409,9 @@ class UnitreeGo1(gym.Env):
         # self.kd_idx = [self.observation_name_to_id["kd_gain"]]
         # self.scale_idx = [self.observation_name_to_id["action_scaling_factor"]]
         #
-        # self.stiffness_idx = [self.observation_name_to_id["stiffness"]]
-        # self.damping_idx = [self.observation_name_to_id["damping"]]
+        self.friction_idx = [self.observation_name_to_id["friction"]]
+        self.stiffness_idx = [self.observation_name_to_id["stiffness"]]
+        self.damping_idx = [self.observation_name_to_id["damping"]]
         # self.gravity_idx = [self.observation_name_to_id["gravity"]]
         # self.tangential_friction_idx = [self.observation_name_to_id["tangential_friction"]]
         # self.torsional_friction_ground_idx = [self.observation_name_to_id["torsional_friction_ground"]]
@@ -400,28 +426,18 @@ class UnitreeGo1(gym.Env):
 
     def initial_state(self):
         nominal_joint_pos = self.nominal_joint_positions.copy()
-        # upper = 0.9
-        # lower = 0
-        # roll = np.pi/10*((upper - lower) * np.random.uniform() + lower)
-        # pitch = np.pi/10*((upper - lower) * np.random.uniform() + lower)
-        # # yaw = np.pi/4*((upper - lower) * np.random.uniform() + lower)
-        #
-        # upper = 1
-        # lower = -1
-        # quat = quat_from_euler_xyz(roll, pitch, 0)
+        initial_joint_pos = nominal_joint_pos.copy()
 
-        # initial_joint_pos = nominal_joint_pos + 0.1*((upper - lower) * np.random.uniform(size=12) + lower)
-        initial_joint_pos = nominal_joint_pos
         qpos = np.array([
             0.0, 0.0, self.initial_drop_height,
             *[1,0,0,0],
             *initial_joint_pos
         ])
         # init_qvel = np.random.uniform(low=-0.8, high=0.8, size=12)
-        # init_linear = np.random.uniform(low=-0.5, high=0.5, size=3)
-        # init_angular = np.random.uniform(low=-0.5, high=0.5, size=3)
-        init_linear = [0,0,0]
-        init_angular = [0,0,0]
+        init_linear = np.random.uniform(low=-0.5, high=0.5, size=3)*0
+        init_angular = np.random.uniform(low=-0.5, high=0.5, size=3)*0
+        # init_linear = [0,0,0]
+        # init_angular = [0,0,0]
         init_qvel = np.zeros(12)
         qvel = np.array([
             *init_linear,
@@ -441,8 +457,12 @@ class UnitreeGo1(gym.Env):
         self.current_action = np.zeros(self.model.nu)
         self.last_action = np.zeros(self.model.nu)
         self.current_torques = np.zeros(self.model.nu)
+        if not self.eval:
+            if self._n_episode % 1000 == 0:
+                # np.save(f"data/grid_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.grid)
+                np.save(f"data/weights_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.weights)
 
-
+        self._n_episode +=1
         self.reward_function.setup()
 
         qpos, qvel = self.initial_state()
@@ -462,8 +482,8 @@ class UnitreeGo1(gym.Env):
 
         timesteps = self.resampling_command_steps
         vx_tracking = self.vxy_tracking / timesteps
+        vx_tracking = self.vxy_tracking / timesteps
         wz_tracking = self.wz_tracking / timesteps
-
 
         if self.eval:
             cvx = np.random.uniform(-self.x_limit,self.x_limit)
@@ -474,37 +494,36 @@ class UnitreeGo1(gym.Env):
 
         else:
 
+
             self.vel_curriculum.update(self.old_batch, np.array([vx_tracking, ]), np.array([wz_tracking, ]), .8, 0.5, 0.5)
-
-
 
             commands, old_batch = self.vel_curriculum.sample(1)
             v_command = commands[0].copy()
-
             self.old_batch = old_batch
 
-        # v_command[:2] =0
         v_command[:2] *= (np.linalg.norm(v_command[:2]) > 0.2)
+        v_command[0] *= (np.abs(v_command[0])> 0.2)
+        v_command[1] *= (np.abs(v_command[1])> 0.2)
+        v_command[2] *= (np.abs(v_command[2]) > 0.2)
+
+        return v_command
+
         self.vxy_tracking = 0
         self.wz_tracking = 0
-        #v_command[0] = 0 if np.abs(v_command[0]) < 0.1 else v_command[0]
-        #v_command[1] = 0 if np.abs(v_command[1]) < 0.1 else v_command[1]
+
 
 
         return v_command
 
     def should_terminate(self, obs):
-        ids = self.collision_groups["trunk"]
 
-        trunk_collision = False
-        for con_i in range(0, self.data.ncon):
-            con = self.data.contact[con_i]
-            if con.geom1 in ids or con.geom2 in ids:
-                trunk_collision = True
-                break
+        # trunk_collision = False
+        trunk_collision = True if self.check_any_collision(["trunk"]) else False
+        thigh_collision = True if self.check_any_collision(["FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh"]) else False
+
         fall = self.data.qpos[2] < 0.1
 
-        return trunk_collision or fall
+        return trunk_collision or thigh_collision or fall
 
 
 
@@ -531,11 +550,11 @@ class UnitreeGo1(gym.Env):
                 kick_x = np.random.uniform(kick_x_min, kick_x_max)
                 kick_y = np.random.uniform(kick_y_min, kick_y_max)
                 kick_z = np.random.uniform(kick_z_min, kick_z_max)
-                kick = np.array([kick_x, kick_y, kick_z])
+                self.kick = np.array([kick_x, kick_y, kick_z])
                 if np.random.uniform() < 0.001:
-                    self.data.qvel[:3] = kick
+                    self.data.qvel[:3] = self.kick
                 else:
-                    self.data.qvel[:3] += kick
+                    self.data.qvel[:3] += self.kick
                 # self.info["pert_steps"] += 1
 
 
@@ -555,19 +574,20 @@ class UnitreeGo1(gym.Env):
                 self.controller.motor_strength_factor =  np.random.uniform(0.9,1.1, size=self.model.nu)
 
             if should_update_properties:
-                factor = np.random.uniform(0,1)
-                tangential_friction =  self.friction_tangential_min + (self.friction_tangential_max - self.friction_tangential_min)*factor
+                factor_friction = np.random.uniform(0,1)
+                factor_stiffness = np.random.uniform(0,1)
+                factor_damping = np.random.uniform(0,1)
 
-                torsional_friction_ground =  self.friction_torsional_ground_min + (self.friction_torsional_ground_max - self.friction_torsional_ground_min)*factor
-                rolling_friction_ground =  self.friction_rolling_ground_min + (self.friction_rolling_ground_max - self.friction_rolling_ground_min)*factor
-
-                #
-                rolling_friction_feet = self.friction_rolling_feet_min + (self.friction_rolling_feet_max - self.friction_rolling_feet_min)*factor
-                torsional_friction_feet = self.friction_torsional_feet_min + (self.friction_torsional_feet_max - self.friction_torsional_feet_min)*factor
-
-                damping = self.damping_min + (self.damping_max - self.damping_min)*factor
-                stiffness = self.stiffness_min + (self.stiffness_max - self.stiffness_min)*factor
+                tangential_friction =  self.friction_tangential_min + (self.friction_tangential_max - self.friction_tangential_min)*factor_friction
+                damping = self.damping_min + (self.damping_max - self.damping_min)*factor_stiffness
+                stiffness = self.stiffness_min + (self.stiffness_max - self.stiffness_min)*factor_damping
                 gravity = self.default_gravity +  np.random.uniform(-1, 1)
+                # torsional_friction_ground =  self.friction_torsional_ground_min + (self.friction_torsional_ground_max - self.friction_torsional_ground_min)*factor
+                # rolling_friction_ground =  self.friction_rolling_ground_min + (self.friction_rolling_ground_max - self.friction_rolling_ground_min)*factor
+                #
+                # #
+                # rolling_friction_feet = self.friction_rolling_feet_min + (self.friction_rolling_feet_max - self.friction_rolling_feet_min)*factor
+                # torsional_friction_feet = self.friction_torsional_feet_min + (self.friction_torsional_feet_max - self.friction_torsional_feet_min)*factor
 
                 # self.model.geom_friction[0] = [tangential_friction,
                 #                                torsional_friction_ground,
@@ -582,6 +602,10 @@ class UnitreeGo1(gym.Env):
                 self.model.geom_solref[:, 0] = -stiffness
                 self.model.geom_solref[:, 1] = -damping
                 self.model.opt.gravity[2] = -gravity
+
+                self.friction = tangential_friction
+                self.stiffness = stiffness
+                self.damping = damping
 
 
 
@@ -617,11 +641,11 @@ class UnitreeGo1(gym.Env):
 
                 self.goal_x_velocity, self.goal_y_velocity, self.goal_yaw_velocity = self.get_next_command()
 
-
-        torques = self.controller.action2torques(action)
+        torque_limits = self.model.actuator_ctrlrange[:,1].copy()
+        torques = np.clip(self.controller.action2torques(action),-torque_limits,torque_limits)
 
         for _ in range(self.nr_intermediate_steps):
-            self.data.ctrl = torques
+            self.data.ctrl = torques.copy()
             mujoco.mj_step(self.model, self.data, self.nr_substeps)
             self.data.qvel[6:] = np.clip(self.data.qvel[6:], -self.max_joint_velocities, self.max_joint_velocities)
 
@@ -680,20 +704,36 @@ class UnitreeGo1(gym.Env):
 
         # Joint
         for joint_name in self.joint_names:
-            # observation_names.extend(
-            #     [joint_name + "_description_" + str(i) for i in range(self.dynamic_joint_description_size)])
             observation_names.extend([
-                joint_name + "_position", joint_name + "_velocity", joint_name + "_previous_action",
-            ])
-            space_low.extend([-np.inf] * (3))
-            space_high.extend([np.inf] * (3))
+                joint_name + "_position"])
+        space_low.extend([-np.inf] * (12))
+        space_high.extend([np.inf] * (12))
+
+        for joint_name in self.joint_names:
+            observation_names.extend([
+                joint_name + "_velocity"])
+        space_low.extend([-np.inf] * (12))
+        space_high.extend([np.inf] * (12))
+
+        for joint_name in self.joint_names:
+            observation_names.extend([
+                joint_name + "_previous_action"])
+        space_low.extend([-np.inf] * (12))
+        space_high.extend([np.inf] * (12))
 
         for foot_name in self.foot_names:
             observation_names.extend([
-                foot_name + "_ground_contact", foot_name + "_airtime",
+                foot_name + "_ground_contact",
             ])
-            space_low.extend([-np.inf] * (2))
-            space_high.extend([np.inf] * (2))
+        space_low.extend([-np.inf] * (4))
+        space_high.extend([np.inf] * (4))
+
+        for foot_name in self.foot_names:
+            observation_names.extend([
+                foot_name + "_airtime",
+            ])
+        space_low.extend([-np.inf] * (4))
+        space_high.extend([np.inf] * (4))
 
         # General observations
         observation_names.extend([
@@ -726,16 +766,12 @@ class UnitreeGo1(gym.Env):
         # space_high.extend([np.inf] * 3)
 
 
-        # observation_names.extend(["stiffness",
-        #                         "damping",
-        #                         "gravity",
-        #                         "tangential_friction",
-        #                         "torsional_friction_ground",
-        #                         "rolling_friction_ground",
-        #                         "rolling_friction_feet",
-        #                         "torsional_friction_feet"])
-        # space_low.extend([-np.inf] * 8)
-        # space_high.extend([np.inf] * 8)
+        observation_names.extend(["friction",
+                                "stiffness",
+                                "damping"])
+
+        space_low.extend([-np.inf] * 3)
+        space_high.extend([np.inf] * 3)
 
 
         space_low = np.array(space_low, dtype=np.float64)
@@ -746,27 +782,22 @@ class UnitreeGo1(gym.Env):
 
     def get_initial_observation(self):
 
-        joint_observations = []
-        for i, joint_name in enumerate(self.joint_names):
-            joint_observations.append(
-                self.data.qpos[i + 7] - self.nominal_joint_positions[i])
-            joint_observations.append(self.data.qvel[i + 6])
-            joint_observations.append(self.current_action[i])
-        joint_observations = np.array(joint_observations, dtype=np.float64)
+        # joint_observations = []
+        # for i, joint_name in enumerate(self.joint_names):
+        #     joint_observations.append(
+        #         self.data.qpos[i + 7] - self.nominal_joint_positions[i])
+        #     joint_observations.append(self.data.qvel[i + 6])
+        #     joint_observations.append(self.last_action[i])
+        qpos =self.data.qpos[7:] - self.nominal_joint_positions
+        qvel = self.data.qvel[6:]
+        last_actions = self.last_action.copy()
+        joint_observations = np.concatenate((qpos, qvel, last_actions), dtype=np.float64)
 
-        foot_observations = []
-        for foot_name in self.foot_names:
-            foot_observations.append(self.check_collision("floor", foot_name))
-            if foot_name == "FR_foot":
-                foot_observations.append(self.airtime.feet_air_time[0])
-            elif foot_name == "FL_foot":
-                foot_observations.append(self.airtime.feet_air_time[1])
-            elif foot_name == "RR_foot":
-                foot_observations.append(self.airtime.feet_air_time[2])
-            elif foot_name == "RL_foot":
-                foot_observations.append(self.airtime.feet_air_time[3])
+        foot_contacts = np.array(
+            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
 
-        foot_observations = np.array(foot_observations, dtype=np.float64)
+        foot_airtime = self.airtime.feet_air_time.copy()
+        foot_observations = np.concatenate((foot_contacts, foot_airtime), dtype=np.float64)
 
         # General observations
         trunk_linear_velocity = self.orientation_quat_inv.apply(self.data.qvel[:3])
@@ -778,6 +809,9 @@ class UnitreeGo1(gym.Env):
 
         mass = (self.default_mass / (170.0 / 2)) - 1.0
 
+        friction = np.array([self.friction])
+        stiffness = np.array([self.stiffness])
+        damping = np.array([self.damping])
 
         observation = np.concatenate([
             joint_observations,
@@ -788,49 +822,59 @@ class UnitreeGo1(gym.Env):
             projected_gravity_vector,
             height,
             mass,
+            friction,
+            stiffness,
+            damping
+
         ])
 
         return observation
 
     def get_robot_observation(self):
 
-        noise_joint_angles = np.random.uniform(low=-0.03, high=0.03, size=12)
-        noise_joint_vel =  np.random.uniform(low=-1.5, high=1.5, size=12)
-        vel_noise =  np.random.uniform(low=-0.1, high=0.1, size=3)
-        ang_vel_noise =  np.random.uniform(low=-0.2, high=0.2, size=3)
-        gravity_noise =  np.random.uniform(low=-0.05, high=0.05, size=3)
+        obs = self.get_observation()
+        idxs = np.concat((self.joint_positions_idx,
+                          self.joint_velocities_idx,
+                          self.projected_gravity_idx,
+                          self.joint_previous_actions_idx,
+                          self.trunk_linear_vel_idx,
+                          self.trunk_angular_vel_idx,
+                          self.goal_velocity_idx))
 
-        qpos = (self.data.qpos[7:].copy() + noise_joint_angles) - self.nominal_joint_positions #(12)
-
-        qvel = self.data.qvel[6:] + noise_joint_vel  #(12)
-        previous_action = self.current_action   #(12)
-        robot_linear_vel = self.orientation_quat_inv.apply(self.data.qvel[:3]).copy()  + vel_noise#(3)
-        robot_angular_vel = self.data.qvel[3:6].copy() + ang_vel_noise #(3)
-        commands = np.array([self.goal_x_velocity, self.goal_y_velocity, self.goal_yaw_velocity]) #(3)
-        projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0])).copy() + gravity_noise #(3)
-
-
-        # Normalize and clip
-        qpos /= 4.6
-        qvel /= 35.0
-        previous_action /= 10.0
-
-        robot_linear_vel = np.clip(robot_linear_vel / 10.0, -1.0, 1.0)
-        robot_angular_vel= np.clip(robot_angular_vel / 50.0, -1.0, 1.0)
-
-        observation = np.concatenate([qpos,
-                                qvel,
-                                projected_gravity,
-                                previous_action,
-                                robot_linear_vel,
-                                robot_angular_vel,
-                                commands])
-
-
+        observation = obs[idxs]
         return observation
+
+
+
+        # noise_joint_angles = np.random.uniform(low=-0.03, high=0.03, size=12)
+        # noise_joint_vel =  np.random.uniform(low=-1.5, high=1.5, size=12)
+        # vel_noise =  np.random.uniform(low=-0.1, high=0.1, size=3)
+        # ang_vel_noise =  np.random.uniform(low=-0.2, high=0.2, size=3)
+        # gravity_noise =  np.random.uniform(low=-0.05, high=0.05, size=3)
         #
-
-
+        # qpos = (self.data.qpos[7:].copy() + noise_joint_angles) - self.nominal_joint_positions #(12)
+        # qvel = self.data.qvel[6:] + noise_joint_vel  #(12)
+        # previous_action = self.current_action   #(12)
+        # robot_linear_vel = self.orientation_quat_inv.apply(self.data.qvel[:3]).copy()  + vel_noise#(3)
+        # robot_angular_vel = self.data.qvel[3:6].copy() + ang_vel_noise #(3)
+        # commands = np.array([self.goal_x_velocity, self.goal_y_velocity, self.goal_yaw_velocity]) #(3)
+        # projected_gravity = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0])).copy() + gravity_noise #(3)
+        #
+        #
+        # # Normalize and clip
+        # qpos /= 4.6
+        # qvel /= 35.0
+        # previous_action /= 10.0
+        #
+        # robot_linear_vel = np.clip(robot_linear_vel / 10.0, -1.0, 1.0)
+        # robot_angular_vel= np.clip(robot_angular_vel / 50.0, -1.0, 1.0)
+        #
+        #
+        #
+        #
+        #
+        # return observation
+        #
 
     def get_observation(self):
 
@@ -840,7 +884,7 @@ class UnitreeGo1(gym.Env):
                                                            7:] - self.nominal_joint_positions.copy()
         observation[self.joint_velocities_idx] = self.data.qvel[6:]
 
-        observation[self.joint_previous_actions_idx] = self.current_action
+        observation[self.joint_previous_actions_idx] = self.last_action
 
         observation[self.foot_ground_contact_idx] = np.array(
             [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
@@ -853,24 +897,32 @@ class UnitreeGo1(gym.Env):
 
         observation[self.goal_velocity_idx] = np.array(
             [self.goal_x_velocity, self.goal_y_velocity, self.goal_yaw_velocity])
+        # observation[self.goal_velocity_idx] = np.array([1.,0,2.])
 
-
+        # print(observation[:48])
+        # print(self.goal_velocity_idx)
         observation[self.projected_gravity_idx] = self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
 
         observation[self.height_idx] = np.array([self.data.qpos[2]])
 
         mass = self.model.body("trunk").mass
-        observation[self.mass_idx] =  (mass / (170.0 / 2)) - 1.0
+        min_mass =self.default_mass - 1
+        max_mass =self.default_mass + 1
+        observation[self.mass_idx] = 2*(mass - min_mass)/(max_mass - min_mass) -1
+
+        # observation[self.mass_idx] =  (mass / (170.0 / 2)) - 1.0
         # gains_and_action_scaling_factor = (self.controller.get_gains_and_scale_factor() / [100.0 / 2, 2.0 / 2, 0.8 / 2]) - 1.0
         # observation[self.kp_idx] = gains_and_action_scaling_factor[0]
         # observation[self.kd_idx] = gains_and_action_scaling_factor[1]
         # observation[self.scale_idx] = gains_and_action_scaling_factor[2]
 
+        #
+        # exit()
         # Normalize and clip
         observation[self.joint_positions_idx] /= 4.6
         observation[self.joint_velocities_idx] /= 35.0
         observation[self.joint_previous_actions_idx] /= 10.0
-        observation[self.foot_airtime_idx] = (observation[self.foot_ground_contact_idx] / 0.5) - 1.0
+        observation[self.foot_ground_contact_idx] = (observation[self.foot_ground_contact_idx] / 0.5) - 1.0
         observation[self.foot_airtime_idx] = np.clip((observation[self.foot_airtime_idx] / (5.0 / 2)) - 1.0, -1.0, 1.0)
         observation[self.trunk_linear_vel_idx] = np.clip(
             observation[self.trunk_linear_vel_idx] / 10.0, -1.0, 1.0)
@@ -878,41 +930,16 @@ class UnitreeGo1(gym.Env):
             observation[self.trunk_angular_vel_idx] / 50.0, -1.0, 1.0)
         observation[self.height_idx] = np.clip(
             (observation[self.height_idx] / (2 * self.nominal_height / 2)) - 1.0, -1.0, 1.0)
-        #
-        # tangential_friction, torsional_friction_ground, rolling_friction_ground = self.model.geom_friction[0]
-        # _, rolling_friction_feet, torsional_friction_feet = self.model.geom_friction[20]
-        # damping = -self.model.geom_solref[0, 1]
-        # stiffness = -self.model.geom_solref[0, 0]
-        # gravity = -self.model.opt.gravity[2]
-        #
-        # print(damping)
-        # print(stiffness)
-        # print(tangential_friction)
-        # print(tangential_friction, torsional_friction_ground, rolling_friction_ground)
-        #
-        # norm_stiffness = (stiffness - self.stiffness_min) / (self.stiffness_max - self.stiffness_min)
-        # norm_gravity = (gravity - 8.91) / (10.91 - 8.91)
-        # norm_damping = (damping - self.damping_min) / (self.damping_max - self.damping_min)
-        # norm_tangential_friction = (tangential_friction - self.friction_tangential_min) / (
+
+        # tangential_friction = self.friction_tangential_min + (
         #             self.friction_tangential_max - self.friction_tangential_min)
-        # norm_torsional_friction_ground = (torsional_friction_ground - self.friction_torsional_ground_min) / (
-        #             self.friction_torsional_ground_max - self.friction_torsional_ground_min)
-        # norm_rolling_friction_ground = (rolling_friction_ground - self.friction_rolling_ground_min) / (
-        #             self.friction_rolling_ground_max - self.friction_rolling_ground_min)
-        # norm_rolling_friction_feet = (rolling_friction_feet - self.friction_rolling_feet_min) / (
-        #             self.friction_rolling_feet_max - self.friction_rolling_feet_min)
-        # norm_torsional_friction_feet = (torsional_friction_feet - self.friction_torsional_feet_min) / (
-        #             self.friction_torsional_feet_max - self.friction_torsional_feet_min)
-        #
-        #
-        # observation[self.stiffness_idx] = norm_stiffness
-        # observation[self.damping_idx] = norm_damping
-        # observation[self.gravity_idx] = norm_gravity
-        # observation[self.tangential_friction_idx] = norm_tangential_friction
-        # observation[self.torsional_friction_ground_idx] = norm_torsional_friction_ground
-        # observation[self.rolling_friction_ground_idx] = norm_rolling_friction_ground
-        # observation[self.rolling_friction_feet_idx] = norm_rolling_friction_feet
-        # observation[self.torsional_friction_feet_idx] = norm_torsional_friction_feet
+        # damping = self.damping_min + (self.damping_max - self.damping_min)
+        # stiffness = self.stiffness_min + (self.stiffness_max - self.stiffness_min)
+
+        observation[self.friction_idx] = 2*(self.friction - self.friction_tangential_min)/ (self.friction_tangential_max -self.friction_tangential_min) -1
+        observation[self.stiffness_idx] =2*(self.stiffness -self.stiffness_min)/(self.stiffness_max - self.stiffness_min) -1
+        observation[self.damping_idx] = 2*(self.damping -self.damping_min)/(self.damping_max - self.damping_min) -1
+
 
         return observation
 
@@ -924,8 +951,6 @@ class UnitreeGo1(gym.Env):
         if self.viewer:
             self.viewer.stop()
             self.viewer=None
-
-
 
     def check_collision(self, groups1, groups2):
         if isinstance(groups1, list):

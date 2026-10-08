@@ -16,7 +16,7 @@ class MujocoViewer:
         self.target_render_time = 1 / 60.
         self.time_per_render = self.target_render_time
         self.run_speed_factor = 1.0
-        self.paused = False
+        self.paused = True
         self.hide_menu = False
         self.overlay = {}
         self.font_scale = 100
@@ -49,6 +49,9 @@ class MujocoViewer:
         framebuffer_width, framebuffer_height = glfw.get_framebuffer_size(self.window)
         self.viewport = mujoco.MjrRect(0, 0, framebuffer_width, framebuffer_height)
         self.context = mujoco.MjrContext(model, mujoco.mjtFontScale(self.font_scale))
+
+
+
 
     def mouse_button(self, window, button, act, mods):
         self.button_left = glfw.get_mouse_button(self.window, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS
@@ -92,6 +95,46 @@ class MujocoViewer:
             self.run_speed_factor /= 2.0
         elif key == glfw.KEY_F:
             self.run_speed_factor *= 2.0
+
+        if key == glfw.KEY_C:
+            self.scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = not self.scene_option.flags[
+                mujoco.mjtVisFlag.mjVIS_CONTACTFORCE]
+            self.scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONSTRAINT] = not self.scene_option.flags[
+                mujoco.mjtVisFlag.mjVIS_CONSTRAINT]
+
+        if key == glfw.KEY_T:
+            self.scene_option.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = not self.scene_option.flags[
+                mujoco.mjtVisFlag.mjVIS_TRANSPARENT]
+
+        if key == glfw.KEY_0:
+            self.scene_option.geomgroup[0] = not self.scene_option.geomgroup[0]
+
+        if key == glfw.KEY_1:
+            self.scene_option.geomgroup[1] = not self.scene_option.geomgroup[1]
+
+        if key == glfw.KEY_2:
+            self.scene_option.geomgroup[2] = not self.scene_option.geomgroup[2]
+
+        if key == glfw.KEY_3:
+            self.scene_option.geomgroup[3] = not self.scene_option.geomgroup[3]
+
+        if key == glfw.KEY_4:
+            self.scene_option.geomgroup[4] = not self.scene_option.geomgroup[4]
+
+        if key == glfw.KEY_5:
+            self.scene_option.geomgroup[5] = not self.scene_option.geomgroup[5]
+
+        if key == glfw.KEY_6:
+            self.scene_option.geomgroup[6] = not self.scene_option.geomgroup[6]
+
+        if key == glfw.KEY_7:
+            self.scene_option.geomgroup[7] = not self.scene_option.geomgroup[7]
+
+        if key == glfw.KEY_8:
+            self.scene_option.geomgroup[8] = not self.scene_option.geomgroup[8]
+
+        if key == glfw.KEY_9:
+            self.scene_option.geomgroup[9] = not self.scene_option.geomgroup[9]
 
     def scroll(self, window, x_offset, y_offset):
         mujoco.mjv_moveCamera(self.model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, 0.05 * y_offset, self.scene, self.camera)

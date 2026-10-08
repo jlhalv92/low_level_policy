@@ -100,7 +100,8 @@ def experiment(alg, n_epochs,
                name_exp ="",
                log=False,
                 wandb_project="LocomotionPolicy",
-               config=None):
+               config=None,
+               init_epoch=0):
 
     np.random.seed()
 
@@ -150,7 +151,9 @@ def experiment(alg, n_epochs,
 
     actor = PolicyNetwork
     critic = ValueNetwork
-    env_args = dict(vx_limit=3, vy_limit=1, wz_limit=3.5)
+    env_args = dict(vx_limit=3., vy_limit=0.5, wz_limit=2*np.pi)
+    # env_args = dict(vx_limit=1.5, vy_limit=0.8, wz_limit=1.5)
+
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, **env_args)
     mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
 
@@ -176,20 +179,14 @@ def experiment(alg, n_epochs,
     alg_params['critic_params'] = critic_params
 
     if retrain:
-        # #BASE POLICY
-        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_120"
-        #
-        # #SAFE POLICY
-        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_50_VC_NR_RT/epoch_20"
-        #
-        # #AGILE POLICY
-        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
-        # # AGILE SAFE
-        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_AGILE_vx=4_vy=2_wz=5_hip_KP=30_KD=0.65/epoch_220"
 
-        # path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_last"
         path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_STABLE/epoch_last"
         path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE_RR/epoch_150"
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_T/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_T2/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_R_LOCOMOTION/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_R_LOCOMOTION_S/epoch_last"
+        path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_RAPID_CURRICULUM/epoch_last"
 
         agent = Agent.load(path)
     else:
@@ -197,6 +194,7 @@ def experiment(alg, n_epochs,
 
     agent.set_logger(logger)
 
+    mdp.env.eval = config.use_uniform_commands
     core = Core(agent, mdp,  vectorize=True)
 
     mdp_eval.env.eval=True
@@ -212,7 +210,7 @@ def experiment(alg, n_epochs,
 
 
 
-    for it in trange(n_epochs, leave=False):
+    for it in trange(init_epoch,n_epochs + init_epoch, leave=False):
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit)
 
 
@@ -231,7 +229,7 @@ def experiment(alg, n_epochs,
                             R=R,
                             entropy=E)
 
-            wandb.log(log_dict, step=it)
+            wandb.log(log_dict, step=it*n_envs*n_steps)
 
         if (it+1) % 10 == 0:
             agent.save("checkpoint/{}/{}/{}/epoch_{}".format('GO1',alg.__name__, agent_task, it+1))
@@ -242,25 +240,40 @@ def experiment(alg, n_epochs,
     if log:
         wandb.finish()
 
+
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', '1', 'True'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', '0', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def parse_args():
 
     parser = argparse.ArgumentParser(description="Parse command-line arguments for the script.")
     parser.add_argument("--n_envs", type=int, default=100, help="Number of steps")
     parser.add_argument("--n_steps", type=int, default=10_000, help="Number of steps")
-    parser.add_argument("--n_epochs", type=int, default=200, help="Number of steps")
+    parser.add_argument("--n_epochs", type=int, default=100, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
-    parser.add_argument("--n_minibatches", type=int, default=4, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_{}_STABLE_Retrain")
-    parser.add_argument("--log", default=False,  help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="ADVERSARIAL_LOCOMOTION_RATIONALITY_ANALYSIS")
+    parser.add_argument("--n_minibatches", type=int, default=20, help="Number of test episodes")
+    parser.add_argument("--name_exp", type=str, default="LOCOMOTION_RAPID_CURRICULUM_S")
+    parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
+    parser.add_argument("--wandb_project",type=str,default="NOMINAL_RAPID_LOCOMOTION_TRAINING")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--eps_ppo", type=float, default=0.2)
-    parser.add_argument("--n_epochs_policy", type=int, default=5)
+    parser.add_argument("--n_epochs_policy", type=int, default=10)
     parser.add_argument("--lam", type=float, default=.95)
     parser.add_argument("--ent_coeff", type=float, default= 0.01)
     parser.add_argument("--n_features", type=int, default= 256)
     parser.add_argument("--gamma", type=float, default= 0.99)
+    parser.add_argument("--retrain", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--use_uniform_commands", type=str2bool, nargs='?', const=True, default=False)
+
+
 
     return parser.parse_args()
 
@@ -273,6 +286,7 @@ if __name__ == '__main__':
     n_epochs = args.n_epochs # 150
     total_data = n_epochs*n_steps
     print('Total number of steps per env: {}'.format(total_data), "total number of steps: {}".format(total_data*n_envs))
+    init_epoch = 0
     experiment(alg=PPO,
                n_epochs=n_epochs,
                n_steps=int(n_steps),
@@ -280,9 +294,10 @@ if __name__ == '__main__':
                n_episodes_test=args.n_episodes_test,
                n_envs=n_envs,
                n_minibatches=args.n_minibatches,
-               retrain=True,
+               retrain=args.retrain,
                name_exp=args.name_exp.format(n_epochs),
                log=args.log,
-               config=args)
+               config=args,
+               init_epoch=init_epoch)
 
 

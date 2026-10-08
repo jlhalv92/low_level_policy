@@ -270,10 +270,12 @@ class Core(object):
 
         student_obs= self.mdp.env.get_robot_observation()
         noisy_states = student_obs
+
         if self.expert_agent:
             expert_action = self.expert_agent.draw_action(self._state)
         else:
             expert_action = np.zeros(12)
+
         if learning:
             action = self.agent.draw_noisy_action(noisy_states)
             mixed_action = self.beta * expert_action + (1 - self.beta) * action

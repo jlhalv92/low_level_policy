@@ -33,19 +33,19 @@
           <geom size="0.046 0.02" quat="1 1 0 0" type="cylinder"/>
         </default>
         <default class="thigh1">
-          <geom size="0.015" fromto="-0.02 0 0 -0.02 0 -0.16"/>
+          <geom size="0.015" fromto="-0.02 0 0 -0.02 0 -0.16" rgba="1 0.5 0.5 0.8"/>
         </default>
         <default class="thigh2">
-          <geom size="0.015" fromto="0 0 0 -0.02 0 -0.1"/>
+          <geom size="0.015" fromto="0 0 0 -0.02 0 -0.1" rgba="0 0.5 1 0.8"/>
         </default>
         <default class="thigh3">
-          <geom size="0.015" fromto="-0.02 0 -0.16 0 0 -0.2"/>
+          <geom size="0.015" fromto="-0.02 0 -0.16 0 0 -0.2" rgba="0 1 0 0.8"/>
         </default>
         <default class="calf1">
-          <geom size="0.01" fromto="0 0 0 0.02 0 -0.13"/>
+          <geom size="0.01" fromto="0 0 0 0.02 0 -0.13" rgba="0 0 1 0.8"/>
         </default>
         <default class="calf2">
-          <geom size="0.01" fromto="0.02 0 -0.13 0 0 -0.2"/>
+          <geom size="0.01" fromto="0.02 0 -0.13 0 0 -0.2" rgba="1 0 0 0.8"/>
         </default>
         <default class="foot">
           <geom type="sphere" size="0.023" pos="0 0 -0.213"  priority="0" solimp="0.015 1 0.031" condim="6"  friction="0.8"
@@ -77,16 +77,19 @@
       <freejoint/>
 
       <inertial pos="0.0223 0.002 -0.0005" quat="-0.00342088 0.705204 0.000106698 0.708996" mass="5.204" diaginertia="0.0716565 0.0630105 0.0168101"/>
+        <!--Skin-->
+      <geom name="trunk_0" class="visual"  mesh="trunk" />
+        <!--Trunk-->
 
-      <geom name="trunk_0" class="visual"  mesh="trunk"/>
-      <geom name="trunk_1" class="collision" size="0.125 0.04 0.057" type="box"/>
-      <geom name="trunk_2" class="collision" quat="1 0 1 0" pos="0 -0.04 0" size="0.058 0.125" type="cylinder"/>
-      <geom name="trunk_3" class="collision" quat="1 0 1 0" pos="0 +0.04 0" size="0.058 0.125" type="cylinder"/>
-      <geom  name="trunk_4" class="collision" pos="0.25 0 0" size="0.005 0.06 0.05" type="box"/>
-      <geom name="trunk_5" class="collision" pos="0.25 0.06 -0.01" size="0.009 0.035"/>
-      <geom name="trunk_6" class="collision" pos="0.25 -0.06 -0.01" size="0.009 0.035"/>
-      <geom  name="trunk_7" class="collision" pos="0.25 0 -0.05" size="0.01 0.06" quat="1 1 0 0"/>
-      <geom  name="trunk_8" class="collision" pos="0.255 0 0.0355" size="0.021 0.052" quat="1 1 0 0"/>
+      <geom name="trunk_1" class="collision" size="0.125 0.04 0.057" type="box" rgba="1. 0.5 0 1" />
+      <geom name="trunk_2" class="collision" quat="1 0 1 0" pos="0 -0.04 0" size="0.058 0.125" type="cylinder" rgba="1. 0.5 0 1"/>
+      <geom name="trunk_3" class="collision" quat="1 0 1 0" pos="0 +0.04 0" size="0.058 0.125" type="cylinder" rgba="1. 0.5 0 1"/>
+      <!--head-->
+        <geom  name="trunk_4" class="collision" pos="0.25 0 0" size="0.005 0.06 0.05" type="box" rgba="1 0 0 1"/>
+      <geom name="trunk_5" class="collision" pos="0.25 0.06 -0.01" size="0.009 0.035" rgba="1 0.5 1 1"/>
+      <geom name="trunk_6" class="collision" pos="0.25 -0.06 -0.01" size="0.009 0.035" rgba="1 0.5 1 1"/>
+      <geom  name="trunk_7" class="collision" pos="0.25 0 -0.05" size="0.01 0.06" quat="1 1 0 0" rgba="1 0.5 1 1"/>
+      <geom  name="trunk_8" class="collision" pos="0.255 0 0.0355" size="0.021 0.052" quat="1 1 0 0" rgba="1 0.5 1 1"/>
 
       <body name="FR_hip" pos="0.1881 -0.04675 0">
         <inertial pos="-0.0049166 0.00762615 -8.865e-05" quat="0.507341 0.514169 0.495027 0.482891" mass="0.68"
@@ -101,15 +104,15 @@
           <joint axis="0 -1 0" range="-4.501 0.686" name="FR_thigh_joint"/>
           <geom class="visual" mesh="thigh_mirror"/>
           <geom class="thigh1" name="FR_thigh1"/>
-          <geom class="thigh2"/>
-          <geom class="thigh3"/>
+          <geom class="thigh2" name="FR_thigh2"/>
+          <geom class="thigh3" name="FR_thigh3"/>
           <body name="FR_calf" pos="0 0 -0.213">
             <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
               mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
             <joint axis="0 -1 0" range="0.888 2.818" name="FR_calf_joint"/>
             <geom class="visual" mesh="calf"/>
             <geom class="calf1" name="FR_calf1"/>
-            <geom class="calf2"/>
+            <geom class="calf2" name="FR_calf2"/>
             <geom name="FR_foot" class="foot"/>
           </body>
         </body>
@@ -127,15 +130,15 @@
           <joint axis="0 1 0" range="-0.686 4.501" name="FL_thigh_joint"/>
           <geom class="visual" mesh="thigh"/>
           <geom class="thigh1" name="FL_thigh1"/>
-          <geom class="thigh2"/>
-          <geom class="thigh3"/>
+          <geom class="thigh2" name="FL_thigh2"/>
+          <geom class="thigh3" name="FL_thigh3"/>
           <body name="FL_calf" pos="0 0 -0.213">
             <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
               mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
             <joint axis="0 1 0" range="-2.818 -0.888" name="FL_calf_joint"/>
             <geom class="visual" mesh="calf"/>
             <geom class="calf1" name="FL_calf1"/>
-            <geom class="calf2"/>
+            <geom class="calf2" name="FL_calf2"/>
             <geom name="FL_foot" class="foot"/>
           </body>
         </body>
@@ -154,15 +157,15 @@
           <joint axis="0 -1 0" range="-4.501 0.686" name="RR_thigh_joint"/>
           <geom class="visual" mesh="thigh_mirror"/>
           <geom class="thigh1" name="RR_thigh1"/>
-          <geom class="thigh2"/>
-          <geom class="thigh3"/>
+          <geom class="thigh2" name="RR_thigh2"/>
+          <geom class="thigh3" name="RR_thigh3"/>
           <body name="RR_calf" pos="0 0 -0.213">
             <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
               mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
             <joint axis="0 -1 0" range="0.888 2.818" name="RR_calf_joint"/>
             <geom class="visual" mesh="calf"/>
             <geom class="calf1" name="RR_calf1"/>
-            <geom class="calf2"/>
+            <geom class="calf2" name="RR_calf2"/>
             <geom name="RR_foot" class="foot"/>
           </body>
         </body>
@@ -181,15 +184,15 @@
           <joint axis="0 1 0" range="-0.686 4.501" name="RL_thigh_joint"/>
           <geom class="visual" mesh="thigh"/>
           <geom class="thigh1" name="RL_thigh1"/>
-          <geom class="thigh2"/>
-          <geom class="thigh3"/>
+          <geom class="thigh2" name="RL_thigh2"/>
+          <geom class="thigh3" name="RL_thigh3"/>
           <body name="RL_calf" pos="0 0 -0.213">
             <inertial pos="0.00429862 0.000976676 -0.146197" quat="0.691246 0.00357467 0.00511118 0.722592"
               mass="0.195862" diaginertia="0.00149767 0.00148468 3.58427e-05"/>
             <joint axis="0 1 0" range="-2.818 -0.888" name="RL_calf_joint"/>
             <geom class="visual" mesh="calf"/>
             <geom class="calf1" name="RL_calf1"/>
-            <geom class="calf2"/>
+            <geom class="calf2" name="RL_calf2"/>
             <geom name="RL_foot" class="foot"/>
           </body>
         </body>

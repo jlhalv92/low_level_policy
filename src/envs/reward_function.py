@@ -6,25 +6,25 @@ class Reward:
                  curriculum_steps=0,
                  tracking_xy_velocity_command_coeff= 1,
                  tracking_yaw_velocity_command_coeff= 0.5,
-                 pose_coeff= 0, #0.
-                 z_velocity_coeff= -2,
+                 z_velocity_coeff= -2, #2, 0.5
                  pitch_roll_vel_coeff= -0.05,
-                 pitch_roll_pos_coeff= -5, # 0.2
+                 pitch_roll_pos_coeff= -5, # 0.2, 5
                  joint_position_limit_coeff= -10.0, #10
-                 joint_torque_coeff= -0.0001,
+                 joint_torque_coeff= -0.0002, #0.00001 0.0001
                  joint_acceleration_coeff= -2.5e-7,
-                 joint_velocity_coeff = -0, # 0
-                 action_rate_coeff= -0.02, # 0.02
+                 joint_velocity_coeff = 0, # 0
+                 action_rate_coeff= -0.02, # 0.02 0.01
                  collision_coeff= -1,
                  base_height_coeff= -30, #30
-                 air_time_coeff= 1, # 0.1
-                 stand_still_coeff= -0.5,
+                 air_time_coeff= 0.8, # 0.1 0.5
                  xy_tracking_temperature= 0.25,
                  yaw_tracking_temperature= 0.25,
                  soft_joint_position_limit= 0.9,
-                 max_airtime =0.5):
+                 max_airtime =0.5,
+                 stand_still_coeff = -0.5):
 
         self.env = env
+        self.stand_still_coeff=stand_still_coeff
         self.tracking_xy_vel_reward = 0
         self.tracking_yaw_vel_reward = 0
         # Tracking rewards
@@ -40,7 +40,6 @@ class Reward:
         self.z_velocity_coeff = z_velocity_coeff * self.env.dt
         self.pitch_roll_vel_coeff = pitch_roll_vel_coeff * self.env.dt
         self.pitch_roll_pos_coeff = pitch_roll_pos_coeff * self.env.dt
-        self.pose_coeff = pose_coeff * self.env.dt
         self.joint_position_limit_coeff = joint_position_limit_coeff * self.env.dt
         self.soft_joint_position_limit = soft_joint_position_limit
         self.joint_torque_coeff = joint_torque_coeff * self.env.dt
@@ -49,7 +48,6 @@ class Reward:
         self.base_height_coeff = base_height_coeff * self.env.dt
         self.nominal_trunk_z = self.env.nominal_height
         self.air_time_coeff = air_time_coeff * self.env.dt
-        self.stand_still_coeff = stand_still_coeff * self.env.dt
         self._prev_joint_vel = None
         self.max_airtime = max_airtime
 
@@ -73,13 +71,6 @@ class Reward:
         cmd_norm = np.linalg.norm(commands)
 
 
-        # total_timesteps = self.env.total_timesteps * self.env.nr_envs_per_type
-        # #
-        # curriculum_coeff = min(total_timesteps / self.curriculum_steps, 1.0)
-        # if self.env.eval:
-        #     curriculum_coeff = 1.0
-
-        curriculum_coeff = 1
         # Tracking velocity command reward
         current_global_linear_velocity = self.env.data.qvel[:3]
         current_local_linear_velocity = self.env.orientation_quat_inv.apply(current_global_linear_velocity)
@@ -99,32 +90,29 @@ class Reward:
 
         self.tracking_yaw_vel_reward = yaw_vel_reward_tracking.copy()
 
-        # default Pose
-        qpos = np.array(self.env.data.qpos[7:]).copy()
-        default_pose = self.env.nominal_joint_positions
-        weight = np.array([1.0, 1.0, 0.1] * 4)
-        pos_reward = curriculum_coeff*self.pose_coeff*np.exp(-np.sum(np.square(qpos - default_pose) * weight))
+        # # default Pose
+        # qpos = np.array(self.env.data.qpos[7:]).copy()
+        # default_pose = self.env.nominal_joint_positions
+        # weight = np.array([1.0, 1.0, 0.1] * 4)
+        # pos_reward = curriculum_coeff*self.pose_coeff*np.exp(-np.sum(np.square(qpos - default_pose) * weight))
 
         # Air time reward
-
-        air_time_reward = np.sum((air_time - self.max_airtime) * first_contact)
         commands = np.array([self.env.goal_x_velocity,self.env.goal_y_velocity,self.env.goal_yaw_velocity])
-        cmd_norm = np.linalg.norm(commands[:2])
-        air_time_reward *= (cmd_norm > 0.1)
-        air_time_reward = curriculum_coeff * self.air_time_coeff * air_time_reward
-
+        cmd_norm = np.linalg.norm(commands)
+        air_time_reward = np.sum((air_time - self.max_airtime) * first_contact)
+        air_time_reward *= (cmd_norm > 0.01)
+        air_time_reward =  self.air_time_coeff * air_time_reward
         # Linear velocity reward
         z_velocity_squared = current_local_linear_velocity[2] ** 2
-        linear_velocity_penalty = curriculum_coeff * self.z_velocity_coeff * z_velocity_squared
+        linear_velocity_penalty =  self.z_velocity_coeff * z_velocity_squared
 
         # Angular velocity reward
         angular_velocity_norm = np.sum(np.square(current_local_angular_velocity[:2]))
-        angular_velocity_penalty = curriculum_coeff * self.pitch_roll_vel_coeff * angular_velocity_norm
+        angular_velocity_penalty =  self.pitch_roll_vel_coeff * angular_velocity_norm
 
         # Angular position reward
         pitch_roll_position_norm = np.sum(np.square(self.env.orientation_euler[:2]))
-
-        angular_position_penalty = curriculum_coeff * self.pitch_roll_pos_coeff * pitch_roll_position_norm
+        angular_position_penalty =  self.pitch_roll_pos_coeff * pitch_roll_position_norm
 
         # print("---------------------------------------------------------------------")
         # print("angular_position_penalty: ", pitch_roll_position_norm, "angular_velocity_penalty: ",angular_velocity_norm)
@@ -134,69 +122,75 @@ class Reward:
         joint_positions = np.array(self.env.data.qpos[7:])
         lower_limit_penalty = -np.minimum(joint_positions - self.joint_limits[:, 0], 0.0).sum()
         upper_limit_penalty = np.maximum(joint_positions - self.joint_limits[:, 1], 0.0).sum()
-        joint_position_limit_penalty = curriculum_coeff * self.joint_position_limit_coeff * (lower_limit_penalty + upper_limit_penalty)
+        joint_position_limit_penalty =   self.joint_position_limit_coeff * (lower_limit_penalty + upper_limit_penalty)
 
         # Joint   # joint vel limit
-        joint_velocities = np.array(self.env.data.qvel[6:])
-        lower_limit = -0.9*self.env.max_joint_velocities.copy()
-        upper_limit = 0.9*self.env.max_joint_velocities.copy()
+        # joint_velocities = np.array(self.env.data.qvel[6:])
+        # lower_limit = -0.9*self.env.max_joint_velocities.copy()
+        # upper_limit = 0.9*self.env.max_joint_velocities.copy()
 
-        lower_limit_penalty = -np.minimum(joint_velocities - lower_limit, 0.0).sum()
-        upper_limit_penalty = np.maximum(joint_velocities - upper_limit, 0.0).sum()
-        joint_vel_limit_penalty = curriculum_coeff * self.joint_position_limit_coeff * (
-                    lower_limit_penalty + upper_limit_penalty)
+        # lower_limit_penalty = -np.minimum(joint_velocities - lower_limit, 0.0).sum()
+        # upper_limit_penalty = np.maximum(joint_velocities - upper_limit, 0.0).sum()
+        # joint_vel_limit_penalty =   self.joint_position_limit_coeff * (
+        #             lower_limit_penalty + upper_limit_penalty)
 
 
-        # Joint torques limit
-        joint_torques = self.env.data.qfrc_actuator[6:].copy()
-        lower_limit = -0.85*self.env.default_torque_limit.copy()
-        upper_limit = 0.85*self.env.default_torque_limit.copy()
+        # # Joint torques limit
+        # joint_torques = self.env.data.qfrc_actuator[6:].copy()
+        # lower_limit = -0.85*self.env.default_torque_limit.copy()
+        # upper_limit = 0.85*self.env.default_torque_limit.copy()
 
-        lower_limit_penalty = -np.minimum(joint_torques - lower_limit, 0.0).sum()
-        upper_limit_penalty = np.maximum(joint_torques - upper_limit, 0.0).sum()
-        joint_torques_limits = curriculum_coeff * self.joint_position_limit_coeff * (
-                    lower_limit_penalty + upper_limit_penalty)
+        # lower_limit_penalty = -np.minimum(joint_torques - lower_limit, 0.0).sum()
+        # upper_limit_penalty = np.maximum(joint_torques - upper_limit, 0.0).sum()
+        # joint_torques_limits =   self.joint_position_limit_coeff * (
+        #             lower_limit_penalty + upper_limit_penalty)
 
 
 
         velocity_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env.data.qvel[6:])))
-        q_velocity_penalty = curriculum_coeff * self.joint_velocity_coeff * velocity_norm
+        q_velocity_penalty =   self.joint_velocity_coeff * velocity_norm
 
         # Joint acceleration reward
+
         acceleration_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env.data.qvel[6:]) / self.env.dt))
-        q_acceleration_penalty = curriculum_coeff * self.joint_acceleration_coeff * acceleration_norm
+        q_acceleration_penalty =   self.joint_acceleration_coeff * acceleration_norm
 
 
         # Joint torque reward
         torque_norm = np.sum(np.square(np.array(self.env.data.qfrc_actuator[6:])))
-        torque_penalty = curriculum_coeff * self.joint_torque_coeff * torque_norm
+
+        torque_penalty =  self.joint_torque_coeff * torque_norm
 
         # Action rate reward
         action_rate_norm = np.sum(np.square(self.env.current_action - self.env.last_action))
-        action_rate_penalty = curriculum_coeff * self.action_rate_coeff * action_rate_norm
+        action_rate_penalty =   self.action_rate_coeff * action_rate_norm
 
         # Collision reward
         collisions = self.env.check_any_collision_for_all([
-            "FR_calf1", "FL_calf1", "RR_calf1", "RL_calf1"
+            "FR_calf", "FL_calf", "RR_calf", "RL_calf"
         ])
-        trunk_collision = 1 if self.env.check_any_collision(["trunk_1", "trunk_2", "trunk_3"]) else 0
-        nr_collisions = sum(collisions.values()) + trunk_collision
-        collision_penalty = curriculum_coeff * self.collision_coeff * nr_collisions
+        trunk_collision = 1 if self.env.check_any_collision(["trunk"]) else 0
+        thigh_collision = 1 if self.env.check_any_collision(["FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh"]) else 0
+        nr_collisions = sum(collisions.values()) + trunk_collision + thigh_collision
+        collision_penalty =   self.collision_coeff * nr_collisions
 
         # Walking height
         trunk_z = self.env.data.qpos[2]
-
         height_difference_squared = (trunk_z - self.nominal_trunk_z) ** 2
-        base_height_penalty = curriculum_coeff * self.base_height_coeff * height_difference_squared
+        base_height_penalty = self.base_height_coeff * height_difference_squared
 
 
         # Stand still
         commands = np.array([self.env.goal_x_velocity,self.env.goal_y_velocity,self.env.goal_yaw_velocity])
+        contacts = np.array(
+            [self.env.check_collision("floor", foot_name) for foot_name in self.env.foot_names])
+        contact_sum = np.sum(contacts)
         cmd_norm = np.linalg.norm(commands)
         qpos = np.array(self.env.data.qpos[7:]).copy()
-        default_pose = self.env.nominal_joint_positions
-        stand_still =  np.sum(np.abs(qpos - default_pose)) * (cmd_norm < 0.2)
-        stand_still_penalty = curriculum_coeff*self.stand_still_coeff *stand_still
+        default_pose = self.env.nominal_joint_positions.copy()
+        stand_still =  np.sum(np.abs(qpos - default_pose)) * (cmd_norm < 0.1)
+        stand_still_penalty = self.stand_still_coeff*0.02 *stand_still
+
 
         # # trotting low speeds
         # contacts = np.array(
@@ -210,7 +204,6 @@ class Reward:
         # Total reward
         tracking_reward = (tracking_xy_velocity_command_reward +
                            tracking_yaw_velocity_command_reward +
-                           pos_reward +
                            air_time_reward)
 
         reward_penalty = (linear_velocity_penalty +
@@ -222,7 +215,9 @@ class Reward:
                           torque_penalty +
                           action_rate_penalty +
                          collision_penalty +
-                          base_height_penalty  + stand_still_penalty)
+                          base_height_penalty
+                          + stand_still_penalty)
+
         # print(f"linear_velocity_penalty: {linear_velocity_penalty/(self.z_velocity_coeff)} \n",
         #        f"angular_velocity_penalty: {angular_velocity_penalty/(self.pitch_roll_vel_coeff )}  \n",
         #         f"angular_position_penalty: {angular_position_penalty/(self.pitch_roll_pos_coeff)}  \n",
@@ -232,14 +227,24 @@ class Reward:
         #                   f" torque_penalty: {torque_penalty/self.joint_torque_coeff} \n" ,
         #                 f" action_rate_penalty: {action_rate_penalty / self.action_rate_coeff} \n",
         #       f" collision_penalty: {collision_penalty / self.collision_coeff} \n",
-        #       f" base_height_penalty: {base_height_penalty / self.base_height_coeff} \n",
-        #       f" joint_vel_limit_penalty: {joint_vel_limit_penalty / self.joint_position_limit_coeff} \n",
-        #       f" joint_torques_limits: {joint_torques_limits / self.joint_position_limit_coeff} \n",
-        #       f" stand_still_penalty: {stand_still_penalty} \n")
+        #       f" base_height_penalty: {base_height_penalty / self.base_height_coeff} \n")
 
 
 
         reward = tracking_reward + reward_penalty
+        # print("-------------------------------------------------------------------------")
+        # print("linear_velocity_penalty: ", linear_velocity_penalty," \n",
+        #                   "linear_velocity_penalty: ",angular_velocity_penalty," \n",
+        #                   "angular_position_penalty: ",angular_position_penalty," \n",
+        #                  "joint_position_limit_penalty: ", joint_position_limit_penalty," \n",
+        #                   "q_acceleration_penalty: ", q_acceleration_penalty," \n",
+        #                   "q_velocity_penalty: ", q_velocity_penalty," \n",
+        #                   "torque_penalty: ", torque_penalty," \n",
+        #                   "action_rate_penalty: ", action_rate_penalty," \n",
+        #                  "collision_penalty: ", collision_penalty," \n",
+        #                   "base_height_penalty: ", base_height_penalty," \n",
+        #                   "stand_still_penalty: ", stand_still_penalty)
+
         reward = max(reward, 0.0)
 
         # More logging metrics

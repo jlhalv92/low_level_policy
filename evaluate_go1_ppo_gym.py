@@ -17,34 +17,148 @@ from mushroom_rl.utils.dataset import compute_J
 
 from tqdm import trange
 
+# class PolicyNetwork(nn.Module):
+#     def __init__(self, input_shape, output_shape, n_features, **kwargs):
+#         super().__init__()
+#
+#         n_input = input_shape[-1]
+#         n_output = output_shape[0]
+#
+#         self._h1 = nn.Linear(n_input, 2*n_features)
+#         self._h2 = nn.Linear(2*n_features, n_features)
+#         self._h3 = nn.Linear(n_features, int(n_features/2))
+#         self._h4 = nn.Linear(int(n_features/2), n_output)
+#
+#         nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
+#         nn.init.constant_(self._h1.bias, 0.0)
+#         nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
+#         nn.init.constant_(self._h2.bias, 0.0)
+#         nn.init.orthogonal_(self._h3.weight, np.sqrt(2))
+#         nn.init.constant_(self._h3.bias, 0.0)
+#         nn.init.orthogonal_(self._h4.weight, 0.01)
+#         nn.init.constant_(self._h4.bias, 0.0)
+#
+#     def forward(self, state, **kwargs):
+#         features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
+#         features2 = F.elu(self._h2(features1))
+#         features3 = F.elu(self._h3(features2))
+#         a = self._h4(features3)
+#
+#         return a
+# class PolicyNetworkStudent(nn.Module):
+#     def __init__(self, input_shape, output_shape, n_features,  **kwargs):
+#         super().__init__()
+#
+#         n_input = input_shape[-1]
+#         n_output = output_shape[0]
+#
+#         self._h1 = nn.Linear(n_input, 2 * n_features)
+#
+#         self._h2 = nn.Linear(2 * n_features, n_features)
+#
+#         self._h3 = nn.Linear(n_features, int(n_features / 2))
+#
+#         self._h4 = nn.Linear(int(n_features / 2), n_output)
+#
+#         nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
+#         nn.init.constant_(self._h1.bias, 0.0)
+#         nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
+#         nn.init.constant_(self._h2.bias, 0.0)
+#         nn.init.orthogonal_(self._h3.weight, np.sqrt(2))
+#         nn.init.constant_(self._h3.bias, 0.0)
+#         nn.init.orthogonal_(self._h4.weight, 0.01)
+#         nn.init.constant_(self._h4.bias, 0.0)
+#
+#     def forward(self, state):
+#         features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
+#
+#         features2 = F.elu(self._h2(features1))
+#
+#         features3 = F.elu(self._h3(features2))
+#
+#         a = self._h4(features3)
+#         return a
+#
+#
+# class ValueNetwork(nn.Module):
+#     def __init__(self, input_shape, output_shape, n_features, **kwargs):
+#         super().__init__()
+#
+#         n_input = input_shape[-1]
+#         n_output = output_shape[0]
+#
+#         self._h1 = nn.Linear(n_input, 2*n_features)
+#         self._h2 = nn.Linear(2*n_features, n_features)
+#         self._h3 = nn.Linear(n_features, int(n_features/2))
+#         self._h4 = nn.Linear(int(n_features/2), n_output)
+#
+#         nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
+#         nn.init.constant_(self._h1.bias, 0.0)
+#         nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
+#         nn.init.constant_(self._h2.bias, 0.0)
+#         nn.init.orthogonal_(self._h3.weight, np.sqrt(2))
+#         nn.init.constant_(self._h3.bias, 0.0)
+#         nn.init.orthogonal_(self._h4.weight, 0.01)
+#         nn.init.constant_(self._h4.bias, 0.0)
+#
+#     def forward(self, state, **kwargs):
+#         features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
+#         features2 = F.elu(self._h2(features1))
+#         features3 = F.elu(self._h3(features2))
+#         V = self._h4(features3)
+#
+#         return V
+
+class PolicyNetworkStudent(nn.Module):
+    def __init__(self,  input_shape, output_shape, n_features, **kwargs):
+        super().__init__()
+        n_input = input_shape[-1]
+        n_output = output_shape[0]
+        self.fc1 = nn.Linear(n_input, 2*n_features)
+        self.ln1 = nn.LayerNorm(2*n_features)
+
+        self.fc2 = nn.Linear(2*n_features, n_features)
+        self.ln2 = nn.LayerNorm(n_features)
+
+        self.fc3 = nn.Linear(n_features, n_features//2)
+        self.ln3 = nn.LayerNorm(n_features//2)
+
+        self.fc4 = nn.Linear(n_features//2, n_output)
+
+    def forward(self, x):
+        x = torch.squeeze(x, 1).float()
+
+        x = F.silu(self.ln1(self.fc1(x)))
+        x = F.silu(self.ln2(self.fc2(x)))
+        x = F.silu(self.ln3(self.fc3(x)))
+
+        return self.fc4(x)
+
 class PolicyNetwork(nn.Module):
     def __init__(self, input_shape, output_shape, n_features, **kwargs):
         super().__init__()
-
         n_input = input_shape[-1]
         n_output = output_shape[0]
 
-        self._h1 = nn.Linear(n_input, 2*n_features)
-        self._h2 = nn.Linear(2*n_features, n_features)
-        self._h3 = nn.Linear(n_features, int(n_features/2))
-        self._h4 = nn.Linear(int(n_features/2), n_output)
+        self.fc1 = nn.Linear(n_input, 2*n_features)
+        self.ln1 = nn.LayerNorm(2*n_features)
 
-        nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
-        nn.init.constant_(self._h1.bias, 0.0)
-        nn.init.orthogonal_(self._h2.weight, np.sqrt(2))
-        nn.init.constant_(self._h2.bias, 0.0)
-        nn.init.orthogonal_(self._h3.weight, np.sqrt(2))
-        nn.init.constant_(self._h3.bias, 0.0)
-        nn.init.orthogonal_(self._h4.weight, 0.01)
-        nn.init.constant_(self._h4.bias, 0.0)
+        self.fc2 = nn.Linear(2*n_features, n_features)
+        self.ln2 = nn.LayerNorm(n_features)
 
-    def forward(self, state, **kwargs):
-        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
-        features2 = F.elu(self._h2(features1))
-        features3 = F.elu(self._h3(features2))
-        a = self._h4(features3)
+        self.fc3 = nn.Linear(n_features, n_features//2)
+        self.ln3 = nn.LayerNorm(n_features//2)
 
-        return a
+        self.fc4 = nn.Linear(n_features//2, n_output)
+
+    def forward(self, x):
+        x = torch.squeeze(x, 1).float()
+
+        x = F.silu(self.ln1(self.fc1(x)))
+        x = F.silu(self.ln2(self.fc2(x)))
+        x = F.silu(self.ln3(self.fc3(x)))
+
+        return self.fc4(x)
 
 
 class ValueNetwork(nn.Module):
@@ -55,9 +169,15 @@ class ValueNetwork(nn.Module):
         n_output = output_shape[0]
 
         self._h1 = nn.Linear(n_input, 2*n_features)
+        self.ln1 = nn.LayerNorm(2*n_features)
+
         self._h2 = nn.Linear(2*n_features, n_features)
-        self._h3 = nn.Linear(n_features, int(n_features/2))
-        self._h4 = nn.Linear(int(n_features/2), n_output)
+        self.ln2 = nn.LayerNorm(n_features)
+
+        self._h3 = nn.Linear(n_features, n_features//2)
+        self.ln3 = nn.LayerNorm(n_features//2)
+
+        self._h4 = nn.Linear(n_features//2, n_output)
 
         nn.init.orthogonal_(self._h1.weight, np.sqrt(2))
         nn.init.constant_(self._h1.bias, 0.0)
@@ -69,13 +189,12 @@ class ValueNetwork(nn.Module):
         nn.init.constant_(self._h4.bias, 0.0)
 
     def forward(self, state, **kwargs):
-        features1 = F.elu(self._h1(torch.squeeze(state, 1).float()))
-        features2 = F.elu(self._h2(features1))
-        features3 = F.elu(self._h3(features2))
+        features1 = F.silu(self.ln1(self._h1(torch.squeeze(state, 1).float())))
+        features2 = F.silu(self.ln2(self._h2(features1)))
+        features3 = F.silu(self.ln3(self._h3(features2)))
         V = self._h4(features3)
 
         return V
-
 
 def calculate_success_rate(info, last):
     info_array = np.array([d["success"] for d in info])
@@ -85,7 +204,7 @@ def calculate_success_rate(info, last):
     return success_rate
 
 
-def experiment(alg, n_episodes_test=5, joystick=False):
+def experiment(alg, n_episodes_test=5, joystick=False, render=False):
 
     np.random.seed()
 
@@ -99,7 +218,9 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 
 
-    env_args = dict(vx_limit=3, vy_limit=1, wz_limit=2.5)
+    env_args = dict(vx_limit=3, vy_limit=0.5, wz_limit=3.5)
+    # env_args = dict(vx_limit=3, vy_limit=0.8, wz_limit=5)
+
     mdp_eval = GymnasiumGO1(gamma=gamma,
                             n_envs=1,
                             joystick=joystick,
@@ -124,7 +245,12 @@ def experiment(alg, n_episodes_test=5, joystick=False):
     path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_last"
     path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE/epoch_last"
     path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_STABLE/epoch_60"
-    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_400_STABLE_RR/epoch_150"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_T3_R/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_R_LOCOMOTION_S_RT/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_RAPID_CURRICULUM/epoch_320"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_RAPID_CURRICULUM_S/epoch_last"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_ST/epoch_290"
+    path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_C_TS/epoch_last"
 
 
     # path = "../checkpoint/GO1/PPO/nominal_LOCOMOTION_400_VC_R/epoch_last"
@@ -141,10 +267,10 @@ def experiment(alg, n_episodes_test=5, joystick=False):
     agent = Agent.load(path)
     agent.set_logger(logger)
 
-    core_eval = Core(agent, mdp_eval, student=False)
+    core_eval = Core(agent, mdp_eval)
 
 
-    dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=True)
+    dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=render, student=True)
     from mushroom_rl.utils.dataset import compute_J, parse_dataset
     import matplotlib.pyplot as plt
     s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
@@ -153,7 +279,7 @@ def experiment(alg, n_episodes_test=5, joystick=False):
     vy = velocities[:, 1]
     wz = velocities[:, 2]
 
-    commands = s[:, [50, 51, 52]]
+    commands = s[:, [45, 46, 47]]
     cvx = commands[:, 0]
     cvy = commands[:, 1]
     cwz = commands[:, 2]
@@ -204,6 +330,6 @@ def experiment(alg, n_episodes_test=5, joystick=False):
 
 if __name__ == '__main__':
     experiment(alg=PPO,
-                   n_episodes_test=5, joystick=True)
+                   n_episodes_test=5, joystick=True, render=True)
 
 

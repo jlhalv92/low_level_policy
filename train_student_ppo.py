@@ -173,7 +173,7 @@ def experiment(alg, n_epochs,
     )
 
     actor = PolicyNetworkStudent
-    env_args = dict(vx_limit=2, wz_limit=2, vy_limit=1)
+    env_args = dict(vx_limit=3, wz_limit=5, vy_limit=0.5)
 
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=1, domain_randomization=True,  **env_args)
     mdp.env.eval =True
@@ -201,7 +201,7 @@ def experiment(alg, n_epochs,
 
     core = Core(agent, mdp, expert_agent=teacher)
 
-    dataset = core.evaluate(n_episodes=5, render=True)
+    dataset = core.evaluate(n_episodes=25, render=False)
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -215,8 +215,8 @@ def experiment(alg, n_epochs,
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit)
         render = False
         if it % 5==0:
-            render = True
-        dataset = core.evaluate(n_episodes=10, render=render)
+            render = False
+        dataset = core.evaluate(n_episodes=25, render=render)
         J = np.mean(compute_J(dataset, mdp.info.gamma))
         R = np.mean(compute_J(dataset))
         E = agent.policy.entropy()
@@ -240,16 +240,20 @@ if __name__ == '__main__':
     n_epochs = 40 # 150
 
     # teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
-    teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+    # teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_VC_AGILE/epoch_last"
+    teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_100_T3_R/epoch_last"
+    teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_RAPID_CURRICULUM_S/epoch_last"
+
+
 
 
 
     teacher = Agent.load(teacher_path)
     experiment(alg=DaggerSP,
                n_epochs=n_epochs,
-               n_steps=20_000,
-               n_steps_per_fit=20_000,
-               name_exp="RAPID_LOCOMOTION_",
+               n_steps=100_000,
+               n_steps_per_fit=100_000,
+               name_exp="RAPID_LOCOMOTION_STUDENT",
                teacher=teacher)
 
 

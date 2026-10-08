@@ -10,6 +10,19 @@ from mushroom_rl.utils.viewer import ImageViewer
 # gym.logger.set_level(40)
 
 
+def make_env(seed, env_id, env_args, domain_randomization, episode_length_in_seconds):
+    def thunk():
+        env =UnitreeGo1(seed,
+                        env_id=env_id,
+                   render=False,
+                   domain_randomization=domain_randomization,
+                   episode_length_in_seconds=episode_length_in_seconds,
+                   **env_args)
+        return env
+    return thunk
+
+
+
 class GymnasiumGO1(Environment):
     """
     Interface for Gymnasium environments. It makes it possible to use every
@@ -54,13 +67,19 @@ class GymnasiumGO1(Environment):
         episode_length_in_seconds = horizon*0.02
         if n_envs > 1:
             vector_environment_class = gym.vector.AsyncVectorEnv
-            env = vector_environment_class([lambda: UnitreeGo1(42, render=False,
-                                                               domain_randomization=domain_randomization,
-                                                               episode_length_in_seconds=episode_length_in_seconds,
-                                                               **env_args)]*n_envs)
+            print("Parallel envs", n_envs)
+
+            env = vector_environment_class(
+                [make_env(42,
+                          env_id,
+                          env_args,
+                          domain_randomization,
+                          episode_length_in_seconds) for env_id in range(n_envs)])
+
 
         else:
             env = UnitreeGo1(42,
+
                              render=False,
                              joystick=joystick,
                              domain_randomization=domain_randomization,

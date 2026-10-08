@@ -123,7 +123,7 @@ class PPO(Agent):
 
         # Print fit information
         self._log_info(dataset, x, v_target, old_pol_dist)
-        print()
+
         new_pol_dist = self.policy.distribution(x)
         kl_mean = torch.mean(torch.distributions.kl.kl_divergence(
             new_pol_dist, old_pol_dist))
@@ -154,6 +154,7 @@ class PPO(Agent):
                                              clipped_ratio * adv_i))
                 loss -= self._ent_coeff()*self.policy.entropy_t(obs_i)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy._mu.model.network.parameters(), 1.)
                 self._optimizer.step()
 
     def _log_info(self, dataset, x, v_target, old_pol_dist):

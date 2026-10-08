@@ -67,25 +67,25 @@ class Curriculum:
         return np.stack([self.sample_uniform_from_cell(v_range) for v_range in cgf_centroid]), inds
 
 
-class SumCurriculum(Curriculum):
-    def __init__(self, seed, **kwargs):
-        super().__init__(seed, **kwargs)
-
-        self.success = np.zeros(len(self))
-        self.trials = np.zeros(len(self))
-
-    def update(self, bin_inds, l1_error, threshold):
-        is_success = l1_error < threshold
-        self.success[bin_inds[is_success]] += 1
-        self.trials[bin_inds] += 1
-
-    def success_rates(self, *keys):
-        s_rate = self.success / (self.trials + 1e-6)
-        s_rate = s_rate.reshape(list(self.ls.values()))
-        marginals = tuple(i for i, key in enumerate(self.keys) if key not in keys)
-        if marginals:
-            return s_rate.mean(axis=marginals)
-        return s_rate
+# class SumCurriculum(Curriculum):
+#     def __init__(self, seed, **kwargs):
+#         super().__init__(seed, **kwargs)
+#
+#         self.success = np.zeros(len(self))
+#         self.trials = np.zeros(len(self))
+#
+#     def update(self, bin_inds, l1_error, threshold):
+#         is_success = l1_error < threshold
+#         self.success[bin_inds[is_success]] += 1
+#         self.trials[bin_inds] += 1
+#
+#     def success_rates(self, *keys):
+#         s_rate = self.success / (self.trials + 1e-6)
+#         s_rate = s_rate.reshape(list(self.ls.values()))
+#         marginals = tuple(i for i, key in enumerate(self.keys) if key not in keys)
+#         if marginals:
+#             return s_rate.mean(axis=marginals)
+#         return s_rate
 
 
 class RewardThresholdCurriculum(Curriculum):
@@ -94,6 +94,7 @@ class RewardThresholdCurriculum(Curriculum):
 
         self.episode_reward_lin = np.zeros(len(self))
         self.episode_reward_ang = np.zeros(len(self))
+
         self.episode_lin_vel_raw = np.zeros(len(self))
         self.episode_ang_vel_raw = np.zeros(len(self))
         self.episode_duration = np.zeros(len(self))
@@ -122,8 +123,11 @@ class RewardThresholdCurriculum(Curriculum):
             adjacent_inds = np.array(adjacent.nonzero()[0])
             self.weights[adjacent_inds] = np.clip(self.weights[adjacent_inds] + 0.2, 0, 1)
 
-    def log(self, bin_inds, lin_vel_raw=None, ang_vel_raw=None, episode_duration=None):
-        self.episode_lin_vel_raw[bin_inds] = lin_vel_raw.cpu().numpy()
-        self.episode_ang_vel_raw[bin_inds] = ang_vel_raw.cpu().numpy()
-        self.episode_duration[bin_inds] = episode_duration.cpu().numpy()
+    def log_weights(self):
+        return self.weights
+
+    # def log(self, bin_inds, lin_vel_raw=None, ang_vel_raw=None, episode_duration=None):
+    #     self.episode_lin_vel_raw[bin_inds] = lin_vel_raw.cpu().numpy()
+    #     self.episode_ang_vel_raw[bin_inds] = ang_vel_raw.cpu().numpy()
+    #     self.episode_duration[bin_inds] = episode_duration.cpu().numpy()
 

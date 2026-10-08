@@ -180,7 +180,7 @@
             <joint axis="0 -1 0" range="0.888 2.818" name="FR_calf_joint"/>
             <geom class="visual" mesh="calf"/>
             <geom class="calf1" name="FR_calf1"/>
-            <geom class="calf2"/>
+            <geom class="calf2" rgba="1 0 0 1"/>
             <geom name="FR_foot" class="foot"/>
           </body>
         </body>

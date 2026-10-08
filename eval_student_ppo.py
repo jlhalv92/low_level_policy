@@ -163,9 +163,9 @@ def experiment(alg,
     gamma = 0.99
     n_features = 256
 
-    env_args = dict(vx_limit=2, wz_limit=2, vy_limit=1)
+    env_args = dict(vx_limit=3, wz_limit=4, vy_limit=0.5)
 
-    mdp = GymnasiumGO1(gamma=gamma,  n_envs=1, joystick=True, domain_randomization=True,  **env_args)
+    mdp = GymnasiumGO1(gamma=gamma,  n_envs=1, joystick=True, domain_randomization=False,  **env_args)
     mdp.env.eval =True
 
 
@@ -176,6 +176,9 @@ def experiment(alg,
     core = Core(agent, mdp, expert_agent=None)
 
     dataset = core.evaluate(n_episodes=5, render=True)
+
+
+
 
     J = np.mean(compute_J(dataset, mdp.info.gamma))
     R = np.mean(compute_J(dataset))
@@ -191,8 +194,9 @@ if __name__ == '__main__':
     n_epochs = 40 # 150
 
     # teacher_path = "checkpoint/GO1/PPO/nominal_LOCOMOTION_200_VC_NR/epoch_100"
+    # student_path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_/epoch_last"
     student_path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_/epoch_last"
-
+    student_path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT/epoch_last"
 
 
     low_level_control = Agent.load(student_path)

@@ -12,7 +12,7 @@ class Core(object):
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
                  preprocessors=None, prior_pretrain_only=False, pretrain_sampling_batch_size=20,
-                 use_data_prior=False, prior_eps=0.0, record_dictionary=None, student=False):
+                 use_data_prior=False, prior_eps=0.0, record_dictionary=None, student=False, asymetric=False):
         """
         Constructor.
 
@@ -29,6 +29,7 @@ class Core(object):
             use_data_prior (bool): tells us whether to use a prior from mdp for biasing data collection
 
         """
+        self.asymetric = asymetric
         self.agent = agent
         self.mdp = mdp
         self.student = student
@@ -115,7 +116,7 @@ class Core(object):
         self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders, learning=True) # Add bool to signify this is a learning run
 
     def evaluate(self, initial_states=None, n_steps=None, n_episodes=None,
-                 render=False, quiet=False, get_renders=False, initial_conditions=None, record=False):
+                 render=False, quiet=False, get_renders=False, initial_conditions=None, record=False, student=False):
         """
         This function moves the agent in the environment using its policy.
         The agent is moved for a provided number of steps, episodes, or from
@@ -133,6 +134,7 @@ class Core(object):
         """
         fit_condition = lambda: False
         self.record =record
+        self.student=student
         return self._run(n_steps, n_episodes, fit_condition, render, quiet, get_renders,
                          initial_states, initial_conditions)
 
@@ -232,17 +234,31 @@ class Core(object):
             of the reached state and the last step flag.
 
         """
-        if self.student:
+        if self.student or self.asymetric:
             self._state = self.mdp.env.get_robot_observation()
 
         if learning:
             action = self.agent.draw_noisy_action(self._state)
             next_state, reward, absorbing, truncated, info = self.mdp.step(action)
+
         else: # Default
+            if self.student:
 
-            action = self.agent.draw_action(self._state)
+                action = self.agent.student_policy.draw_action(self._state)
+                _, reward, absorbing, truncated, info = self.mdp.step(action)
+                next_state = self.mdp.env.get_robot_observation()
 
-            next_state, reward, absorbing, truncated, info = self.mdp.step(action)
+            elif self.asymetric:
+                action = self.agent.draw_action(self._state)
+                _, reward, absorbing, truncated, info = self.mdp.step(action)
+                next_state = self.mdp.env.get_robot_observation()
+
+
+
+            else:
+                action = self.agent.draw_action(self._state)
+
+                next_state, reward, absorbing, truncated, info = self.mdp.step(action)
 
         self._episode_steps += 1
 
