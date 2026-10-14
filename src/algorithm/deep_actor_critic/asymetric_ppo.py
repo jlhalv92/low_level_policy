@@ -31,6 +31,7 @@ def compute_cumulative_rewards(trajectories):
             env_rewards[env_id] = 0  # Reset for next episode
 
     # Store any ongoing episode rewards
+
     for env_id, reward in env_rewards.items():
         if reward > 0:
             cumulative_rewards[env_id].append(reward)

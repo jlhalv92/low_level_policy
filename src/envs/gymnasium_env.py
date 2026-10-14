@@ -74,7 +74,8 @@ class GymnasiumGO1(Environment):
                           env_id,
                           env_args,
                           domain_randomization,
-                          episode_length_in_seconds) for env_id in range(n_envs)])
+                          episode_length_in_seconds,
+                          ) for env_id in range(n_envs)], autoreset_mode=gym.vector.AutoresetMode.SAME_STEP)
 
 
         else:

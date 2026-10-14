@@ -248,7 +248,7 @@ class Core(object):
             for i, single_done in enumerate(done):
                 infos_l.append(info)
                 if single_done:
-                    actual_next_state[i] = info["final_observation"][i]
+                    actual_next_state[i] = info["final_obs"][i]
 
             for env in range(self.mdp.env.num_envs):
                 datasets[env].append([self._state[env]
