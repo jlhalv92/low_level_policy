@@ -189,6 +189,6 @@ if __name__ == '__main__':
     low_level_control = Agent.load(student_path)
     experiment(
                name_exp="RAPID_LOCOMOTION_",
-               agent=low_level_control, joystick=True, n_episodes=10, render=True, vel=[3.5,0.5,4.])
+               agent=low_level_control, joystick=True, n_episodes=10, render=True, vel=[1.5,0.5,4.])
 
 

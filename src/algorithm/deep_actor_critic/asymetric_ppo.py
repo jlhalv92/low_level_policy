@@ -72,10 +72,12 @@ class PPO(Agent):
 
         """
         self._critic_fit_params = dict(n_epochs=10) if critic_fit_params is None else critic_fit_params
+        # 36, 37, 38, 39 steps
+
         self.actor_idxs = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
                                      10, 11, 12, 13, 14, 15, 16,
        17, 18, 19, 20, 21, 22, 23, 53, 54, 55, 24, 25, 26, 27, 28, 29, 30,
-       31, 32, 33, 34, 35, 44, 45, 46, 47, 48, 49, 50, 51, 52])
+       31, 32, 33, 34, 35,36, 37, 38, 39, 44, 45, 46, 47, 48, 49, 50, 51, 52])
         self._n_epochs_policy = to_parameter(n_epochs_policy)
         self._batch_size = to_parameter(batch_size)
         self._eps_ppo = to_parameter(eps_ppo)

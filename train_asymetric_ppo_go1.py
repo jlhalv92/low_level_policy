@@ -130,7 +130,7 @@ def experiment(alg, n_epochs,
     if log:
         wandb.init(
             # set the wandb project where this run will be logged
-            project=wandb_project,
+            project=config.wandb_project,
             group=task_name,
             job_type="Locomotion_policy_ppo_" + config.name_exp,
             name="seed_{}".format(0)
@@ -175,7 +175,7 @@ def experiment(alg, n_epochs,
                          output_shape=(1,),
                          use_cuda=torch.cuda.is_available())
 
-    obs_shape = (48,)
+    obs_shape = (52,)
     policy = GaussianTorchPolicy(actor,
                                  obs_shape,
                                  action_shape,
@@ -278,9 +278,9 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--n_minibatches", type=int, default=20, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LOW_LEVEL_LOCOMOTION_P1")
+    parser.add_argument("--name_exp", type=str, default="LLC")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="A_POLICY_TRAINING")
+    parser.add_argument("--wandb_project",type=str,default="Locomotion_LLC_TRAINING")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--eps_ppo", type=float, default=0.2)
     parser.add_argument("--n_epochs_policy", type=int, default=10)

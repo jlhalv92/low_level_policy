@@ -386,6 +386,8 @@ class UnitreeGo1(gym.Env):
         self.foot_ground_contact_idx = [self.observation_name_to_id[foot_name + "_ground_contact"] for
                                                    foot_name in self.foot_names]
 
+
+
         self.foot_airtime_idx = [
             self.observation_name_to_id[foot_name + "_airtime"] for foot_name in
             self.foot_names]
@@ -457,10 +459,10 @@ class UnitreeGo1(gym.Env):
         self.current_action = np.zeros(self.model.nu)
         self.last_action = np.zeros(self.model.nu)
         self.current_torques = np.zeros(self.model.nu)
-        if not self.eval:
-            if self._n_episode % 1000 == 0:
-                # np.save(f"data/grid_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.grid)
-                np.save(f"data/weights_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.weights)
+        # if not self.eval:
+        #     if self._n_episode % 1000 == 0:
+        #         # np.save(f"data/grid_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.grid)
+        #         np.save(f"data/weights_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.weights)
 
         self._n_episode +=1
         self.reward_function.setup()
@@ -837,6 +839,7 @@ class UnitreeGo1(gym.Env):
                           self.joint_velocities_idx,
                           self.projected_gravity_idx,
                           self.joint_previous_actions_idx,
+                          self.foot_ground_contact_idx, #test augmented state
                           self.trunk_linear_vel_idx,
                           self.trunk_angular_vel_idx,
                           self.goal_velocity_idx))
