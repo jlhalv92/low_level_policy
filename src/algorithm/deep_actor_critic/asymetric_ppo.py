@@ -8,14 +8,82 @@ from src.mushroom.agent.agent import Agent
 from mushroom_rl.approximators import Regressor
 from mushroom_rl.approximators.parametric import TorchApproximator
 from mushroom_rl.utils.torch import to_float_tensor, update_optimizer_parameters
-from mushroom_rl.utils.minibatches import minibatch_generator
+#from mushroom_rl.utils.minibatches import minibatch_generator
 # from mushroom_rl.utils.dataset import parse_dataset, compute_J
-from src.mushroom.dataset.dataset import parse_dataset
-from mushroom_rl.utils.value_functions import compute_gae
+from src.mushroom.dataset.dataset import parse_vectorize_dataset
+#from mushroom_rl.utils.value_functions import compute_gae
 from mushroom_rl.utils.parameters import to_parameter
 
 from collections import defaultdict
 
+import numpy as np
+
+
+def minibatch_generator(mini_batch_size, *dataset):
+    """
+    Generator that creates a minibatch from the full dataset.
+
+    Args:
+        mini_batch_size (int): the maximum size of each minibatch;
+        dataset: the dataset to be splitted.
+        # actor_obs, actions, adv, old_log_p
+    Returns:
+        The current minibatch.
+
+    """
+
+    steps = dataset[0].size()[0]
+    n_envs = dataset[0].size()[1]
+    batch_size = n_envs * steps
+    size = len(dataset[0])
+    num_minibatches = int(np.ceil(size/ mini_batch_size))
+
+    states = dataset[0].flatten(0, 1)
+    actions = dataset[1].flatten(0, 1)
+    old_log_probs = dataset[2].flatten(0, 1)
+    advantages = dataset[3].flatten(0, 1)
+
+    # A fresh shuffle for every epoch.
+    indices = torch.randperm(batch_size,device=dataset[0].device)
+
+    for batch_idx in torch.tensor_split(indices, num_minibatches):
+        yield (
+            states[batch_idx],
+            actions[batch_idx],
+            old_log_probs[batch_idx],
+            advantages[batch_idx],
+        )
+
+
+@torch.no_grad()
+def compute_gae(Value, Next_value, r, absorbing, last, gamma, lam):
+    """
+    Returns:
+        value_target, advantage: tensors of shape (N_steps, N_envs, 1).
+
+    absorbing: disables value bootstrapping.
+    last: stops advantage propagation across episode boundaries.
+    """
+    absorbing = absorbing.bool()
+    last = last.bool()
+
+    delta = (
+        r
+        + gamma * Next_value.masked_fill(absorbing, 0.0)
+        - Value
+    )
+
+    advantage = torch.empty_like(Value)
+    next_advantage = torch.zeros_like(Value[0])
+
+    for t in reversed(range(Value.shape[0])):
+        continuation = next_advantage.masked_fill(
+            last[t] | absorbing[t], 0.0
+        )
+        advantage[t] = delta[t] + gamma * lam * continuation
+        next_advantage = advantage[t]
+
+    return advantage + Value, advantage
 
 def compute_cumulative_rewards(trajectories):
     cumulative_rewards = defaultdict(list)  # Stores rewards per environment
@@ -108,34 +176,46 @@ class PPO(Agent):
 
     def fit(self, dataset, **info):
 
-        x, u, r, xn, absorbing,_, last = parse_dataset(dataset)
-        x = x.astype(np.float32)
-        u = u.astype(np.float32)
-        r = r.astype(np.float32)
-        xn = xn.astype(np.float32)
+        states, actions, old_log_p, values, next_values, rewards, next_states, terminated, truncated = dataset
+        #state, action, old_log_p, r, values, next_state, absorbing, last = parse_vectorize_dataset(dataset)
+        #x = state.astype(np.float32)
+        #u = action.astype(np.float32)
+        #r = r.astype(np.float32)
+        #xn = next_state.astype(np.float32)
 
-        obs = to_float_tensor(x, self.policy.use_cuda)
-        act = to_float_tensor(u, self.policy.use_cuda)
-        v_target, np_adv = compute_gae(self._V, x, xn, r, absorbing, last, self.mdp_info.gamma, self._lambda())
-        np_adv = (np_adv - np.mean(np_adv)) / (np.std(np_adv) + 1e-8)
-        adv = to_float_tensor(np_adv, self.policy.use_cuda)
-
-        actor_obs = obs[:, self.actor_idxs]
-        old_pol_dist = self.policy.distribution_t(actor_obs)
-        old_log_p = old_pol_dist.log_prob(act)[:, None].detach()
-
-        self._V.fit(x, v_target, **self._critic_fit_params)
+        #obs = to_float_tensor(x, self.policy.use_cuda)
+        #act = to_float_tensor(u, self.policy.use_cuda)
+        # Compute GAE
 
 
-        self._update_policy(actor_obs, act, adv, old_log_p)
+        #v_target, np_adv = compute_gae(self._V, x, xn, r, absorbing, last, self.mdp_info.gamma, self._lambda())
+        #np_adv = (np_adv - np.mean(np_adv)) / (np.std(np_adv) + 1e-8)
+        #adv = to_float_tensor(np_adv, self.policy.use_cuda)
+        v_target, adv= compute_gae(values, next_values, rewards, terminated, truncated, self.mdp_info.gamma, self._lambda())
+
+
+        actor_obs = states[:,:, self.actor_idxs].cuda()
+        actions_gpu = actions.cuda()
+        old_log_p_gpu = old_log_p.cuda()
+        adv_gpu = adv.cuda()
+        #old_pol_dist = self.policy.distribution_t(actor_obs)
+        #old_log_p = old_pol_dist.log_prob(act)[:, None].detach()
+        v_target_b = v_target.flatten(0,1)
+        states_b = states.flatten(0,1)
+        old_policy_distribution = self.policy.distribution(actor_obs.flatten(0,1))
+
+        self._V.fit(states_b, v_target_b, **self._critic_fit_params)
+
+        #
+        self._update_policy(actor_obs, actions_gpu, adv_gpu, old_log_p_gpu)
 
 
 
-        self._log_info(dataset, x, v_target, old_pol_dist)
+        #self._log_info(dataset, x, v_target.flatten(0,1), old_policy_distribution)
 
-        new_pol_dist = self.policy.distribution(x[:, self.actor_idxs])
+        new_pol_dist = self.policy.distribution(actor_obs.flatten(0,1))
         kl_mean = torch.mean(torch.distributions.kl.kl_divergence(
-            new_pol_dist, old_pol_dist))
+            new_pol_dist, old_policy_distribution))
         kl_target = 0.01 #0.01
 
         if kl_mean > kl_target * 2:

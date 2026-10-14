@@ -1,3 +1,4 @@
+import torch
 from tqdm import tqdm
 import numpy as np
 np.random.seed()
@@ -18,38 +19,55 @@ class Batch:
 
 
 class Buffer:
-    def __init__(self):
-        self.states = []
-        self.actions = []
-        self.rewards = []
-        self.next_states = []
-        self.terminated = []
-        self.info = []
-        self.truncated = []
-    def append(self, state, action, reward, next_state, terminated, truncated, info):
-        self.states.append(state)
-        self.actions.append(action)
-        self.rewards.append(reward)
-        self.next_states.append(next_state)
-        self.terminated.append(terminated)
-        self.info =info
-        self.truncated.append(truncated)
-    def return_dataset(self, single_observation_space, action_space):
-        dataset = []
-        states_array = np.array(self.states).reshape((-1,) + single_observation_space.shape)
-        actions_array = np.array(self.actions).reshape((-1,) + action_space.shape)
-        rewards_array = np.array(self.rewards).reshape(-1,)
-        next_states_array = np.array(self.next_states).reshape((-1,) + single_observation_space.shape)
-        terminated_array = np.array(self.terminated).reshape(-1)
-        truncated_array = np.array(self.truncated).reshape(-1)
-        for i in range(len(states_array)):
-            dataset.append([states_array[i],
-                            actions_array[i],
-                            rewards_array[i],
-                            next_states_array[i],
-                            terminated_array[i],
-                            {},
-                            truncated_array[i]])
+    def __init__(self, n_steps, n_environments):
+        self.n_steps = n_steps
+        self.n_environments = n_environments
+
+        self.states = torch.zeros((n_steps,n_environments, 61))
+        self.actions =  torch.zeros((n_steps,n_environments, 12) )
+        self.log_probs =  torch.zeros((n_steps,n_environments ,1) )
+        self.values =  torch.zeros((n_steps,n_environments ,1) )
+        self.next_values =  torch.zeros((n_steps,n_environments ,1) )
+
+        self.rewards =  torch.zeros((n_steps,n_environments ,1) )
+        self.next_states =  torch.zeros((n_steps,n_environments, 61) )
+        self.terminated =  torch.zeros((n_steps,n_environments, 1))
+        self.truncated =  torch.zeros((n_steps,n_environments,1) )
+
+    def reset(self):
+        self.states = torch.zeros((self.n_steps,self.n_environments, 61))
+        self.actions =  torch.zeros((self.n_steps,self.n_environments, 12) )
+        self.log_probs =  torch.zeros((self.n_steps,self.n_environments ,1) )
+        self.values =  torch.zeros((self.n_steps,self.n_environments ,1) )
+        self.next_values =  torch.zeros((self.n_steps,self.n_environments ,1) )
+        self.rewards =  torch.zeros((self.n_steps,self.n_environments ,1) )
+        self.next_states =  torch.zeros((self.n_steps,self.n_environments, 61) )
+        self.terminated =  torch.zeros((self.n_steps,self.n_environments, 1))
+        self.truncated =  torch.zeros((self.n_steps,self.n_environments,1) )
+
+    def add_step(self,itr, state, action, log_probs, values, next_values , reward, next_state, terminated, truncated):
+        self.states[itr,:,:] = state
+        self.actions[itr,:,:] = action
+        self.rewards[itr,:,:] = reward
+        self.log_probs[itr,:,:] = log_probs
+        self.values[itr,:,:] = values
+        self.next_values[itr,:,:] = next_values
+
+        self.next_states[itr,:,:] = next_state
+        self.terminated[itr,:,:] = terminated
+        self.truncated[itr,:,:] =truncated
+
+    def return_dataset(self):
+        dataset = [self.states,
+                   self.actions,
+                   self.log_probs,
+                   self.values,
+                   self.next_values,
+                   self.rewards,
+                   self.next_states,
+                   self.terminated,
+                   self.truncated]
+
         return dataset
 
 class Core(object):
@@ -82,7 +100,7 @@ class Core(object):
         self.callbacks_fit = callbacks_fit if callbacks_fit is not None else list()
         self.callback_step = callback_step if callback_step is not None else lambda x: None
         self._preprocessors = preprocessors if preprocessors is not None else list()
-
+        self.buffer = Buffer(n_environments=100, n_steps=1000)
         self._state = None
 
 
@@ -146,7 +164,7 @@ class Core(object):
 
         self._n_steps_per_fit = n_steps_per_fit
         self._n_episodes_per_fit = n_episodes_per_fit
-
+        self._n_steps = n_steps
         if n_steps_per_fit is not None:
             fit_condition =\
                 lambda: self._current_steps_counter >= self._n_steps_per_fit
@@ -226,10 +244,10 @@ class Core(object):
 
         infos_l = []
         datasets = [[] for _ in range(self.mdp.env.num_envs)]
+        step_fit_counter = 0
         while move_condition():
 
             self._total_steps_counter += 1
-            self._current_steps_counter += 1
             steps_progress_bar.update(1)
 
             actor_state = self._state.copy()
@@ -243,27 +261,44 @@ class Core(object):
             next_state, reward, terminated, truncated, info = self.mdp.step(actions)
             done = terminated | truncated
             actual_next_state = next_state.copy()
+            values = self.agent._V(torch.tensor(self._state).cuda(), output_tensor=True)
+            next_values = self.agent._V(torch.tensor(actual_next_state).cuda(),  output_tensor=True)
+
+            log_probs = self.agent.policy.distribution_t(torch.tensor(actor_state).cuda()).log_prob(torch.tensor(actions).cuda())[:, None].detach()
+
+
 
             for i, single_done in enumerate(done):
                 infos_l.append(info)
                 if single_done:
-                    actual_next_state[i] = info["final_observation"][i]
+                    actual_next_state[i] = info["final_obs"][i]
 
-            for env in range(self.mdp.env.num_envs):
-                datasets[env].append([self._state[env]
-                                   ,actions[env],
-                                    reward[env],
-                                actual_next_state[env],
-                                terminated[env],
-                                {"env_id": "env_{}".format(env)},
-                                    done[env]])
+            # for env in range(self.mdp.env.num_envs):
+            #     datasets[env].append([self._state[env]
+            #                        ,actions[env],
+            #                         reward[env],
+            #                     actual_next_state[env],
+            #                     terminated[env],
+            #                     {"env_id": "env_{}".format(env)},
+
+            #                         done[env]])
+
+
+            dataset.append([torch.tensor(self._state),
+                            torch.tensor(actions),
+                           log_probs,
+                            torch.tensor(reward),
+                           values,
+                            next_values,
+                         torch.tensor(actual_next_state),
+                         torch.tensor(terminated),
+                            torch.tensor(done)])
+
             self._state = actual_next_state
 
-
             if fit_condition():
-                dataset = []
-                for trj in datasets:
-                    dataset.extend(trj)
+                dataset = self.buffer.return_dataset()
+
 
 
                 self.agent.fit(dataset)
@@ -273,8 +308,21 @@ class Core(object):
                 for c in self.callbacks_fit:
                     c(dataset)
 
-                datasets = [[] for _ in range(self.mdp.env.num_envs)]
                 dataset = list()
+                self.buffer.reset()
+            self.buffer.add_step(step_fit_counter,
+                                 torch.tensor(self._state),
+                                 torch.tensor(actions),
+                                 log_probs,
+                                 values,
+                                 next_values,
+                                 torch.tensor(reward).unsqueeze(1),
+                                 torch.tensor(actual_next_state),
+                                 torch.tensor(terminated).unsqueeze(1),
+                                 torch.tensor(done).unsqueeze(1))
+            self._current_steps_counter += 1
+            step_fit_counter +=1
+
 
 
         self.agent.stop()

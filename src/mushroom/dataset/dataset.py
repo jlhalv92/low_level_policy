@@ -94,6 +94,43 @@ def parse_dataset(dataset, features=None):
         next_state), np.array(absorbing),info, np.array(last)
 
 
+def parse_vectorize_dataset(dataset, features=None):
+    """
+    Split the dataset in its different components and return them.
+
+    Args:
+        dataset (list): the dataset to parse;
+        features (object, None): features to apply to the states.
+
+    Returns:
+        The np.ndarray of state, action, reward, next_state, absorbing flag and
+        last step flag. Features are applied to ``state`` and ``next_state``,
+        when provided.
+
+    """
+    assert len(dataset) > 0
+    state = []
+    action = []
+    logprobs = []
+    reward = []
+    values = []
+    next_state = []
+    absorbing = []
+    last = []
+    for trajectory in dataset:
+        state.append(trajectory[0])
+        action.append(trajectory[1])
+        logprobs.append(trajectory[2])
+        reward.append(trajectory[3])
+        values.append(trajectory[4])
+        next_state.append(trajectory[5])
+        absorbing.append(trajectory[6])
+        last.append(trajectory[7])
+
+    return np.array(state), np.array(action), np.array(reward), np.array(
+        next_state), np.array(absorbing), np.array(last)
+
+
 def arrays_as_dataset(states, actions, rewards, next_states, absorbings, lasts):
     """
     Creates a dataset of transitions from the provided arrays.

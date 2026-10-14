@@ -457,10 +457,10 @@ class UnitreeGo1(gym.Env):
         self.current_action = np.zeros(self.model.nu)
         self.last_action = np.zeros(self.model.nu)
         self.current_torques = np.zeros(self.model.nu)
-        if not self.eval:
-            if self._n_episode % 1000 == 0:
+        #if not self.eval:
+            #if self._n_episode % 1000 == 0:
                 # np.save(f"data/grid_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.grid)
-                np.save(f"data/weights_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.weights)
+                #np.save(f"data/weights_{self.env_id}_episode_{self._n_episode}.npy", self.vel_curriculum.weights)
 
         self._n_episode +=1
         self.reward_function.setup()
@@ -663,6 +663,7 @@ class UnitreeGo1(gym.Env):
         terminated = self.should_terminate(next_observation)
 
         truncated = self.episode_step >= self.horizon-1
+
         done = terminated | truncated
         if done:
             self.episode_count +=1
