@@ -266,38 +266,30 @@ class Core(object):
 
             log_probs = self.agent.policy.distribution_t(torch.tensor(actor_state).cuda()).log_prob(torch.tensor(actions).cuda())[:, None].detach()
 
-
-
             for i, single_done in enumerate(done):
                 infos_l.append(info)
                 if single_done:
                     actual_next_state[i] = info["final_obs"][i]
 
-            # for env in range(self.mdp.env.num_envs):
-            #     datasets[env].append([self._state[env]
-            #                        ,actions[env],
-            #                         reward[env],
-            #                     actual_next_state[env],
-            #                     terminated[env],
-            #                     {"env_id": "env_{}".format(env)},
+            self.buffer.add_step(step_fit_counter,
+                                 torch.tensor(self._state),
+                                 torch.tensor(actions),
+                                 log_probs,
+                                 values,
+                                 next_values,
+                                 torch.tensor(reward).unsqueeze(1),
+                                 torch.tensor(actual_next_state),
+                                 torch.tensor(terminated).unsqueeze(1),
+                                 torch.tensor(done).unsqueeze(1))
 
-            #                         done[env]])
-
-
-            dataset.append([torch.tensor(self._state),
-                            torch.tensor(actions),
-                           log_probs,
-                            torch.tensor(reward),
-                           values,
-                            next_values,
-                         torch.tensor(actual_next_state),
-                         torch.tensor(terminated),
-                            torch.tensor(done)])
 
             self._state = actual_next_state
+            step_fit_counter += 1
+            self._current_steps_counter += 1
 
             if fit_condition():
                 dataset = self.buffer.return_dataset()
+                step_fit_counter = 0
 
 
 
@@ -310,18 +302,8 @@ class Core(object):
 
                 dataset = list()
                 self.buffer.reset()
-            self.buffer.add_step(step_fit_counter,
-                                 torch.tensor(self._state),
-                                 torch.tensor(actions),
-                                 log_probs,
-                                 values,
-                                 next_values,
-                                 torch.tensor(reward).unsqueeze(1),
-                                 torch.tensor(actual_next_state),
-                                 torch.tensor(terminated).unsqueeze(1),
-                                 torch.tensor(done).unsqueeze(1))
-            self._current_steps_counter += 1
-            step_fit_counter +=1
+
+
 
 
 

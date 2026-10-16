@@ -278,7 +278,7 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--n_minibatches", type=int, default=20, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LOW_LEVEL_LOCOMOTION_P1")
+    parser.add_argument("--name_exp", type=str, default="LLC_N_48")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="A_POLICY_TRAINING")
     parser.add_argument("--lr", type=float, default=1e-3)

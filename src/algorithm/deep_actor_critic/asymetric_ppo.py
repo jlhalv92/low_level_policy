@@ -192,7 +192,7 @@ class PPO(Agent):
         #np_adv = (np_adv - np.mean(np_adv)) / (np.std(np_adv) + 1e-8)
         #adv = to_float_tensor(np_adv, self.policy.use_cuda)
         v_target, adv= compute_gae(values, next_values, rewards, terminated, truncated, self.mdp_info.gamma, self._lambda())
-
+        adv = (adv - adv.mean()) / (adv.std(unbiased=False) + 1e-8)
 
         actor_obs = states[:,:, self.actor_idxs].cuda()
         actions_gpu = actions.cuda()
