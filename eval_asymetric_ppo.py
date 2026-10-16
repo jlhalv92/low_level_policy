@@ -8,7 +8,7 @@ from src.algorithm.deep_actor_critic.imitation.dagger import DaggerSP
 from src.algorithm.policies.torch_policy import GaussianTorchPolicy
 
 from mushroom_rl.core import Logger
-from src.core.core_imitation_ppo import Core
+from src.core.core_gym import Core
 
 from src.envs.gymnasium_env import GymnasiumGO1
 import torch.nn as nn
@@ -116,7 +116,7 @@ def experiment(agent=None,
 
     agent.set_logger(logger)
 
-    core = Core(agent, mdp, expert_agent=None)
+    core = Core(agent, mdp, asymetric=True)
 
     dataset = core.evaluate(n_episodes=n_episodes, render=render)
 
@@ -134,7 +134,7 @@ def experiment(agent=None,
     vy = velocities[:, 1]
     wz = velocities[:, 2]
 
-    commands = s[:, [45, 46, 47]]
+    commands = s[:, [49, 50, 51]]
     cvx = commands[:, 0]
     cvy = commands[:, 1]
     cwz = commands[:, 2]
@@ -186,9 +186,10 @@ if __name__ == '__main__':
     student_path = "checkpoint/GO1/DaggerSP/nominal_RAPID_LOCOMOTION_STUDENT/epoch_last"
     student_path = "/home/jose-luis/Project/low_level_policy/checkpoint/GO1/PPO/nominal_LOCOMOTION_A_PPO/epoch_last"
     student_path = "checkpoint/GO1/PPO/nominal_nominal_LOCOMOTION_ASYMETRIC_PPO_RAPID_PHASE_2/epoch_last"
+    student_path = "checkpoint/GO1/PPO/nominal_LLC_NEW_IMPLEMENTATION/epoch_last"
     low_level_control = Agent.load(student_path)
     experiment(
                name_exp="RAPID_LOCOMOTION_",
-               agent=low_level_control, joystick=True, n_episodes=10, render=True, vel=[3.5,0.5,4.])
+               agent=low_level_control, joystick=True, n_episodes=10, render=True, vel=[1.5,0.5,1.5])
 
 

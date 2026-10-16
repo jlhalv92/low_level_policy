@@ -174,8 +174,8 @@ def experiment(alg, n_epochs,
                          input_shape=obs_shape,
                          output_shape=(1,),
                          use_cuda=torch.cuda.is_available())
-
-    obs_shape = (48,)
+    # 48
+    obs_shape = (52,)
     policy = GaussianTorchPolicy(actor,
                                  obs_shape,
                                  action_shape,
@@ -206,7 +206,7 @@ def experiment(alg, n_epochs,
     agent.set_logger(logger)
 
     mdp.env.eval = config.use_uniform_commands
-    core = Core(agent, mdp,  vectorize=True, asymetric=True)
+    core = Core(agent, mdp,  vectorize=True, asymetric=True, n_envs=n_envs, buffer_size=config.n_steps_per_fit)
 
     mdp_eval.env.eval=True
     core_eval = CoreEval(agent, mdp_eval, asymetric=True)
@@ -276,11 +276,11 @@ def parse_args():
     parser.add_argument("--n_steps", type=int, default=10_000, help="Number of steps")
     parser.add_argument("--n_epochs", type=int, default=100, help="Number of steps")
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
-    parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
+    parser.add_argument("--n_episodes_test", type=int, default=20, help="Number of test episodes")
     parser.add_argument("--n_minibatches", type=int, default=20, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LOW_LEVEL_LOCOMOTION_P1")
+    parser.add_argument("--name_exp", type=str, default="LLC_NEW_IMPLEMENTATION")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
-    parser.add_argument("--wandb_project",type=str,default="A_POLICY_TRAINING")
+    parser.add_argument("--wandb_project",type=str,default="LocomotionPolicy")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--eps_ppo", type=float, default=0.2)
     parser.add_argument("--n_epochs_policy", type=int, default=10)
@@ -293,7 +293,7 @@ def parse_args():
     parser.add_argument("--use_uniform_commands", type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument("--target_vx", type=float, default= 1.5) #1.5, 2.5
     parser.add_argument("--target_vy", type=float, default= 0.8)
-    parser.add_argument("--target_wz", type=float, default= 1.) #1.5. 4.
+    parser.add_argument("--target_wz", type=float, default= 1.5) #1.5. 4.
 
 
 
@@ -322,6 +322,7 @@ if __name__ == '__main__':
                log=args.log,
                config=args,
                init_epoch=init_epoch,
-               target_v=target_v)
+               target_v=target_v,
+               wandb_project=args.wandb_project)
 
 

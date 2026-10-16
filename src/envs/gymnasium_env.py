@@ -123,7 +123,7 @@ class GymnasiumGO1(Environment):
         # if state is None:
         state, info = self.env.reset()
 
-        return np.atleast_1d(state)
+        return np.atleast_1d(state), info
 
     def step(self, action):
         action = self._convert_action(action)

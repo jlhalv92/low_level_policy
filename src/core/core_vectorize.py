@@ -18,57 +18,214 @@ class Batch:
 
 
 
+# class Buffer:
+#     def __init__(self, n_steps, n_environments):
+#         self.n_steps = n_steps
+#         self.n_environments = n_environments
+#
+#         self.states = torch.zeros((n_steps,n_environments, 61))
+#         self.actor_states = torch.zeros((n_steps,n_environments, 52))
+#
+#         self.actions =  torch.zeros((n_steps,n_environments, 12) )
+#         self.log_probs =  torch.zeros((n_steps,n_environments ,1) )
+#         self.values =  torch.zeros((n_steps,n_environments ,1) )
+#         self.next_values =  torch.zeros((n_steps,n_environments ,1) )
+#
+#         self.rewards =  torch.zeros((n_steps,n_environments ,1) )
+#         self.next_states =  torch.zeros((n_steps,n_environments, 61) )
+#         self.next_actor_states =  torch.zeros((n_steps,n_environments, 52) )
+#
+#         self.terminated =  torch.zeros((n_steps,n_environments, 1))
+#         self.truncated =  torch.zeros((n_steps,n_environments,1) )
+#
+#     def reset(self):
+#         self.states = torch.zeros((self.n_steps,self.n_environments, 61))
+#         self.actor_states = torch.zeros((self.n_steps,self.n_environments, 52))
+#         self.actions =  torch.zeros((self.n_steps,self.n_environments, 12) )
+#         self.log_probs =  torch.zeros((self.n_steps,self.n_environments ,1) )
+#         self.values =  torch.zeros((self.n_steps,self.n_environments ,1) )
+#         self.next_values =  torch.zeros((self.n_steps,self.n_environments ,1) )
+#         self.rewards =  torch.zeros((self.n_steps,self.n_environments ,1) )
+#         self.next_states =  torch.zeros((self.n_steps,self.n_environments, 61) )
+#         self.next_actor_states =  torch.zeros((self.n_steps,self.n_environments, 52) )
+#
+#         self.terminated =  torch.zeros((self.n_steps,self.n_environments, 1))
+#         self.truncated =  torch.zeros((self.n_steps,self.n_environments,1) )
+#
+#     def add_step(self,itr, state, actor_state, action, log_probs, values, next_values , reward, next_state, next_actor_state, terminated, truncated):
+#         self.states[itr,:,:] = state
+#         self.actor_states[itr,:,:] = actor_state
+#         self.actions[itr,:,:] = action
+#         self.rewards[itr,:,:] = reward
+#         self.log_probs[itr,:,:] = log_probs
+#         self.values[itr,:,:] = values
+#         self.next_values[itr,:,:] = next_values
+#         self.next_states[itr,:,:] = next_state
+#         self.next_actor_states[itr,:,:] = next_actor_state
+#         self.terminated[itr,:,:] = terminated
+#         self.truncated[itr,:,:] =truncated
+#
+#     def return_dataset(self):
+#         dataset = [self.states,
+#                    self.actor_states,
+#                    self.actions,
+#                    self.log_probs,
+#                    self.values,
+#                    self.next_values,
+#                    self.rewards,
+#                    self.next_states,
+#                    self.next_actor_states,
+#                    self.terminated,
+#                    self.truncated]
+#
+#         return dataset
+#
+#     def return_dataset_gpu(self):
+#         dataset = [torch.tensor(self.states),
+#                    torch.tensor(self.actor_states),
+#                    torch.tensor(self.actions),
+#                    self.log_probs,
+#                    self.values,
+#                    self.next_values,
+#                    self.rewards,
+#                    torch.tensor(self.next_states),
+#                    torch.tensor(self.next_actor_states),
+#                    torch.tensor(self.terminated),
+#                    torch.tensor(self.truncated)]
+#
+#         return dataset
+
 class Buffer:
-    def __init__(self, n_steps, n_environments):
+    def __init__(
+        self,
+        n_steps,
+        n_environments,
+        state_dim=61,
+        actor_state_dim=52,
+        action_dim=12,
+        device="cpu",
+    ):
         self.n_steps = n_steps
         self.n_environments = n_environments
+        self.device = torch.device(device)
+        self.position = 0
 
-        self.states = torch.zeros((n_steps,n_environments, 61))
-        self.actions =  torch.zeros((n_steps,n_environments, 12) )
-        self.log_probs =  torch.zeros((n_steps,n_environments ,1) )
-        self.values =  torch.zeros((n_steps,n_environments ,1) )
-        self.next_values =  torch.zeros((n_steps,n_environments ,1) )
+        # Ordering matches your existing return_dataset().
+        dimensions = {
+            "states": state_dim,
+            "actor_states": actor_state_dim,
+            "actions": action_dim,
+            "log_probs": 1,
+            "values": 1,
+            "next_values": 1,
+            "rewards": 1,
+            "next_states": state_dim,
+            "next_actor_states": actor_state_dim,
+            "terminated": 1,
+            "truncated": 1,
+        }
 
-        self.rewards =  torch.zeros((n_steps,n_environments ,1) )
-        self.next_states =  torch.zeros((n_steps,n_environments, 61) )
-        self.terminated =  torch.zeros((n_steps,n_environments, 1))
-        self.truncated =  torch.zeros((n_steps,n_environments,1) )
+        self.storage = {}
+
+        for name, dimension in dimensions.items():
+            dtype = (
+                torch.bool
+                if name in ("terminated", "truncated")
+                else torch.float32
+            )
+
+            tensor = torch.empty(
+                (n_steps, n_environments, dimension),
+                dtype=dtype,
+                device=self.device,
+            )
+
+            self.storage[name] = tensor
+            setattr(self, name, tensor)
 
     def reset(self):
-        self.states = torch.zeros((self.n_steps,self.n_environments, 61))
-        self.actions =  torch.zeros((self.n_steps,self.n_environments, 12) )
-        self.log_probs =  torch.zeros((self.n_steps,self.n_environments ,1) )
-        self.values =  torch.zeros((self.n_steps,self.n_environments ,1) )
-        self.next_values =  torch.zeros((self.n_steps,self.n_environments ,1) )
-        self.rewards =  torch.zeros((self.n_steps,self.n_environments ,1) )
-        self.next_states =  torch.zeros((self.n_steps,self.n_environments, 61) )
-        self.terminated =  torch.zeros((self.n_steps,self.n_environments, 1))
-        self.truncated =  torch.zeros((self.n_steps,self.n_environments,1) )
+        # Every populated entry will be overwritten before reuse.
+        self.position = 0
 
-    def add_step(self,itr, state, action, log_probs, values, next_values , reward, next_state, terminated, truncated):
-        self.states[itr,:,:] = state
-        self.actions[itr,:,:] = action
-        self.rewards[itr,:,:] = reward
-        self.log_probs[itr,:,:] = log_probs
-        self.values[itr,:,:] = values
-        self.next_values[itr,:,:] = next_values
+    @property
+    def full(self):
+        return self.position == self.n_steps
 
-        self.next_states[itr,:,:] = next_state
-        self.terminated[itr,:,:] = terminated
-        self.truncated[itr,:,:] =truncated
+    @torch.no_grad()
+    def add_step(
+        self,
+        state,
+        actor_state,
+        action,
+        log_probs,
+        values,
+        next_values,
+        reward,
+        next_state,
+        next_actor_state,
+        terminated,
+        truncated,
+    ):
+        if self.full:
+            raise RuntimeError("Buffer is full. Fit and reset before adding.")
 
-    def return_dataset(self):
-        dataset = [self.states,
-                   self.actions,
-                   self.log_probs,
-                   self.values,
-                   self.next_values,
-                   self.rewards,
-                   self.next_states,
-                   self.terminated,
-                   self.truncated]
+        inputs = (
+            state,
+            actor_state,
+            action,
+            log_probs,
+            values,
+            next_values,
+            reward,
+            next_state,
+            next_actor_state,
+            terminated,
+            truncated,
+        )
 
-        return dataset
+        # Validate before modifying storage.
+        sources = []
+        for (name, storage), value in zip(self.storage.items(), inputs):
+            source = (
+                value.detach()
+                if isinstance(value, torch.Tensor)
+                else torch.as_tensor(value, device="cpu")
+            )
+
+            expected_shape = storage.shape[1:]
+
+            # Accept scalar fields as either (N,) or (N, 1).
+            if (
+                expected_shape[-1] == 1
+                and source.shape == (self.n_environments,)
+            ):
+                source = source.unsqueeze(-1)
+
+            if source.shape != expected_shape:
+                raise ValueError(
+                    f"{name}: expected {tuple(expected_shape)}, "
+                    f"got {tuple(source.shape)}"
+                )
+
+            sources.append(source)
+
+        for storage, source in zip(self.storage.values(), sources):
+            storage[self.position].copy_(source)
+
+        self.position += 1
+
+    def return_dataset(self, device=None):
+        if self.position == 0:
+            raise RuntimeError("Cannot return an empty rollout.")
+
+        target_device = (
+            self.device if device is None else torch.device(device)
+        )
+
+        return [
+            tensor[:self.position].to(target_device)
+            for tensor in self.storage.values()
+        ]
 
 class Core(object):
     """
@@ -76,7 +233,8 @@ class Core(object):
 
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, vectorize=False, asymetric=False):
+                 preprocessors=None, vectorize=False, asymetric=False,
+                 n_envs=100, buffer_size=1000):
         """
         Constructor.
 
@@ -100,7 +258,7 @@ class Core(object):
         self.callbacks_fit = callbacks_fit if callbacks_fit is not None else list()
         self.callback_step = callback_step if callback_step is not None else lambda x: None
         self._preprocessors = preprocessors if preprocessors is not None else list()
-        self.buffer = Buffer(n_environments=100, n_steps=1000)
+        self.buffer = Buffer(n_environments=n_envs, n_steps=buffer_size)
         self._state = None
 
 
@@ -250,15 +408,13 @@ class Core(object):
             self._total_steps_counter += 1
             steps_progress_bar.update(1)
 
-            actor_state = self._state.copy()
-            if self.asymetric:
-                idxs = [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
-                            17, 18, 19, 20, 21, 22, 23, 53, 54, 55, 24, 25, 26, 27, 28, 29, 30,
-                            31, 32, 33, 34, 35, 44, 45, 46, 47, 48, 49, 50, 51, 52]
-                actor_state = self._state[:,idxs].copy()
-            actions = self.agent.draw_noisy_action(actor_state)
+            actor_state = self._actor_state.copy()
+
+            actions = self.agent.draw_noisy_action(self._actor_state)
 
             next_state, reward, terminated, truncated, info = self.mdp.step(actions)
+
+            actual_next_actor_state = info["actor_obs"]
             done = terminated | truncated
             actual_next_state = next_state.copy()
             values = self.agent._V(torch.tensor(self._state).cuda(), output_tensor=True)
@@ -267,11 +423,10 @@ class Core(object):
             log_probs = self.agent.policy.distribution_t(torch.tensor(actor_state).cuda()).log_prob(torch.tensor(actions).cuda())[:, None].detach()
 
 
-
             for i, single_done in enumerate(done):
-                infos_l.append(info)
                 if single_done:
                     actual_next_state[i] = info["final_obs"][i]
+                    actual_next_actor_state[i] = info["final_info"]["actor_obs"][i]
 
             # for env in range(self.mdp.env.num_envs):
             #     datasets[env].append([self._state[env]
@@ -284,44 +439,71 @@ class Core(object):
             #                         done[env]])
 
 
-            dataset.append([torch.tensor(self._state),
-                            torch.tensor(actions),
-                           log_probs,
-                            torch.tensor(reward),
-                           values,
-                            next_values,
-                         torch.tensor(actual_next_state),
-                         torch.tensor(terminated),
-                            torch.tensor(done)])
+
+
+            # self.buffer.add_step(step_fit_counter,
+            #                      torch.tensor(self._state),
+            #                      torch.tensor(self._actor_state),
+            #                      torch.tensor(actions),
+            #                      log_probs,
+            #                      values,
+            #                      next_values,
+            #                      torch.tensor(reward).unsqueeze(1),
+            #                      torch.tensor(actual_next_state),
+            #                      torch.tensor(actual_next_actor_state),
+            #                      torch.tensor(terminated).unsqueeze(1),
+            #                      torch.tensor(done).unsqueeze(1))
+            #
+            # self.buffer.add_step(step_fit_counter,
+            #                      self._state,
+            #                      self._actor_state,
+            #                      actions,
+            #                      log_probs,
+            #                      values,
+            #                      next_values,
+            #                      reward,
+            #                     actual_next_state,
+            #                      actual_next_actor_state,
+            #                      terminated,
+            #                      done)
+            self.buffer.add_step(
+                state=self._state,  # NumPy
+                actor_state=self._actor_state,  # NumPy
+                action=actions,
+                log_probs=log_probs,  # Tensor
+                values=values,  # Tensor
+                next_values=next_values,  # Tensor
+                reward=reward,  # NumPy, (N,) accepted
+                next_state=actual_next_state,
+                next_actor_state=actual_next_actor_state,
+                terminated=terminated,
+                truncated=done,
+            )
 
             self._state = actual_next_state
+            self._actor_state = actual_next_actor_state
+            self._current_steps_counter += 1
+            step_fit_counter +=1
 
             if fit_condition():
-                dataset = self.buffer.return_dataset()
+
+                dataset = self.buffer.return_dataset(device="cuda")
 
 
 
                 self.agent.fit(dataset)
                 self._current_episodes_counter = 0
                 self._current_steps_counter = 0
+                step_fit_counter = 0
+
 
                 for c in self.callbacks_fit:
                     c(dataset)
 
                 dataset = list()
                 self.buffer.reset()
-            self.buffer.add_step(step_fit_counter,
-                                 torch.tensor(self._state),
-                                 torch.tensor(actions),
-                                 log_probs,
-                                 values,
-                                 next_values,
-                                 torch.tensor(reward).unsqueeze(1),
-                                 torch.tensor(actual_next_state),
-                                 torch.tensor(terminated).unsqueeze(1),
-                                 torch.tensor(done).unsqueeze(1))
-            self._current_steps_counter += 1
-            step_fit_counter +=1
+
+
 
 
 
@@ -399,7 +581,9 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        self._state = self._preprocess(self.mdp.reset(initial_state).copy())
+        state, info = self._preprocess(self.mdp.reset(initial_state))
+        self._state = state.copy()
+        self._actor_state = info["actor_obs"]
         self.agent.episode_start()
         self.agent.next_action = None
         self._episode_steps = 0

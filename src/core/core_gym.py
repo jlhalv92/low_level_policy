@@ -235,7 +235,7 @@ class Core(object):
 
         """
         if self.student or self.asymetric:
-            self._state = self.mdp.env.get_robot_observation()
+            self._state = self.mdp.env.get_actor_observation()
 
         if learning:
             action = self.agent.draw_noisy_action(self._state)
@@ -246,12 +246,12 @@ class Core(object):
 
                 action = self.agent.student_policy.draw_action(self._state)
                 _, reward, absorbing, truncated, info = self.mdp.step(action)
-                next_state = self.mdp.env.get_robot_observation()
+                next_state = self.mdp.env.get_actor_observation()
 
             elif self.asymetric:
                 action = self.agent.draw_action(self._state)
                 _, reward, absorbing, truncated, info = self.mdp.step(action)
-                next_state = self.mdp.env.get_robot_observation()
+                next_state = self.mdp.env.get_actor_observation()
 
 
 
@@ -298,7 +298,8 @@ class Core(object):
         else:
             initial_condition = initial_conditions[self._total_episodes_counter]
 
-        self._state = self._preprocess(self.mdp.reset(initial_state).copy())
+        state, _ = self._preprocess(self.mdp.reset(initial_state))
+        self._state = state.copy()
         self.agent.episode_start()
         self.agent.next_action = None
         self._episode_steps = 0

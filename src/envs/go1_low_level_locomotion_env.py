@@ -475,8 +475,10 @@ class UnitreeGo1(gym.Env):
         self.airtime = Airtime()
         # if self.viewer:
         #     self.viewer.render(self.data)
-
-        return self.get_observation(), {}
+        actor_obs = self.get_actor_observation()
+        info = {}
+        info["actor_obs"] = actor_obs
+        return self.get_observation(), info
 
     def get_next_command(self):
 
@@ -684,6 +686,8 @@ class UnitreeGo1(gym.Env):
         self.episode_len +=1
         self.episode_step += 1
         self.total_timesteps += 1
+        actor_obs = self.get_actor_observation()
+        info["actor_obs"] = actor_obs
         return next_observation, reward, terminated, truncated, info
 
     def render(self, mode='human'):
@@ -837,6 +841,7 @@ class UnitreeGo1(gym.Env):
         idxs = np.concat((self.joint_positions_idx,
                           self.joint_velocities_idx,
                           self.projected_gravity_idx,
+                          self.foot_ground_contact_idx,
                           self.joint_previous_actions_idx,
                           self.trunk_linear_vel_idx,
                           self.trunk_angular_vel_idx,
@@ -876,6 +881,54 @@ class UnitreeGo1(gym.Env):
         #
         # return observation
         #
+    def get_actor_observation(self):
+
+
+        qpos = self.data.qpos[ 7:] - self.nominal_joint_positions.copy()
+        qvel = self.data.qvel[6:]
+        prior_action = self.last_action
+        feet_contact = np.array(
+            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+
+        # observation[self.foot_airtime_idx] = self.airtime.feet_air_time
+
+        trunk_linear_velocity = self.orientation_quat_inv.apply(self.data.qvel[:3])
+        trunk_angular_velocity = self.data.qvel[3:6]
+
+        commands = np.array(
+            [self.goal_x_velocity, self.goal_y_velocity, self.goal_yaw_velocity])
+
+        projected_gravity= self.orientation_quat_inv.apply(np.array([0.0, 0.0, -1.0]))
+
+
+        qpos /= 4.6
+        qvel /= 35.0
+        prior_action /= 10.0
+        feet_contact = (feet_contact / 0.5) - 1.0
+        trunk_linear_velocity = np.clip(trunk_linear_velocity / 10.0, -1.0, 1.0)
+        trunk_angular_velocity = np.clip(
+            trunk_angular_velocity / 50.0, -1.0, 1.0)
+
+        # tangential_friction = self.friction_tangential_min + (
+        #             self.friction_tangential_max - self.friction_tangential_min)
+        # damping = self.damping_min + (self.damping_max - self.damping_min)
+        # stiffness = self.stiffness_min + (self.stiffness_max - self.stiffness_min)
+
+        #observation[self.friction_idx] = 2*(self.friction - self.friction_tangential_min)/ (self.friction_tangential_max -self.friction_tangential_min) -1
+        #observation[self.stiffness_idx] =2*(self.stiffness -self.stiffness_min)/(self.stiffness_max - self.stiffness_min) -1
+        #observation[self.damping_idx] = 2*(self.damping -self.damping_min)/(self.damping_max - self.damping_min) -1
+
+
+        observation = np.concatenate([qpos,
+                                      qvel,
+                                      projected_gravity,
+                                      feet_contact,
+                                      prior_action,
+                                      trunk_linear_velocity,
+                                      trunk_angular_velocity,
+                                      commands
+                                      ])
+        return observation
 
     def get_observation(self):
 
