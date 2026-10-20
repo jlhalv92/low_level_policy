@@ -19,29 +19,29 @@ class Batch:
 
 
 class Buffer:
-    def __init__(self, n_steps, n_environments):
+    def __init__(self, n_steps, n_environments, state_size=61):
         self.n_steps = n_steps
         self.n_environments = n_environments
-
-        self.states = torch.zeros((n_steps,n_environments, 61))
+        self.state_size = state_size
+        self.states = torch.zeros((n_steps,n_environments, state_size))
         self.actions =  torch.zeros((n_steps,n_environments, 12) )
         self.log_probs =  torch.zeros((n_steps,n_environments ,1) )
         self.values =  torch.zeros((n_steps,n_environments ,1) )
         self.next_values =  torch.zeros((n_steps,n_environments ,1) )
 
         self.rewards =  torch.zeros((n_steps,n_environments ,1) )
-        self.next_states =  torch.zeros((n_steps,n_environments, 61) )
+        self.next_states =  torch.zeros((n_steps,n_environments, state_size) )
         self.terminated =  torch.zeros((n_steps,n_environments, 1))
         self.truncated =  torch.zeros((n_steps,n_environments,1) )
 
     def reset(self):
-        self.states = torch.zeros((self.n_steps,self.n_environments, 61))
+        self.states = torch.zeros((self.n_steps,self.n_environments, self.state_size))
         self.actions =  torch.zeros((self.n_steps,self.n_environments, 12) )
         self.log_probs =  torch.zeros((self.n_steps,self.n_environments ,1) )
         self.values =  torch.zeros((self.n_steps,self.n_environments ,1) )
         self.next_values =  torch.zeros((self.n_steps,self.n_environments ,1) )
         self.rewards =  torch.zeros((self.n_steps,self.n_environments ,1) )
-        self.next_states =  torch.zeros((self.n_steps,self.n_environments, 61) )
+        self.next_states =  torch.zeros((self.n_steps,self.n_environments, self.state_size) )
         self.terminated =  torch.zeros((self.n_steps,self.n_environments, 1))
         self.truncated =  torch.zeros((self.n_steps,self.n_environments,1) )
 
@@ -76,7 +76,7 @@ class Core(object):
 
     """
     def __init__(self, agent, mdp, callbacks_fit=None, callback_step=None,
-                 preprocessors=None, vectorize=False, asymetric=False):
+                 preprocessors=None, vectorize=False, asymetric=False, n_environments=100, n_steps=1000, state_size=61):
         """
         Constructor.
 
@@ -100,7 +100,7 @@ class Core(object):
         self.callbacks_fit = callbacks_fit if callbacks_fit is not None else list()
         self.callback_step = callback_step if callback_step is not None else lambda x: None
         self._preprocessors = preprocessors if preprocessors is not None else list()
-        self.buffer = Buffer(n_environments=100, n_steps=1000)
+        self.buffer = Buffer(n_environments=n_environments, n_steps=n_steps, state_size=state_size)
         self._state = None
 
 

@@ -119,7 +119,7 @@ class PPO(Agent):
     """
     def __init__(self, mdp_info, policy, actor_optimizer, critic_params,
                  n_epochs_policy, batch_size, eps_ppo, lam, ent_coeff=0.0,
-                 critic_fit_params=None):
+                 critic_fit_params=None, asymetric=False):
         """
         Constructor.
 
@@ -139,6 +139,7 @@ class PPO(Agent):
                 of the critic approximator.
 
         """
+        self.asymetric = asymetric
         self._critic_fit_params = dict(n_epochs=10) if critic_fit_params is None else critic_fit_params
         self.actor_idxs = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
                                      10, 11, 12, 13, 14, 15, 16,
@@ -193,8 +194,10 @@ class PPO(Agent):
         #adv = to_float_tensor(np_adv, self.policy.use_cuda)
         v_target, adv= compute_gae(values, next_values, rewards, terminated, truncated, self.mdp_info.gamma, self._lambda())
         adv = (adv - adv.mean()) / (adv.std(unbiased=False) + 1e-8)
-
-        actor_obs = states[:,:, self.actor_idxs].cuda()
+        if self.asymetric:
+            actor_obs = states[:,:, self.actor_idxs].cuda()
+        else:
+            actor_obs = states.cuda()
         actions_gpu = actions.cuda()
         old_log_p_gpu = old_log_p.cuda()
         adv_gpu = adv.cuda()
