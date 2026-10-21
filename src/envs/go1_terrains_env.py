@@ -721,7 +721,7 @@ class TerrainHeightSampler:
         height_observation = (
                 base_pos[2] - self.heights - self.nominal_height
         )
-
+        height_observation += np.random.uniform(-0.02, 0.02, size=height_observation.shape)
         # height_observation = np.where(
         #     self.valid,
         #     height_observation,
