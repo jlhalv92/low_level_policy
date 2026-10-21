@@ -105,8 +105,8 @@ def experiment(agent=None,
     n_features = 256
 
     env_args = dict(vx_limit=vel[0], wz_limit=vel[2], vy_limit=vel[1])
-    env_args["task"] = 1
-    env_args["current_level"] = 8
+    env_args["task"] = "flat"
+    env_args["current_level"] = 1
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=1, joystick=joystick, domain_randomization=False,  **env_args)
     mdp.env.eval =True
     mdp.env.track_velocities = True
@@ -127,53 +127,53 @@ def experiment(agent=None,
 
     logger.epoch_info(0, J=J, R=R, entropy=E)
 
-    from mushroom_rl.utils.dataset import parse_dataset
-    import matplotlib.pyplot as plt
-    s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
-    velocities = np.array(mdp.env.tracking_velocities_array)
-    vx = velocities[:, 0]
-    vy = velocities[:, 1]
-    wz = velocities[:, 2]
+    # from mushroom_rl.utils.dataset import parse_dataset
+    # import matplotlib.pyplot as plt
+    # s, a, r, s1, absorbing, info, last = parse_dataset(dataset)
+    # velocities = np.array(mdp.env.tracking_velocities_array)
+    # vx = velocities[:, 0]
+    # vy = velocities[:, 1]
+    # wz = velocities[:, 2]
+    #
+    # commands = s[:, [45, 46, 47]]
+    # cvx = commands[:, 0]
+    # cvy = commands[:, 1]
+    # cwz = commands[:, 2]
+    #
+    # time = np.arange(len(vx))
 
-    commands = s[:, [45, 46, 47]]
-    cvx = commands[:, 0]
-    cvy = commands[:, 1]
-    cwz = commands[:, 2]
+    # # Create subplots
+    # fig, axs = plt.subplots(3, 1, figsize=(10, 15), sharex=True)
+    # colors = plt.get_cmap('tab10')
 
-    time = np.arange(len(vx))
+    # # Plot Vx and Command Vx
+    # axs[0].plot(time, cvx, color=colors(0), linestyle='-', label='Command Vx')
+    # axs[0].plot(time, vx, color=colors(0), label='Vx')
+    # axs[0].set_title('Vx and Command Vx over Time')
+    # axs[0].set_ylabel('Vx')
+    # axs[0].grid(True)
+    # axs[0].legend()
 
-    # Create subplots
-    fig, axs = plt.subplots(3, 1, figsize=(10, 15), sharex=True)
-    colors = plt.get_cmap('tab10')
-
-    # Plot Vx and Command Vx
-    axs[0].plot(time, cvx, color=colors(0), linestyle='-', label='Command Vx')
-    axs[0].plot(time, vx, color=colors(0), label='Vx')
-    axs[0].set_title('Vx and Command Vx over Time')
-    axs[0].set_ylabel('Vx')
-    axs[0].grid(True)
-    axs[0].legend()
-
-    # Plot Vy and Command Vy
-    axs[1].plot(time, cvy, color=colors(1), linestyle='-', label='Command Vy')
-    axs[1].plot(time, vy, color=colors(1), label='Vy')
-    axs[1].set_title('Vy and Command Vy over Time')
-    axs[1].set_ylabel('Vy')
-    axs[1].grid(True)
-    axs[1].legend()
-
-    # Plot Wz and Command Wz
-    axs[2].plot(time, cwz, color=colors(2), linestyle='-', label='Command Wz')
-    axs[2].plot(time, wz, color=colors(2), label='Wz')
-    axs[2].set_title('Wz and Command Wz over Time')
-    axs[2].set_xlabel('Time')
-    axs[2].set_ylabel('Wz')
-    axs[2].grid(True)
-    axs[2].legend()
-
-    # Adjust layout
-    plt.tight_layout()
-    plt.show()
+    # # Plot Vy and Command Vy
+    # axs[1].plot(time, cvy, color=colors(1), linestyle='-', label='Command Vy')
+    # axs[1].plot(time, vy, color=colors(1), label='Vy')
+    # axs[1].set_title('Vy and Command Vy over Time')
+    # axs[1].set_ylabel('Vy')
+    # axs[1].grid(True)
+    # axs[1].legend()
+    #
+    # # Plot Wz and Command Wz
+    # axs[2].plot(time, cwz, color=colors(2), linestyle='-', label='Command Wz')
+    # axs[2].plot(time, wz, color=colors(2), label='Wz')
+    # axs[2].set_title('Wz and Command Wz over Time')
+    # axs[2].set_xlabel('Time')
+    # axs[2].set_ylabel('Wz')
+    # axs[2].grid(True)
+    # axs[2].legend()
+    #
+    # # Adjust layout
+    # plt.tight_layout()
+    # plt.show()
 
 
 
@@ -181,7 +181,7 @@ if __name__ == '__main__':
 
 
 
-    student_path = "checkpoint/GO1/PPO/nominal_LLC_stairs/epoch_last"
+    student_path = "nominal_policy/stairs/epoch_last"
     low_level_control = Agent.load(student_path)
     experiment(
                name_exp="RAPID_LOCOMOTION_",

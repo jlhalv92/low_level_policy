@@ -574,6 +574,8 @@ class TerrainHeightSampler:
         ray_top_z=3.0,
         max_distance=6.0,
         marker_offset=0.012,
+            height_clip=0.5,
+            height_scale=5.0,
     ):
         """
         site_ids:
@@ -586,6 +588,12 @@ class TerrainHeightSampler:
         self.model = model
         self.site_ids = np.asarray(site_ids, dtype=np.int32)
         self.grid_shape = (17, 11)
+
+        if height_clip <= 0 or height_scale <= 0:
+            raise ValueError("height_clip and height_scale must be positive.")
+
+        self.height_clip = float(height_clip)
+        self.height_scale = float(height_scale)
 
         if self.site_ids.shape != self.grid_shape:
             raise ValueError("site_ids must have shape (17, 11).")
@@ -709,7 +717,31 @@ class TerrainHeightSampler:
 
         mujoco.mj_kinematics(self.model, data)
 
-        return self.heights.copy(), self.valid.copy()
+        ##################
+        height_observation = (
+                base_pos[2] - self.heights - self.nominal_height
+        )
+
+        # height_observation = np.where(
+        #     self.valid,
+        #     height_observation,
+        #     self.height_clip,
+        # )
+        #
+        # height_observation = (
+        #         np.clip(
+        #             height_observation,
+        #             -self.height_clip,
+        #             self.height_clip,
+        #         )
+        #         * self.height_scale
+        # ).astype(np.float32)
+        #
+        return height_observation, self.valid.copy()
+
+        ##########################
+
+        # return self.heights.copy(), self.valid.copy()
 
 
 class UnitreeGo1(gym.Env):
@@ -733,10 +765,11 @@ class UnitreeGo1(gym.Env):
             p = psutil.Process()
             p.cpu_affinity([cpu_id, ])
         self.final_level = False
+        self.task_dict ={"stairs_up":2, "stairs_down":1, "flat":0}
         self.current_level = env_args["current_level"]
-        self.task = env_args["task"] # upstairs, downstairs, flat-terrain
+        self.task = self.task_dict[env_args["task"]] # upstairs, downstairs, flat-terrain
         self.env_id = env_id
-        print("Created env {}".format(self.env_id))
+        print(f"Created env {self.env_id}, env_type={env_args['task']}")
         self._n_episode = 0
         self.episode_step = 0
         self.resampling_command_steps = 500 # 500
@@ -786,6 +819,7 @@ class UnitreeGo1(gym.Env):
         self.eval = False
         self.np_rng = np.random.default_rng(self.seed)
         self.nominal_height = 0.34 #0.325  0.3
+        self.initial_drop_height = 0.30
         # self.nominal_joint_positions = np.array([
         #     -0.2, -0.7, 1.25,
         #     0.2, 0.7, -1.25,
@@ -800,7 +834,9 @@ class UnitreeGo1(gym.Env):
         ])
 
         self.max_joint_velocities = np.array([30.1, 30.1, 20.06] * 4)
-        self.initial_drop_height = 0.30 + self.current_level*0.1 #0.325 0.34, 0.30
+
+
+
 
         self.total_timesteps = 0
 
@@ -950,6 +986,7 @@ class UnitreeGo1(gym.Env):
         #         geom.solref = contact_solref
         spec = mujoco.MjSpec.from_file(filename=xml_path)
         self.step_height_curriculum_level = np.linspace(0.0, 0.15, 8)
+        self.number_steps = 10
 
         tile_size = 8.0
         curriculum_spacing = tile_size * 2.0 # 15 m
@@ -968,10 +1005,11 @@ class UnitreeGo1(gym.Env):
                         grid_loc=tile_center_pos,
                         name=f"stairs_center_{level}",
                         tile_size=tile_size,
-                        num_stairs=10,
+                        num_stairs=self.number_steps,
                         step_height=step_height,
                         step_depth=0.24,
                         terrain_group=5,
+                        buffer_width = 2
                     )
         elif self.task==2:
 
@@ -988,7 +1026,7 @@ class UnitreeGo1(gym.Env):
                         grid_loc=tile_center_pos,
                         name=f"stairs_center_{level}",
                         tile_size=tile_size,
-                        num_stairs=10,
+                        num_stairs=self.number_steps,
                         step_height=step_height,
                         step_depth=0.24,
                         terrain_group=5,
@@ -1069,6 +1107,8 @@ class UnitreeGo1(gym.Env):
                     #     terrain_group=5,
                     # )
 
+        # initial drop height
+          # 0.325 0.34, 0.30
         # step_height_curriculum_level = np.linspace(0.0, 0.15, 8)
         # for level in range(2):
         #     tile_size = 5.0
@@ -1321,14 +1361,19 @@ class UnitreeGo1(gym.Env):
         self.reward_function.init()
 
 
+    def set_drop_height(self):
+        if self.task == 2:
 
+            self.initial_drop_height = 0.30 + self.number_steps  * self.step_height_curriculum_level[self.current_level]
+        else:
+            self.initial_drop_height = 0.30
 
     def initial_state(self):
         if self.final_level or self.current_level==8:
             self.current_level = np.random.choice(8)
         nominal_joint_pos = self.nominal_joint_positions.copy()
         initial_joint_pos = nominal_joint_pos.copy()
-        self.initial_drop_height =  0.30 + self.current_level * self.step_height_curriculum_level[self.current_level] + 0.15
+        self.set_drop_height()
         init_xpos,init_ypos = self.tile_poses[self.current_level,:]
         qpos = np.array([
             init_xpos,init_ypos, self.initial_drop_height,
@@ -1589,28 +1634,29 @@ class UnitreeGo1(gym.Env):
         if done:
             self.episode_count +=1
             # evaluate curriculum
+            if self.task>0:
 
-            self.final_level = self.current_level >= 8
-
-
-            robot_xy = self.data.qpos[:2].copy()
-            tile_origin_xy =self.tile_poses[self.current_level,:].copy()
-            distance = np.linalg.norm(robot_xy - tile_origin_xy)
-            command_xy = np.array([self.goal_x_velocity, self.goal_y_velocity])
-
-            promote = distance > 2.5
-            demote = (
-                             distance < 0.5 * np.linalg.norm(command_xy) * 10.0
-                     ) and not promote
+                self.final_level = self.current_level >= 8
 
 
+                robot_xy = self.data.qpos[:2].copy()
+                tile_origin_xy =self.tile_poses[self.current_level,:].copy()
+                distance = np.linalg.norm(robot_xy - tile_origin_xy)
+                command_xy = np.array([self.goal_x_velocity, self.goal_y_velocity])
 
-            if promote:
-                self.current_level += 1
-                self.current_level = np.clip(self.current_level,0,9)
-            if demote:
-                self.current_level -= 1
-                self.current_level = np.clip(self.current_level,0,9)
+                promote = distance > 2.5
+                demote = (
+                                 distance < 0.5 * np.linalg.norm(command_xy) * 10.0
+                         ) and not promote
+
+
+
+                if promote:
+                    self.current_level += 1
+                    self.current_level = np.clip(self.current_level,0,9)
+                if demote:
+                    self.current_level -= 1
+                    self.current_level = np.clip(self.current_level,0,9)
 
 
 
@@ -1897,6 +1943,7 @@ class UnitreeGo1(gym.Env):
         observation[self.damping_idx] = 2*(self.damping -self.damping_min)/(self.damping_max - self.damping_min) -1
 
         observation[self.height_map_idx] = self.heights_obs.copy()
+
 
         return observation
 

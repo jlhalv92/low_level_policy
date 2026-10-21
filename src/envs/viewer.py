@@ -16,7 +16,7 @@ class MujocoViewer:
         self.target_render_time = 1 / 60.
         self.time_per_render = self.target_render_time
         self.run_speed_factor = 1.0
-        self.paused = True
+        self.paused = False
         self.hide_menu = False
         self.overlay = {}
         self.font_scale = 100
@@ -42,8 +42,8 @@ class MujocoViewer:
         mujoco.mjv_defaultFreeCamera(model, self.camera)
         self.all_camera_modes = ("static", "follow")
         self.camera_mode_iter = cycle(self.all_camera_modes)
-        self.camera_mode = "follow"
-        self.camera_mode_target = self.camera_mode
+        self.camera_mode = "static"
+        self.camera_mode_target = "follow"
         self.set_camera()
 
         framebuffer_width, framebuffer_height = glfw.get_framebuffer_size(self.window)
@@ -202,6 +202,7 @@ class MujocoViewer:
         self.overlay[topleft][1] += "[S]lower, [F]aster"
 
     def set_camera(self):
+
         if self.camera_mode_target == "static" and self.camera_mode != "static":
                 self.camera.fixedcamid = 0
                 self.camera.type = mujoco.mjtCamera.mjCAMERA_FREE

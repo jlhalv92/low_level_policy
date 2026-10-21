@@ -155,10 +155,16 @@ def experiment(alg, n_epochs,
     actor = PolicyNetwork
     critic = ValueNetwork
     print(f"Target velocity vx: {target_v[0]} vy: {target_v[1]}  wz: {target_v[2]}")
+
     env_args = dict(vx_limit=target_v[0], vy_limit=target_v[1], wz_limit=target_v[2])
     # env_args = dict(vx_limit=1.5, vy_limit=0.8, wz_limit=1.5)
+    env_args["current_level"] = 0
 
-    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, **env_args)
+
+    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, multi_envs=True, **env_args)
+
+    env_args["task"] = "flat"
+    env_args["current_level"] = 0
     mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
 
     obs_shape = (mdp_eval.info.observation_space.shape[0],)
@@ -278,7 +284,7 @@ def parse_args():
     parser.add_argument("--n_steps_per_fit", type=int, default=1000, help="Number of steps per fit")
     parser.add_argument("--n_episodes_test", type=int, default=10, help="Number of test episodes")
     parser.add_argument("--n_minibatches", type=int, default=20, help="Number of test episodes")
-    parser.add_argument("--name_exp", type=str, default="LLC_N_48")
+    parser.add_argument("--name_exp", type=str, default="LLC_MULTI_TERRAIN")
     parser.add_argument("--log", type=str2bool, nargs='?', const=True, default=False,  help="Enable logging")
     parser.add_argument("--wandb_project",type=str,default="A_POLICY_TRAINING")
     parser.add_argument("--lr", type=float, default=1e-3)

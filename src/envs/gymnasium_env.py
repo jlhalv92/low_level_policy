@@ -1,4 +1,5 @@
 import warnings
+from copy import deepcopy
 
 import gymnasium as gym
 from gymnasium import spaces as gym_spaces
@@ -42,6 +43,8 @@ class GymnasiumGO1(Environment):
                  ,headless=False,
                  wrappers=None,
                  wrappers_args=None,
+                 multi_envs=False,
+                 tasks = ("flat", "stairs_down", "stairs_up"),
                  **env_args):
         """
         Constructor.
@@ -68,17 +71,28 @@ class GymnasiumGO1(Environment):
         self.horizon = horizon
         episode_length_in_seconds = horizon*0.02
         if n_envs > 1:
+
             vector_environment_class = gym.vector.AsyncVectorEnv
             print("Parallel envs", n_envs)
+            if multi_envs:
+                env = vector_environment_class(
+                    [make_env(42,
+                              env_id,
+                              {**deepcopy(env_args), "task": tasks[env_id % len(tasks)]},
+                              domain_randomization,
+                              episode_length_in_seconds) for env_id in range(n_envs)],
+                    autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
+                )
 
-            env = vector_environment_class(
-                [make_env(42,
-                          env_id,
-                          env_args,
-                          domain_randomization,
-                          episode_length_in_seconds) for env_id in range(n_envs)],
-                autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
-            )
+            else:
+                env = vector_environment_class(
+                    [make_env(42,
+                              env_id,
+                              env_args,
+                              domain_randomization,
+                              episode_length_in_seconds) for env_id in range(n_envs)],
+                    autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
+                )
 
 
         else:
