@@ -7,16 +7,81 @@ import torch.nn.functional as F
 from src.mushroom.agent.agent import Agent
 from mushroom_rl.approximators import Regressor
 from mushroom_rl.approximators.parametric import TorchApproximator
-from mushroom_rl.utils.torch import to_float_tensor, update_optimizer_parameters
-#from mushroom_rl.utils.minibatches import minibatch_generator
-# from mushroom_rl.utils.dataset import parse_dataset, compute_J
-from src.mushroom.dataset.dataset import parse_vectorize_dataset
-#from mushroom_rl.utils.value_functions import compute_gae
+from mushroom_rl.utils.torch import update_optimizer_parameters
 from mushroom_rl.utils.parameters import to_parameter
 
 from collections import defaultdict
 
 import numpy as np
+
+
+class OnlineEpisodeReturn:
+    def __init__(self):
+        self.pending_returns = None
+
+    @torch.no_grad()
+    def update(
+        self,
+        rewards: torch.Tensor,
+        terminated: torch.Tensor,
+    ) -> torch.Tensor:
+        """Inputs: (M, N, 1). Output: mean completed episode return.
+
+        Returns NaN when no episodes complete in this iteration.
+        Environment ordering must remain consistent between calls.
+        """
+        if (
+            rewards.ndim != 3
+            or rewards.shape[-1] != 1
+            or rewards.shape != terminated.shape
+        ):
+            raise ValueError("Inputs must have matching shapes (M, N, 1).")
+
+        if not rewards.is_floating_point():
+            rewards = rewards.float()
+
+        done = terminated.to(device=rewards.device, dtype=torch.bool)
+
+        if self.pending_returns is None:
+            self.pending_returns = rewards.new_zeros(rewards.shape[1:])
+
+        if (
+            self.pending_returns.shape != rewards.shape[1:]
+            or self.pending_returns.device != rewards.device
+            or self.pending_returns.dtype != rewards.dtype
+        ):
+            raise ValueError("Environment count, device and dtype must stay consistent.")
+
+        # Transitions up to and including the last termination in each env.
+        completed_mask = (
+            done.flip(0).long().cumsum(dim=0).flip(0) > 0
+        )
+        has_completed = done.any(dim=0)  # (N, 1)
+
+        # Previous pending rewards belong to the first completed episode.
+        completed_return_sum = (
+            rewards.masked_fill(~completed_mask, 0).sum()
+            + self.pending_returns.masked_fill(~has_completed, 0).sum()
+        )
+
+        # Save rewards after the last termination. If there was no
+        # termination, retain the previous pending return as well.
+        self.pending_returns = (
+            rewards.masked_fill(completed_mask, 0).sum(dim=0)
+            + self.pending_returns.masked_fill(has_completed, 0)
+        )
+
+        episode_count = done.sum()
+
+        return torch.where(
+            episode_count > 0,
+            completed_return_sum / episode_count.clamp_min(1),
+            completed_return_sum.new_full((), float("nan")),
+        )
+
+    def reset(self):
+        """Discard pending returns when starting a new training run."""
+        self.pending_returns = None
 
 
 def minibatch_generator(mini_batch_size, *dataset):
@@ -148,6 +213,8 @@ class PPO(Agent):
         self._n_epochs_policy = to_parameter(n_epochs_policy)
         self._batch_size = to_parameter(batch_size)
         self._eps_ppo = to_parameter(eps_ppo)
+        self.rewards_tracker = OnlineEpisodeReturn()
+
 
         self._optimizer = actor_optimizer['class'](policy.parameters(), **actor_optimizer['params'])
         self.learning_rate = actor_optimizer['params']['lr']
@@ -184,14 +251,12 @@ class PPO(Agent):
         #r = r.astype(np.float32)
         #xn = next_state.astype(np.float32)
 
-        #obs = to_float_tensor(x, self.policy.use_cuda)
-        #act = to_float_tensor(u, self.policy.use_cuda)
+
         # Compute GAE
 
 
         #v_target, np_adv = compute_gae(self._V, x, xn, r, absorbing, last, self.mdp_info.gamma, self._lambda())
         #np_adv = (np_adv - np.mean(np_adv)) / (np.std(np_adv) + 1e-8)
-        #adv = to_float_tensor(np_adv, self.policy.use_cuda)
         v_target, adv= compute_gae(values, next_values, rewards, terminated, truncated, self.mdp_info.gamma, self._lambda())
         adv = (adv - adv.mean()) / (adv.std(unbiased=False) + 1e-8)
         if self.asymetric:
@@ -212,8 +277,6 @@ class PPO(Agent):
         #
         self._update_policy(actor_obs, actions_gpu, adv_gpu, old_log_p_gpu)
 
-
-
         #self._log_info(dataset, x, v_target.flatten(0,1), old_policy_distribution)
 
         new_pol_dist = self.policy.distribution(actor_obs.flatten(0,1))
@@ -232,6 +295,17 @@ class PPO(Agent):
             param_group['lr'] = self.learning_rate
 
         self._iter += 1
+
+
+        episode_end = terminated.bool() | truncated.bool()
+        avg_rwd = self.rewards_tracker.update(rewards, episode_end)
+
+
+        msg = "Iteration {}:\n\t\t\t\trewards {} \n\t\t\t\tentropy {}  kl {}".format(
+            self._iter, avg_rwd, self.policy.entropy(actor_obs.flatten(0,1)), kl_mean)
+
+        self._logger.info(msg)
+        self._logger.weak_line()
 
 
 

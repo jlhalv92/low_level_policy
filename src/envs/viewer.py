@@ -42,7 +42,7 @@ class MujocoViewer:
         mujoco.mjv_defaultFreeCamera(model, self.camera)
         self.all_camera_modes = ("static", "follow")
         self.camera_mode_iter = cycle(self.all_camera_modes)
-        self.camera_mode = next(self.camera_mode_iter)
+        self.camera_mode = "follow"
         self.camera_mode_target = self.camera_mode
         self.set_camera()
 

@@ -268,9 +268,9 @@ class Core(object):
             if self.record:
                 self._record(frame)
 
-        last = not(
-            self._episode_steps < self.mdp.info.horizon and not absorbing)
-
+        # last = not(
+        #     self._episode_steps < self.mdp.info.horizon and not absorbing)
+        last = truncated | absorbing
         state = self._state
         next_state = self._preprocess(next_state.copy())
         self._state = next_state

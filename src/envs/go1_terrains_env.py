@@ -67,6 +67,138 @@ def perlin(shape, res, tileable=(False, False), interpolant=interpolant):
   return np.sqrt(2)*((1-t[:,:,1])*n0 + t[:,:,1]*n1)
 
 
+def outward_rising_stairs(
+    spec=None,
+    grid_loc=(0.0, 0.0),
+    num_stairs=4,
+    name="outward_stairs",
+    tile_size=5.0,
+    step_height=0.10,
+    step_depth=0.24,
+    buffer_width=1.0,
+    base_z=0.0,
+    base_thickness=0.10,
+    floor_name="floor",
+    terrain_group=5,
+):
+    """
+    Square stairs rising from the center toward the edges.
+
+    Center surface: base_z.
+    Outer ring and buffer: base_z + num_stairs * step_height.
+    Total width: tile_size + 2 * buffer_width.
+
+    Returns the MjSpec.
+    """
+    if spec is None:
+        spec = mujoco.MjSpec()
+
+    if not isinstance(num_stairs, int) or num_stairs < 0:
+        raise ValueError("num_stairs must be a nonnegative integer.")
+    if min(tile_size, step_depth, base_thickness) <= 0:
+        raise ValueError("Dimensions must be positive.")
+    if step_height < 0 or buffer_width < 0:
+        raise ValueError("step_height and buffer_width must be nonnegative.")
+
+    half = tile_size / 2
+    center_half = half - num_stairs * step_depth
+
+    if center_half <= 0:
+        raise ValueError("Steps leave no space for the center platform.")
+
+    floor = next(
+        (geom for geom in spec.geoms if geom.name == floor_name),
+        None,
+    )
+
+    body = spec.worldbody.add_body(
+        name=name,
+        pos=[float(grid_loc[0]), float(grid_loc[1]), base_z],
+    )
+
+    bottom = -base_thickness
+    rgba = [0.460, 0.362, 0.216, 1.0]
+
+    def add_box(suffix, xy, half_xy, top):
+        height = top - bottom
+
+        geom = body.add_geom(
+            name=f"{name}_{suffix}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=[xy[0], xy[1], bottom + height / 2],
+            size=[half_xy[0], half_xy[1], height / 2],
+            rgba=rgba,
+            group=terrain_group,
+        )
+
+        if floor is not None:
+            for parameter in (
+                "friction", "condim", "solref", "solimp",
+                "solmix", "priority", "margin", "gap",
+                "contype", "conaffinity",
+            ):
+                value = getattr(floor, parameter)
+                setattr(
+                    geom,
+                    parameter,
+                    value.copy() if isinstance(value, np.ndarray) else value,
+                )
+
+    # Lowest central platform.
+    add_box(
+        "center",
+        [0.0, 0.0],
+        [center_half, center_half],
+        top=0.0,
+    )
+
+    # Concentric rings, highest at the outside.
+    for i in range(num_stairs):
+        outer = half - i * step_depth
+        inner = outer - step_depth
+        offset = (outer + inner) / 2
+        top = (num_stairs - i) * step_height
+
+        for label, sign in (("left", -1), ("right", 1)):
+            add_box(
+                f"ring_{i}_{label}",
+                [sign * offset, 0.0],
+                [step_depth / 2, outer],
+                top,
+            )
+
+        for label, sign in (("front", 1), ("back", -1)):
+            add_box(
+                f"ring_{i}_{label}",
+                [0.0, sign * offset],
+                [inner, step_depth / 2],
+                top,
+            )
+
+    # Elevated buffer, flush with the outermost stair.
+    if buffer_width > 0:
+        edge_top = num_stairs * step_height
+        offset = half + buffer_width / 2
+        outer_half = half + buffer_width
+
+        for label, sign in (("left", -1), ("right", 1)):
+            add_box(
+                f"buffer_{label}",
+                [sign * offset, 0.0],
+                [buffer_width / 2, outer_half],
+                edge_top,
+            )
+
+        for label, sign in (("front", 1), ("back", -1)):
+            add_box(
+                f"buffer_{label}",
+                [0.0, sign * offset],
+                [half, buffer_width / 2],
+                edge_top,
+            )
+
+    return spec
+
 def stairs(
     spec=None,
     grid_loc=(0.0, 0.0),
@@ -601,7 +733,8 @@ class UnitreeGo1(gym.Env):
             p = psutil.Process()
             p.cpu_affinity([cpu_id, ])
         self.final_level = False
-        self.current_level = 0
+        self.current_level = env_args["current_level"]
+        self.task = env_args["task"] # upstairs, downstairs, flat-terrain
         self.env_id = env_id
         print("Created env {}".format(self.env_id))
         self._n_episode = 0
@@ -684,7 +817,26 @@ class UnitreeGo1(gym.Env):
         self.dt = timestep * self.nr_substeps * self.nr_intermediate_steps
 
         self.horizon = int(round(episode_length_in_seconds * self.control_frequency_hz))
-        self.reward_function = Reward(self)
+        self.reward_function = Reward(self,
+                tracking_xy_velocity_command_coeff= 1,
+                 tracking_yaw_velocity_command_coeff= 0.5,
+                 z_velocity_coeff= -2, #2, 0.5
+                 pitch_roll_vel_coeff= -0.05,
+                 pitch_roll_pos_coeff= -0, # 0.2, 5
+                 joint_position_limit_coeff= -10.0, #10
+                 joint_torque_coeff= -0.0002, #0.00001 0.0001
+                 joint_acceleration_coeff= -2.5e-7,
+                 joint_velocity_coeff = 0, # 0
+                 action_rate_coeff= -0.01, # 0.02 0.01
+                 collision_coeff= -1,
+                 base_height_coeff= -0, #30
+                 air_time_coeff= 1., # 0.1 0.5
+                 xy_tracking_temperature= 0.25,
+                 yaw_tracking_temperature= 0.25,
+                 soft_joint_position_limit= 0.9,
+                 max_airtime =0.5,
+                 stand_still_coeff = 0)
+
         self.vxy_tracking = 0
         self.wz_tracking = 0
         self.episode_len = 0
@@ -799,53 +951,74 @@ class UnitreeGo1(gym.Env):
         spec = mujoco.MjSpec.from_file(filename=xml_path)
         self.step_height_curriculum_level = np.linspace(0.0, 0.15, 8)
 
-        tile_size = 5.0
-        curriculum_spacing = tile_size * 3.0 # 15 m
+        tile_size = 8.0
+        curriculum_spacing = tile_size * 2.0 # 15 m
         self.tile_poses = np.zeros((8,2))
-        for level in range(8):
-            center_x = level * curriculum_spacing
-            center_y = 0.0
-            tile_center_pos = [center_x, center_y]
-            self.tile_poses[level] = tile_center_pos
-            # Center tile: flat at level zero, stairs at higher levels.
-            step_height = self.step_height_curriculum_level[level]
-            if level > 0 :
-                spec = stairs(
-                    spec=spec,
-                    grid_loc=tile_center_pos,
-                    name=f"stairs_center_{level}",
-                    tile_size=tile_size,
-                    num_stairs=6,
-                    direction=1,
-                    step_height=step_height,
-                    step_depth=0.24,
-                    terrain_group=5,
-                )
-            # Eight neighboring flat tiles.
-            if level < 7:
-                step_height_sides = self.step_height_curriculum_level[level+1]
-
-            else:
-                step_height_sides = self.step_height_curriculum_level[level]
-
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    if dx == 0 and dy == 0:
-                        continue
-                    spec = stairs(
+        if self.task == 1:
+            for level in range(8):
+                center_x = level * curriculum_spacing
+                center_y = 0.0
+                tile_center_pos = [center_x, center_y]
+                self.tile_poses[level] = tile_center_pos
+                # Center tile: flat at level zero, stairs at higher levels.
+                step_height = self.step_height_curriculum_level[level]
+                if level > 0 :
+                    spec = outward_rising_stairs(
                         spec=spec,
-                            grid_loc=(
-                                center_x + dx * tile_size,
-                                center_y + dy * tile_size,
-                            ),
-                        name=f"stairs_center_{level}_{dx + 1}_{dy + 1}",
+                        grid_loc=tile_center_pos,
+                        name=f"stairs_center_{level}",
                         tile_size=tile_size,
-                        num_stairs=6,
-                        direction=1,
-                        step_height=step_height_sides,
+                        num_stairs=10,
+                        step_height=step_height,
                         step_depth=0.24,
                         terrain_group=5,
                     )
+        elif self.task==2:
+
+            for level in range(8):
+                center_x = level * curriculum_spacing
+                center_y = 0.0
+                tile_center_pos = [center_x, center_y]
+                self.tile_poses[level] = tile_center_pos
+                # Center tile: flat at level zero, stairs at higher levels.
+                step_height = self.step_height_curriculum_level[level]
+                if level > 0:
+                    spec = stairs(
+                        spec=spec,
+                        grid_loc=tile_center_pos,
+                        name=f"stairs_center_{level}",
+                        tile_size=tile_size,
+                        num_stairs=10,
+                        step_height=step_height,
+                        step_depth=0.24,
+                        terrain_group=5,
+                        direction=1,
+                    )
+            # Eight neighboring flat tiles.
+            # if level < 7:
+            #     step_height_sides = self.step_height_curriculum_level[level+1]
+            #
+            # else:
+            #     step_height_sides = self.step_height_curriculum_level[level]
+
+            # for dx in (-1, 0, 1):
+            #     for dy in (-1, 0, 1):
+            #         if dx == 0 and dy == 0:
+            #             continue
+            #         spec = stairs(
+            #             spec=spec,
+            #                 grid_loc=(
+            #                     center_x + dx * tile_size,
+            #                     center_y + dy * tile_size,
+            #                 ),
+            #             name=f"stairs_center_{level}_{dx + 1}_{dy + 1}",
+            #             tile_size=tile_size,
+            #             num_stairs=6,
+            #             direction=1,
+            #             step_height=step_height_sides,
+            #             step_depth=0.24,
+            #             terrain_group=5,
+            #         )
 
                     # spec = flat_floor(
                     #     spec=spec,
@@ -1403,7 +1576,12 @@ class UnitreeGo1(gym.Env):
 
         terminated = self.should_terminate(next_observation)
 
-        truncated = self.episode_step >= self.horizon-1
+        robot_xy = self.data.qpos[:2].copy()
+        tile_origin_xy = self.tile_poses[self.current_level, :].copy()
+        distance = np.linalg.norm(robot_xy - tile_origin_xy)
+        distance_condition = distance >=5
+
+        truncated = self.episode_step >= self.horizon-1 or distance_condition
 
         done = terminated | truncated
 
