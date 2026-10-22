@@ -160,11 +160,10 @@ def experiment(alg, n_epochs,
     # env_args = dict(vx_limit=1.5, vy_limit=0.8, wz_limit=1.5)
     env_args["current_level"] = 0
 
-
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, multi_envs=True, **env_args)
 
     env_args["task"] = "flat"
-    env_args["current_level"] = 0
+    env_args["current_level"] = 8
     mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
 
     obs_shape = (mdp_eval.info.observation_space.shape[0],)
@@ -217,40 +216,46 @@ def experiment(alg, n_epochs,
     mdp_eval.env.eval=True
     core_eval = CoreEval(agent, mdp_eval, asymetric=False)
 
+    J_ACC = 0
+    R_ACC = 0
+    for task_id in range(3):
+        core_eval.mdp.env.task=task_id
+        dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
 
-    dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
-
-    J = np.mean(compute_J(dataset, mdp.info.gamma))
-    R = np.mean(compute_J(dataset))
+        J = np.mean(compute_J(dataset, mdp.info.gamma))
+        R = np.mean(compute_J(dataset))
+        J_ACC += J
+        R_ACC += R
+    J_ACC /= 3
+    R_ACC /= 3
     E = agent.policy.entropy()
-
-
-
-    logger.epoch_info(0, J=J, R=R, entropy=E)
+    logger.epoch_info(0, MEAN_J=J_ACC, MEAN_R=R_ACC, entropy=E)
 
 
     for it in trange(init_epoch,n_epochs + init_epoch, leave=False):
         core.learn(n_steps=n_steps, n_steps_per_fit=n_steps_per_fit)
 
+        J_ACC = 0
+        R_ACC = 0
 
-        if (it + 1) % 5 == 0:
-            render = False
-        else:
-            render = False
+        for task_id in range(3):
+            core_eval.mdp.env.task = task_id
+            dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
 
-        dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=render)
+            J = np.mean(compute_J(dataset, mdp.info.gamma))
+            R = np.mean(compute_J(dataset))
+            J_ACC += J
+            R_ACC += R
 
-        J = np.mean(compute_J(dataset, mdp.info.gamma))
-        R = np.mean(compute_J(dataset))
+        J_ACC /= 3
+        R_ACC /= 3
+
         E = agent.policy.entropy()
-
-
-
-        logger.epoch_info(it, J=J, R=R, entropy=E)
+        logger.epoch_info(0, MEAN_J=J_ACC, MEAN_R=R_ACC, entropy=E)
 
         if log:
-            log_dict = dict(J=J,
-                            R=R,
+            log_dict = dict(J=J_ACC,
+                            R=R_ACC,
                             entropy=E)
 
             wandb.log(log_dict, step=it*n_envs*n_steps)

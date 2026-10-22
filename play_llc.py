@@ -89,7 +89,8 @@ def calculate_success_rate(info, last):
 
 
 def experiment(agent=None,
-               joystick=False, name_exp ="", n_episodes=10, render=False, vel=[1.0,1.0,1.0]):
+               joystick=False, name_exp ="",
+               n_episodes=10, render=False, vel=[1.0,1.0,1.0], task="flat"):
 
     np.random.seed()
 
@@ -105,7 +106,7 @@ def experiment(agent=None,
     n_features = 256
 
     env_args = dict(vx_limit=vel[0], wz_limit=vel[2], vy_limit=vel[1])
-    env_args["task"] = "flat"
+    env_args["task"] = task
     env_args["current_level"] = 1
     mdp = GymnasiumGO1(gamma=gamma,  n_envs=1, joystick=joystick, domain_randomization=False,  **env_args)
     mdp.env.eval =True
@@ -181,10 +182,11 @@ if __name__ == '__main__':
 
 
 
-    student_path = "nominal_policy/stairs/epoch_last"
+    student_path = "nominal_policy/multi_terrain/epoch_last"
     low_level_control = Agent.load(student_path)
+    task = task_dict ={"stairs_up":2, "stairs_down":1, "flat":0}
     experiment(
                name_exp="RAPID_LOCOMOTION_",
-               agent=low_level_control, joystick=True, n_episodes=10, render=True, vel=[1.5,0.5,1.5])
+               agent=low_level_control, joystick=False, n_episodes=10, render=True, vel=[1.5,0.8,1.0], task="stairs_down")
 
 
