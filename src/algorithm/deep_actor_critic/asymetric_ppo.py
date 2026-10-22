@@ -317,7 +317,6 @@ class PPO(Agent):
 
 
     def _update_policy(self, obs, act, adv, old_log_p):
-        print(self._batch_size(), obs.shape)
 
         for epoch in range(self._n_epochs_policy()):
             for obs_i, act_i, adv_i, old_log_p_i in minibatch_generator(
