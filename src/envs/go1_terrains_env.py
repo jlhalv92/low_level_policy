@@ -1256,7 +1256,7 @@ class UnitreeGo1(gym.Env):
         self.x_limit =  env_args["vx_limit"]# 1.2, 3.5
         self.y_limit = env_args["vy_limit"]
         self.wz_limit =  env_args["wz_limit"] #1.5, 5.5
-        bins = 11 # 51
+        bins = 21 # 51
         self.vel_curriculum = RewardThresholdCurriculum(42,
                                                         x=(-self.x_limit, self.x_limit, bins),
                                                         y=(-self.y_limit , self.y_limit ,2),
