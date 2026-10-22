@@ -1236,10 +1236,11 @@ class UnitreeGo1(gym.Env):
         self.current_level = env_args["current_level"]
         self.task = self.task_dict[env_args["task"]] # upstairs, downstairs, flat-terrain
         self.env_id = env_id
-        print(f"Created env {self.env_id}, env_type={env_args['task']}")
         self._n_episode = 0
         self.episode_step = 0
         self.terrain_curriculum = terrain_curriculum
+        print(f"Created env {self.env_id}, env_type={env_args['task']} with terrain_curriculum={terrain_curriculum}, current_level={self.current_level}")
+
         self.resampling_command_steps = 500 # 500
         self.joystick = joystick
         self.env_args = env_args

@@ -82,8 +82,8 @@ class GymnasiumGO1(Environment):
                               env_id,
                               {**deepcopy(env_args), "task": tasks[env_id % len(tasks)]},
                               domain_randomization,
-                              terrain_curriculum,
-                              episode_length_in_seconds) for env_id in range(n_envs)],
+                              episode_length_in_seconds,
+                              terrain_curriculum) for env_id in range(n_envs)],
                     autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
                 )
 
@@ -93,8 +93,8 @@ class GymnasiumGO1(Environment):
                               env_id,
                               env_args,
                               domain_randomization,
-                              terrain_curriculum,
-                              episode_length_in_seconds) for env_id in range(n_envs)],
+                              episode_length_in_seconds,
+                              terrain_curriculum) for env_id in range(n_envs)],
                     autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
                 )
 
