@@ -101,16 +101,14 @@ def minibatch_generator(mini_batch_size, *dataset):
 
     """
 
-    steps = dataset[0].size()[0]
-    n_envs = dataset[0].size()[1]
-    batch_size = n_envs * steps
+    batch_size = dataset[0].size()[0]
     size = len(dataset[0])
     num_minibatches = int(np.ceil(size/ mini_batch_size))
 
-    states = dataset[0].flatten(0, 1)
-    actions = dataset[1].flatten(0, 1)
-    old_log_probs = dataset[2].flatten(0, 1)
-    advantages = dataset[3].flatten(0, 1)
+    states = dataset[0]
+    actions = dataset[1]
+    old_log_probs = dataset[2]
+    advantages = dataset[3]
 
     # A fresh shuffle for every epoch.
     indices = torch.randperm(batch_size,device=dataset[0].device)
@@ -213,6 +211,7 @@ class PPO(Agent):
                                      10, 11, 12, 13, 14, 15, 16,
        17, 18, 19, 20, 21, 22, 23, 53, 54, 55, 24, 25, 26, 27, 28, 29, 30,
        31, 32, 33, 34, 35, 44, 45, 46, 47, 48, 49, 50, 51, 52])
+
         self._n_epochs_policy = to_parameter(n_epochs_policy)
         self._batch_size = to_parameter(batch_size)
         self._eps_ppo = to_parameter(eps_ppo)
@@ -279,7 +278,9 @@ class PPO(Agent):
         self._V.fit(states_b, v_target_b, **self._critic_fit_params)
 
         #
-        self._update_policy(actor_obs, actions_gpu, adv_gpu, old_log_p_gpu)
+
+
+        self._update_policy(actor_obs.flatten(0,1), actions_gpu.flatten(0,1), adv_gpu.flatten(0,1), old_log_p_gpu.flatten(0,1))
 
 
 
@@ -316,9 +317,12 @@ class PPO(Agent):
 
 
     def _update_policy(self, obs, act, adv, old_log_p):
+        print(self._batch_size(), obs.shape)
+
         for epoch in range(self._n_epochs_policy()):
             for obs_i, act_i, adv_i, old_log_p_i in minibatch_generator(
                     self._batch_size(), obs, act, adv, old_log_p):
+
                 self._optimizer.zero_grad()
                 prob_ratio = torch.exp(
                     self.policy.log_prob_t(obs_i, act_i) - old_log_p_i
