@@ -567,7 +567,6 @@ class UnitreeGo1(gym.Env):
         self.airtime.feet_air_time.fill(0.0)
         self.airtime.last_contact.fill(False)
         self.update_orientation_attributes()
-        self.airtime = Airtime()
         # if self.viewer:
         #     self.viewer.render(self.data)
         actor_obs = self.get_actor_observation()
