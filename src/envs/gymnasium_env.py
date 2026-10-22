@@ -46,7 +46,7 @@ class GymnasiumGO1(Environment):
                  wrappers_args=None,
                  multi_envs=False,
                  terrain_curriculum=False,
-                 tasks = ("flat", "upstairs", "downstairs"),
+                 tasks = ("flat"),
                  **env_args):
         """
         Constructor.

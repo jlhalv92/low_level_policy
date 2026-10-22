@@ -159,10 +159,14 @@ def experiment(alg, n_epochs,
     env_args = dict(vx_limit=target_v[0], vy_limit=target_v[1], wz_limit=target_v[2])
     # env_args = dict(vx_limit=1.5, vy_limit=0.8, wz_limit=1.5)
     env_args["current_level"] = 0
+    terrains = ["flat", "upstairs", "downstairs", "boxy"]
 
-    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, multi_envs=True, terrain_curriculum=True, **env_args)
+    mdp = GymnasiumGO1(gamma=gamma,
+                       n_envs=n_envs,
+                       domain_randomization=True,
+                       multi_envs=True,
+                       terrain_curriculum=True, tasks=terrains, **env_args)
 
-    terrains = ["flat", "upstairs", "downstairs"]
     list_mdp_eval = []
     for terrain in terrains:
         env_args["current_level"] = 8

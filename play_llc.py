@@ -187,6 +187,6 @@ if __name__ == '__main__':
     task = task_dict ={"downstairs":2, "upstairs":1, "flat":0}
     experiment(
                name_exp="RAPID_LOCOMOTION_",
-               agent=low_level_control, joystick=False, n_episodes=10, render=False, vel=[1.5,0.8,1.0], task="downstairs", level=5)
+               agent=low_level_control, joystick=True, n_episodes=10, render=True, vel=[1.5,0.8,1.0], task="boxy", level=1)
 
 
