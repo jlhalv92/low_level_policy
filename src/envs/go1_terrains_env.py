@@ -66,8 +66,144 @@ def perlin(shape, res, tileable=(False, False), interpolant=interpolant):
   n1 = n01*(1-t[:,:,0]) + t[:,:,0]*n11
   return np.sqrt(2)*((1-t[:,:,1])*n0 + t[:,:,1]*n1)
 
+# def stairs_down_heightfield(
+#     spec=None,
+#     grid_loc=(0.0, 0.0),
+#     name="stairs_down_hf",
+#     tile_size=5.0,
+#     num_stairs=4,
+#     step_height=0.10,
+#     step_depth=0.24,
+#     buffer_width=2.0,
+#     base_z=0.0,
+#     base_thickness=0.20,
+#     resolution=0.04,
+#     floor_name="floor",
+#     terrain_group=5,
+#     contact_timeconst=0.01,
+#     physics_timestep=0.005,
+#     foot_names=("FR_foot", "FL_foot", "RR_foot", "RL_foot"),
+# ):
+#     """
+#     Heightfield staircase descending outward from its center.
+#
+#     Center elevation: base_z.
+#     Edge/buffer elevation: base_z - num_stairs * step_height.
+#     Total width: tile_size + 2 * buffer_width.
+#
+#     Returns MjSpec. Compile after calling.
+#     """
+#     if spec is None:
+#         spec = mujoco.MjSpec()
+#
+#     if not isinstance(num_stairs, int) or num_stairs < 0:
+#         raise ValueError("num_stairs must be a nonnegative integer.")
+#     if min(tile_size, step_depth, resolution, base_thickness) <= 0:
+#         raise ValueError("Dimensions must be positive.")
+#     if step_height < 0 or buffer_width < 0:
+#         raise ValueError("step_height and buffer_width must be nonnegative.")
+#     if physics_timestep <= 0:
+#         raise ValueError("physics_timestep must be positive.")
+#     if contact_timeconst < 2 * physics_timestep:
+#         raise ValueError("contact_timeconst must be >= 2 * timestep.")
+#
+#     tile_half = tile_size / 2
+#     center_half = tile_half - num_stairs * step_depth
+#
+#     if center_half <= 0:
+#         raise ValueError("Steps leave no space for the central platform.")
+#
+#     # Sample the complete tile and its surrounding buffer.
+#     total_width = tile_size + 2 * buffer_width
+#     half_width = total_width / 2
+#
+#     # Odd sample count puts a sample exactly at the center.
+#     intervals = int(np.ceil(total_width / resolution))
+#     intervals += intervals % 2
+#     n = intervals + 1
+#
+#     axis = np.linspace(-half_width, half_width, n)
+#     xx, yy = np.meshgrid(axis, axis, indexing="xy")
+#
+#     # Distance inward from the square tile boundary.
+#     inward = tile_half - np.maximum(np.abs(xx), np.abs(yy))
+#
+#     # Outer ring = level 0; center = level num_stairs.
+#     levels = np.clip(
+#         np.floor(inward / step_depth + 1e-9),
+#         0,
+#         num_stairs,
+#     )
+#
+#     total_drop = num_stairs * step_height
+#
+#     if total_drop > 0:
+#         # MuJoCo heightfield samples are normalized to [0, 1].
+#         elevation = (levels / num_stairs).astype(np.float32)
+#         vertical_scale = total_drop
+#         #geom_z = base_z - total_drop
+#         geom_z = base_z
+#     else:
+#         # Flat terrain without a zero vertical scale.
+#         elevation = np.zeros((n, n), dtype=np.float32)
+#         vertical_scale = 0.001
+#         geom_z = base_z
+#
+#     spec.add_hfield(
+#         name=f"{name}_asset",
+#         size=[
+#             half_width,
+#             half_width,
+#             vertical_scale,
+#             base_thickness,
+#         ],
+#         nrow=n,
+#         ncol=n,
+#         userdata=elevation.ravel(),
+#     )
+#
+#     body = spec.worldbody.add_body(
+#         name=name,
+#         pos=[float(grid_loc[0]), float(grid_loc[1]), geom_z],
+#     )
+#
+#     terrain = body.add_geom(
+#         name=f"{name}_geom",
+#         type=mujoco.mjtGeom.mjGEOM_HFIELD,
+#         hfieldname=f"{name}_asset",
+#         rgba=[0.460, 0.362, 0.216, 1.0],
+#         group=terrain_group,
+#     )
+#
+#     floor = next(
+#         (g for g in spec.geoms if g.name == floor_name),
+#         None,
+#     )
+#
+#     # Copy baseline surface properties before overriding solref.
+#     if floor is not None:
+#         for parameter in (
+#             "friction", "condim", "solref", "solimp",
+#             "solmix", "priority", "margin", "gap",
+#             "contype", "conaffinity",
+#         ):
+#             value = getattr(floor, parameter)
+#             setattr(
+#                 terrain,
+#                 parameter,
+#                 value.copy() if isinstance(value, np.ndarray) else value,
+#             )
+#
+#     # Apply the same positive-format settings to both contact partners.
+#     terrain.solref = [contact_timeconst, 1.0]
+#
+#     for geom in spec.geoms:
+#         if geom.name in foot_names:
+#             geom.solref = [contact_timeconst, 1.0]
+#
+#     return spec
 
-def outward_rising_stairs(
+def stairs(
     spec=None,
     grid_loc=(0.0, 0.0),
     num_stairs=4,
@@ -75,172 +211,47 @@ def outward_rising_stairs(
     tile_size=5.0,
     step_height=0.10,
     step_depth=0.24,
-    buffer_width=1.0,
+    buffer_width=1.5,
     base_z=0.0,
     base_thickness=0.10,
     floor_name="floor",
     terrain_group=5,
+    direction=-1,
 ):
     """
-    Square stairs rising from the center toward the edges.
+    Square staircase with a central platform and an outer buffer.
 
-    Center surface: base_z.
-    Outer ring and buffer: base_z + num_stairs * step_height.
+    Direction is defined when moving outward from the center:
+        -1: upstairs; center low, outer ring high.
+        +1: downstairs; center high, outer ring low.
+
+    The lowest surface is always at base_z.
+    Maximum elevation: base_z + num_stairs * step_height.
     Total width: tile_size + 2 * buffer_width.
 
-    Returns the MjSpec.
-    """
-    if spec is None:
-        spec = mujoco.MjSpec()
-
-    if not isinstance(num_stairs, int) or num_stairs < 0:
-        raise ValueError("num_stairs must be a nonnegative integer.")
-    if min(tile_size, step_depth, base_thickness) <= 0:
-        raise ValueError("Dimensions must be positive.")
-    if step_height < 0 or buffer_width < 0:
-        raise ValueError("step_height and buffer_width must be nonnegative.")
-
-    half = tile_size / 2
-    center_half = half - num_stairs * step_depth
-
-    if center_half <= 0:
-        raise ValueError("Steps leave no space for the center platform.")
-
-    floor = next(
-        (geom for geom in spec.geoms if geom.name == floor_name),
-        None,
-    )
-
-    body = spec.worldbody.add_body(
-        name=name,
-        pos=[float(grid_loc[0]), float(grid_loc[1]), base_z],
-    )
-
-    bottom = -base_thickness
-    rgba = [0.460, 0.362, 0.216, 1.0]
-
-    def add_box(suffix, xy, half_xy, top):
-        height = top - bottom
-
-        geom = body.add_geom(
-            name=f"{name}_{suffix}",
-            type=mujoco.mjtGeom.mjGEOM_BOX,
-            pos=[xy[0], xy[1], bottom + height / 2],
-            size=[half_xy[0], half_xy[1], height / 2],
-            rgba=rgba,
-            group=terrain_group,
-        )
-
-        if floor is not None:
-            for parameter in (
-                "friction", "condim", "solref", "solimp",
-                "solmix", "priority", "margin", "gap",
-                "contype", "conaffinity",
-            ):
-                value = getattr(floor, parameter)
-                setattr(
-                    geom,
-                    parameter,
-                    value.copy() if isinstance(value, np.ndarray) else value,
-                )
-
-    # Lowest central platform.
-    add_box(
-        "center",
-        [0.0, 0.0],
-        [center_half, center_half],
-        top=0.0,
-    )
-
-    # Concentric rings, highest at the outside.
-    for i in range(num_stairs):
-        outer = half - i * step_depth
-        inner = outer - step_depth
-        offset = (outer + inner) / 2
-        top = (num_stairs - i) * step_height
-
-        for label, sign in (("left", -1), ("right", 1)):
-            add_box(
-                f"ring_{i}_{label}",
-                [sign * offset, 0.0],
-                [step_depth / 2, outer],
-                top,
-            )
-
-        for label, sign in (("front", 1), ("back", -1)):
-            add_box(
-                f"ring_{i}_{label}",
-                [0.0, sign * offset],
-                [inner, step_depth / 2],
-                top,
-            )
-
-    # Elevated buffer, flush with the outermost stair.
-    if buffer_width > 0:
-        edge_top = num_stairs * step_height
-        offset = half + buffer_width / 2
-        outer_half = half + buffer_width
-
-        for label, sign in (("left", -1), ("right", 1)):
-            add_box(
-                f"buffer_{label}",
-                [sign * offset, 0.0],
-                [buffer_width / 2, outer_half],
-                edge_top,
-            )
-
-        for label, sign in (("front", 1), ("back", -1)):
-            add_box(
-                f"buffer_{label}",
-                [0.0, sign * offset],
-                [half, buffer_width / 2],
-                edge_top,
-            )
-
-    return spec
-
-def stairs(
-    spec=None,
-    grid_loc=(0.0, 0.0),
-    num_stairs=4,
-    direction=1,
-    name="stairs",
-    tile_size=5.0,
-    step_height=0.10,
-    step_depth=0.24,
-    base_z=0.0,
-    base_thickness=0.10,
-    floor_name="floor",
-    terrain_group=1,
-):
-    """
-    Square staircase with a central platform.
-
-    direction = +1: ascend toward the center.
-    direction = -1: descend toward the center.
-
-    The outer border is at base_z.
-    The center is at base_z + direction*num_stairs*step_height.
-
-    Returns the MjSpec.
+    Returns the MjSpec. Compile after calling.
     """
     if spec is None:
         spec = mujoco.MjSpec()
 
     if direction not in (-1, 1):
-        raise ValueError("direction must be +1 or -1.")
+        raise ValueError("direction must be -1 or +1.")
     if not isinstance(num_stairs, int) or num_stairs < 0:
         raise ValueError("num_stairs must be a nonnegative integer.")
     if min(tile_size, step_depth, base_thickness) <= 0:
         raise ValueError("Dimensions must be positive.")
-    if step_height < 0:
-        raise ValueError("step_height must be nonnegative.")
+    if step_height < 0 or buffer_width < 0:
+        raise ValueError(
+            "step_height and buffer_width must be nonnegative."
+        )
 
     half = tile_size / 2
     center_half = half - num_stairs * step_depth
 
     if center_half <= 0:
-        raise ValueError("Steps leave no space for the central platform.")
+        raise ValueError(
+            "Steps leave no space for the central platform."
+        )
 
     floor = next(
         (geom for geom in spec.geoms if geom.name == floor_name),
@@ -252,11 +263,10 @@ def stairs(
         pos=[float(grid_loc[0]), float(grid_loc[1]), base_z],
     )
 
+    # Heights below are local to the body at base_z.
+    bottom = -base_thickness
+    max_height = num_stairs * step_height
     rgba = [0.460, 0.362, 0.216, 1.0]
-
-    # Local elevation of the common bottom of all boxes.
-    bottom = min(0.0, direction * num_stairs * step_height)
-    bottom -= base_thickness
 
     def add_box(suffix, xy, half_xy, top):
         height = top - bottom
@@ -280,40 +290,342 @@ def stairs(
                 setattr(
                     geom,
                     parameter,
-                    value.copy() if isinstance(value, np.ndarray) else value,
+                    value.copy()
+                    if isinstance(value, np.ndarray)
+                    else value,
                 )
 
-    # Each ring consists of four boxes with no overlapping volumes.
-    for i in range(num_stairs):
-        outer = half - i * step_depth
-        inner = outer - step_depth
-        offset = (outer + inner) / 2
-        top = direction * i * step_height
+    # Flat case: one box covering both tile and buffer.
+    if num_stairs == 0 or step_height == 0:
+        add_box(
+            "center",
+            [0.0, 0.0],
+            [half + buffer_width, half + buffer_width],
+            top=0.0,
+        )
+        return spec
 
-        for label, sign in (("left", -1), ("right", 1)):
-            add_box(
-                f"{i}_{label}",
-                [sign * offset, 0.0],
-                [step_depth / 2, outer],
-                top,
-            )
-
-        for label, sign in (("front", 1), ("back", -1)):
-            add_box(
-                f"{i}_{label}",
-                [0.0, sign * offset],
-                [inner, step_depth / 2],
-                top,
-            )
+    center_top = max_height if direction == 1 else 0.0
 
     add_box(
         "center",
         [0.0, 0.0],
         [center_half, center_half],
-        direction * num_stairs * step_height,
+        top=center_top,
     )
 
+    # Build rings from the outside toward the center.
+    for i in range(num_stairs):
+        outer = half - i * step_depth
+        inner = outer - step_depth
+
+        # Merge the buffer into the outermost ring.
+        if i == 0:
+            outer += buffer_width
+
+        strip_half_width = (outer - inner) / 2
+        offset = (outer + inner) / 2
+
+        if direction == 1:
+            # Low outside, high center: descend moving outward.
+            top = i * step_height
+        else:
+            # High outside, low center: ascend moving outward.
+            top = (num_stairs - i) * step_height
+
+        for label, sign in (("left", -1), ("right", 1)):
+            add_box(
+                f"ring_{i}_{label}",
+                [sign * offset, 0.0],
+                [strip_half_width, outer],
+                top,
+            )
+
+        for label, sign in (("front", 1), ("back", -1)):
+            add_box(
+                f"ring_{i}_{label}",
+                [0.0, sign * offset],
+                [inner, strip_half_width],
+                top,
+            )
+
     return spec
+
+
+# def outward_rising_stairs(
+#     spec=None,
+#     grid_loc=(0.0, 0.0),
+#     num_stairs=4,
+#     name="outward_stairs",
+#     tile_size=5.0,
+#     step_height=0.10,
+#     step_depth=0.24,
+#     buffer_width=1.0,
+#     base_z=0.0,
+#     base_thickness=0.10,
+#     floor_name="floor",
+#     terrain_group=5,
+# ):
+#     """
+#     Square stairs rising from the center toward the edges.
+#
+#     Center surface: base_z.
+#     Outer ring and buffer: base_z + num_stairs * step_height.
+#     Total width: tile_size + 2 * buffer_width.
+#
+#     Returns the MjSpec.
+#     """
+#     if spec is None:
+#         spec = mujoco.MjSpec()
+#
+#     if not isinstance(num_stairs, int) or num_stairs < 0:
+#         raise ValueError("num_stairs must be a nonnegative integer.")
+#     if min(tile_size, step_depth, base_thickness) <= 0:
+#         raise ValueError("Dimensions must be positive.")
+#     if step_height < 0 or buffer_width < 0:
+#         raise ValueError("step_height and buffer_width must be nonnegative.")
+#
+#     half = tile_size / 2
+#     center_half = half - num_stairs * step_depth
+#
+#     if center_half <= 0:
+#         raise ValueError("Steps leave no space for the center platform.")
+#
+#     floor = next(
+#         (geom for geom in spec.geoms if geom.name == floor_name),
+#         None,
+#     )
+#
+#     body = spec.worldbody.add_body(
+#         name=name,
+#         pos=[float(grid_loc[0]), float(grid_loc[1]), base_z],
+#     )
+#
+#     bottom = -base_thickness
+#     rgba = [0.460, 0.362, 0.216, 1.0]
+#
+#     def add_box(suffix, xy, half_xy, top):
+#         height = top - bottom
+#
+#         geom = body.add_geom(
+#             name=f"{name}_{suffix}",
+#             type=mujoco.mjtGeom.mjGEOM_BOX,
+#             pos=[xy[0], xy[1], bottom + height / 2],
+#             size=[half_xy[0], half_xy[1], height / 2],
+#             rgba=rgba,
+#             group=terrain_group,
+#         )
+#
+#         if floor is not None:
+#             for parameter in (
+#                 "friction", "condim", "solref", "solimp",
+#                 "solmix", "priority", "margin", "gap",
+#                 "contype", "conaffinity",
+#             ):
+#                 value = getattr(floor, parameter)
+#                 setattr(
+#                     geom,
+#                     parameter,
+#                     value.copy() if isinstance(value, np.ndarray) else value,
+#                 )
+#
+#     # Lowest central platform.
+#     add_box(
+#         "center",
+#         [0.0, 0.0],
+#         [center_half, center_half],
+#         top=0.0,
+#     )
+#
+#     # Concentric rings, highest at the outside.
+#     for i in range(num_stairs):
+#         outer = half - i * step_depth
+#         inner = outer - step_depth
+#
+#         # Incorporate the buffer into the outermost ring.
+#         if i == 0:
+#             outer += buffer_width
+#
+#         strip_half_width = (outer - inner) / 2
+#         offset = (outer + inner) / 2
+#         top = (num_stairs - i) * step_height
+#
+#         for label, sign in (("left", -1), ("right", 1)):
+#             add_box(
+#                 f"ring_{i}_{label}",
+#                 [sign * offset, 0.0],
+#                 [strip_half_width, outer],
+#                 top,
+#             )
+#
+#         for label, sign in (("front", 1), ("back", -1)):
+#             add_box(
+#                 f"ring_{i}_{label}",
+#                 [0.0, sign * offset],
+#                 [inner, strip_half_width],
+#                 top,
+#             )
+#     # for i in range(num_stairs):
+#     #     outer = half - i * step_depth
+#     #     inner = outer - step_depth
+#     #     offset = (outer + inner) / 2
+#     #     top = (num_stairs - i) * step_height
+#     #
+#     #     for label, sign in (("left", -1), ("right", 1)):
+#     #         add_box(
+#     #             f"ring_{i}_{label}",
+#     #             [sign * offset, 0.0],
+#     #             [step_depth / 2, outer],
+#     #             top,
+#     #         )
+#     #
+#     #     for label, sign in (("front", 1), ("back", -1)):
+#     #         add_box(
+#     #             f"ring_{i}_{label}",
+#     #             [0.0, sign * offset],
+#     #             [inner, step_depth / 2],
+#     #             top,
+#     #         )
+#
+#     # Elevated buffer, flush with the outermost stair.
+#     # if buffer_width > 0:
+#     #     edge_top = num_stairs * step_height
+#     #     offset = half + buffer_width / 2 - 0.2
+#     #     outer_half = half + buffer_width
+#     #
+#     #     for label, sign in (("left", -1), ("right", 1)):
+#     #         add_box(
+#     #             f"buffer_{label}",
+#     #             [sign * offset, 0.0],
+#     #             [buffer_width / 2, outer_half],
+#     #             edge_top,
+#     #         )
+#     #
+#     #     for label, sign in (("front", 1), ("back", -1)):
+#     #         add_box(
+#     #             f"buffer_{label}",
+#     #             [0.0, sign * offset],
+#     #             [half, buffer_width / 2],
+#     #             edge_top,
+#     #         )
+#
+#     return spec
+#
+# def stairs(
+#     spec=None,
+#     grid_loc=(0.0, 0.0),
+#     num_stairs=4,
+#     direction=1,
+#     name="stairs",
+#     tile_size=5.0,
+#     step_height=0.10,
+#     step_depth=0.24,
+#     base_z=0.0,
+#     base_thickness=0.10,
+#     floor_name="floor",
+#     terrain_group=1,
+# ):
+#     """
+#     Square staircase with a central platform.
+#
+#     direction = +1: ascend toward the center.
+#     direction = -1: descend toward the center.
+#
+#     The outer border is at base_z.
+#     The center is at base_z + direction*num_stairs*step_height.
+#
+#     Returns the MjSpec.
+#     """
+#     if spec is None:
+#         spec = mujoco.MjSpec()
+#
+#     if direction not in (-1, 1):
+#         raise ValueError("direction must be +1 or -1.")
+#     if not isinstance(num_stairs, int) or num_stairs < 0:
+#         raise ValueError("num_stairs must be a nonnegative integer.")
+#     if min(tile_size, step_depth, base_thickness) <= 0:
+#         raise ValueError("Dimensions must be positive.")
+#     if step_height < 0:
+#         raise ValueError("step_height must be nonnegative.")
+#
+#     half = tile_size / 2
+#     center_half = half - num_stairs * step_depth
+#
+#     if center_half <= 0:
+#         raise ValueError("Steps leave no space for the central platform.")
+#
+#     floor = next(
+#         (geom for geom in spec.geoms if geom.name == floor_name),
+#         None,
+#     )
+#
+#     body = spec.worldbody.add_body(
+#         name=name,
+#         pos=[float(grid_loc[0]), float(grid_loc[1]), base_z],
+#     )
+#
+#     rgba = [0.460, 0.362, 0.216, 1.0]
+#
+#     # Local elevation of the common bottom of all boxes.
+#     bottom = min(0.0, direction * num_stairs * step_height)
+#     bottom -= base_thickness
+#
+#     def add_box(suffix, xy, half_xy, top):
+#         height = top - bottom
+#
+#         geom = body.add_geom(
+#             name=f"{name}_{suffix}",
+#             type=mujoco.mjtGeom.mjGEOM_BOX,
+#             pos=[xy[0], xy[1], bottom + height / 2],
+#             size=[half_xy[0], half_xy[1], height / 2],
+#             rgba=rgba,
+#             group=terrain_group,
+#         )
+#
+#         if floor is not None:
+#             for parameter in (
+#                 "friction", "condim", "solref", "solimp",
+#                 "solmix", "priority", "margin", "gap",
+#                 "contype", "conaffinity",
+#             ):
+#                 value = getattr(floor, parameter)
+#                 setattr(
+#                     geom,
+#                     parameter,
+#                     value.copy() if isinstance(value, np.ndarray) else value,
+#                 )
+#
+#     # Each ring consists of four boxes with no overlapping volumes.
+#     for i in range(num_stairs):
+#         outer = half - i * step_depth
+#         inner = outer - step_depth
+#         offset = (outer + inner) / 2
+#         top = direction * i * step_height
+#
+#         for label, sign in (("left", -1), ("right", 1)):
+#             add_box(
+#                 f"{i}_{label}",
+#                 [sign * offset, 0.0],
+#                 [step_depth / 2, outer],
+#                 top,
+#             )
+#
+#         for label, sign in (("front", 1), ("back", -1)):
+#             add_box(
+#                 f"{i}_{label}",
+#                 [0.0, sign * offset],
+#                 [inner, step_depth / 2],
+#                 top,
+#             )
+#
+#     add_box(
+#         "center",
+#         [0.0, 0.0],
+#         [center_half, center_half],
+#         direction * num_stairs * step_height,
+#     )
+#
+#     return spec
 
 
 
@@ -505,20 +817,49 @@ def keyboard_control(env, vx, vy, wz):
     return vx,vy,wz
 
 
+# class Airtime:
+#     def __init__(self):
+#         self.last_contact = np.zeros(4)
+#         self.feet_air_time = np.zeros(4)
+#
+#     def calculate_airtime_before(self, contact):
+#         contact_filt = np.logical_or(contact, self.last_contact)
+#         first_contact = (self.feet_air_time > 0.0) * contact_filt
+#         self.feet_air_time += 0.02
+#         return first_contact, self.feet_air_time
+#
+#     def calculate_airtime_after(self, contact):
+#         self.feet_air_time *= np.logical_not(contact)
+#         self.last_contact = contact
+
 class Airtime:
-    def __init__(self):
-        self.last_contact = np.zeros(4)
-        self.feet_air_time = np.zeros(4)
+    def __init__(self, dt, n_feet=4):
+        self.dt = float(dt)
+        self.last_contact = np.zeros(n_feet, dtype=bool)
+        self.feet_air_time = np.zeros(n_feet, dtype=np.float64)
 
     def calculate_airtime_before(self, contact):
+        contact = np.asarray(contact, dtype=bool)
+
         contact_filt = np.logical_or(contact, self.last_contact)
-        first_contact = (self.feet_air_time > 0.0) * contact_filt
-        self.feet_air_time += 0.02
-        return first_contact, self.feet_air_time
+
+        # Compute before incrementing, as in legged_gym.
+        first_contact = (
+            (self.feet_air_time > 0.0) & contact_filt
+        )
+
+        self.feet_air_time += self.dt
+
+        return first_contact, self.feet_air_time.copy()
 
     def calculate_airtime_after(self, contact):
-        self.feet_air_time *= np.logical_not(contact)
-        self.last_contact = contact
+        contact = np.asarray(contact, dtype=bool)
+
+        # Use the SAME filter for detecting and resetting contacts.
+        contact_filt = np.logical_or(contact, self.last_contact)
+
+        self.feet_air_time[contact_filt] = 0.0
+        self.last_contact = contact.copy()
 
 class PDController:
     def __init__(self, env, control_frequency_hz=50, p_gain=20, d_gain=0.5, scaling_factor=0.25):
@@ -588,7 +929,6 @@ class TerrainHeightSampler:
         self.model = model
         self.site_ids = np.asarray(site_ids, dtype=np.int32)
         self.grid_shape = (17, 11)
-
         if height_clip <= 0 or height_scale <= 0:
             raise ValueError("height_clip and height_scale must be positive.")
 
@@ -752,32 +1092,35 @@ class UnitreeGo1(gym.Env):
     def __init__(self,
                  seed,
                  env_id=0,
-                 timestep=0.005,
+                 timestep=0.005, # 0.005
                  episode_length_in_seconds=20,
                  total_nr_envs=100,
                  nr_envs_per_type=100,
                  cpu_id=None,
                  joystick = False,
                  domain_randomization=False,
+                 terrain_curriculum=False,
                  **env_args):
 
         if cpu_id is not None:
             p = psutil.Process()
             p.cpu_affinity([cpu_id, ])
         self.final_level = False
-        self.task_dict ={"stairs_up":2, "stairs_down":1, "flat":0}
+        self.task_dict ={"upstairs":1, "downstairs":2, "flat":0}
         self.current_level = env_args["current_level"]
         self.task = self.task_dict[env_args["task"]] # upstairs, downstairs, flat-terrain
         self.env_id = env_id
         print(f"Created env {self.env_id}, env_type={env_args['task']}")
         self._n_episode = 0
         self.episode_step = 0
+        self.terrain_curriculum = terrain_curriculum
         self.resampling_command_steps = 500 # 500
         self.joystick = joystick
         self.env_args = env_args
         self.tracking_velocities_array = []
         self.track_velocities = False
         self.heights_obs = np.zeros(187)
+
         if self.joystick:
             pygame.init()
             screen_width, screen_height = 200, 200
@@ -804,7 +1147,6 @@ class UnitreeGo1(gym.Env):
 
 
 
-        self.airtime = Airtime()
         self.seed = seed
         np.seed = self.seed
 
@@ -848,9 +1190,11 @@ class UnitreeGo1(gym.Env):
         self.controller = PDController(self)
         self.gains_and_action_scaling_factor = self.controller.get_gains_and_scale_factor()
         self.control_frequency_hz = self.controller.control_frequency_hz
-        self.nr_substeps = int(round(1 / self.control_frequency_hz / timestep))
-        self.nr_intermediate_steps = 1
+        #self.nr_substeps = int(round(1 / self.control_frequency_hz / timestep))
+        self.nr_substeps = 1
+        self.nr_intermediate_steps = 4
         self.dt = timestep * self.nr_substeps * self.nr_intermediate_steps
+        self.airtime = Airtime(self.dt)
 
         self.horizon = int(round(episode_length_in_seconds * self.control_frequency_hz))
         self.reward_function = Reward(self,
@@ -986,9 +1330,9 @@ class UnitreeGo1(gym.Env):
         #         geom.solref = contact_solref
         spec = mujoco.MjSpec.from_file(filename=xml_path)
         self.step_height_curriculum_level = np.linspace(0.0, 0.15, 8)
-        self.number_steps = 10
+        self.number_steps = 6
 
-        tile_size = 8.0
+        tile_size = 7.0
         curriculum_spacing = tile_size * 2.0 # 15 m
         self.tile_poses = np.zeros((8,2))
         if self.task == 1:
@@ -1000,7 +1344,8 @@ class UnitreeGo1(gym.Env):
                 # Center tile: flat at level zero, stairs at higher levels.
                 step_height = self.step_height_curriculum_level[level]
                 if level > 0 :
-                    spec = outward_rising_stairs(
+
+                    spec = stairs(
                         spec=spec,
                         grid_loc=tile_center_pos,
                         name=f"stairs_center_{level}",
@@ -1009,7 +1354,8 @@ class UnitreeGo1(gym.Env):
                         step_height=step_height,
                         step_depth=0.24,
                         terrain_group=5,
-                        buffer_width = 2
+                        buffer_width = 2.5,
+                        direction = -1
                     )
         elif self.task==2:
 
@@ -1030,130 +1376,39 @@ class UnitreeGo1(gym.Env):
                         step_height=step_height,
                         step_depth=0.24,
                         terrain_group=5,
-                        direction=1,
+                        buffer_width=2,
+                        direction=1
                     )
-            # Eight neighboring flat tiles.
-            # if level < 7:
-            #     step_height_sides = self.step_height_curriculum_level[level+1]
-            #
-            # else:
-            #     step_height_sides = self.step_height_curriculum_level[level]
-
-            # for dx in (-1, 0, 1):
-            #     for dy in (-1, 0, 1):
-            #         if dx == 0 and dy == 0:
-            #             continue
-            #         spec = stairs(
-            #             spec=spec,
-            #                 grid_loc=(
-            #                     center_x + dx * tile_size,
-            #                     center_y + dy * tile_size,
-            #                 ),
-            #             name=f"stairs_center_{level}_{dx + 1}_{dy + 1}",
-            #             tile_size=tile_size,
-            #             num_stairs=6,
-            #             direction=1,
-            #             step_height=step_height_sides,
-            #             step_depth=0.24,
-            #             terrain_group=5,
-            #         )
-
-                    # spec = flat_floor(
+                    # spec = stairs_down_heightfield(
                     #     spec=spec,
-                    #     grid_loc=(
-                    #         center_x + dx * tile_size,
-                    #         center_y + dy * tile_size,
-                    #     ),
-                    #     name=f"flat_{level}_{dx + 1}_{dy + 1}",
-                    #     tile_size=(tile_size, tile_size),
-                    #     terrain_group=5,
+                    #     tile_size = tile_size,
+                    #     grid_loc=tile_center_pos,
+                    #     num_stairs=self.number_steps,
+                    #     step_height=step_height,
+                    #     step_depth=0.24, #0.24
+                    #     buffer_width=2.0,
+                    #     physics_timestep=0.005,
+                    #     name=f"stairs_center_{level}",
                     # )
 
-            # if step_height == 0.0:
-            #     spec = flat_floor(
-            #         spec=spec,
-            #         grid_loc=(center_x, center_y),
-            #         name=f"center_flat_{level}",
-            #         tile_size=(tile_size, tile_size),
-            #         terrain_group=5,
-            #     )
-            # else:
-            #     spec = stairs(
-            #         spec=spec,
-            #         grid_loc=tile_center_pos,
-            #         name=f"stairs_{level}",
-            #         tile_size=tile_size,
-            #         num_stairs=4,
-            #         direction=1,
-            #         step_height=step_height,
-            #         step_depth=0.24,
-            #         terrain_group=5,
-            #     )
-            #
-            # # Eight neighboring flat tiles.
-            # for dx in (-1, 0, 1):
-            #     for dy in (-1, 0, 1):
-            #         if dx == 0 and dy == 0:
-            #             continue
-
-                    # spec = flat_floor(
-                    #     spec=spec,
-                    #     grid_loc=(
-                    #         center_x + dx * tile_size,
-                    #         center_y + dy * tile_size,
-                    #     ),
-                    #     name=f"flat_{level}_{dx + 1}_{dy + 1}",
-                    #     tile_size=(tile_size, tile_size),
-                    #     terrain_group=5,
-                    # )
-
-        # initial drop height
-          # 0.325 0.34, 0.30
-        # step_height_curriculum_level = np.linspace(0.0, 0.15, 8)
-        # for level in range(2):
-        #     tile_size = 5.0
-        #     tile_center_pos = [level * 7, 0.0]
-
-            # spec = flat_floor(spec=spec,
-            #                   grid_loc=(3+level * 7, 0),
-            #                   name=f"flat_f{level}", tile_size=(2, 7),
-            #                   terrain_group=5)
-            # spec = flat_floor(spec=spec,
-            #                   grid_loc=(-5+level * 10, 0),
-            #                   name=f"flat_b{level}", tile_size=(5, 5),
-            #                   terrain_group=5)
-            # spec = flat_floor(spec=spec,
-            #                   grid_loc=(level * 6, -3.5),
-            #                   name=f"flat_l{level}", tile_size=(8, 2),
-            #                   terrain_group=5)
-            # spec = flat_floor(spec=spec,
-            #                   grid_loc=(level * 6, 3.5),
-            #                   name=f"flat_r{level}", tile_size=(5, 5),
-            #                   terrain_group=5)
-
-
-
-
-            # tile_center_pos = (level * 6.0, 6.0)
-            # spec = stairs(
-            #     spec=spec,
-            #     grid_loc=tile_center_pos,
-            #     num_stairs=4,
-            #     direction=-1,
-            #     name=f"stairs_down_level_{level}",
-            #     tile_size=5.0,
-            #     step_height=0.10,#0.1
-            #     step_depth=0.24,
-            #     terrain_group=5,
-            # )
 
         self.height_site_names = add_height_sampling_sites(
             spec,
             body_name="trunk",
             foot_plane_z=-0.28,
         )
+
+        foot_names = {"FR_foot", "FL_foot", "RR_foot", "RL_foot"}
+
+        for geom in spec.geoms:
+            is_terrain = geom.group == 5  # Your reserved terrain group.
+            is_foot = geom.name in foot_names
+
+            if is_terrain or is_foot:
+                geom.solref = [0.005, 1.0]
         model = spec.compile()
         self.model = model
+        #self.model.opt.timestep = timestep 0.005
         self.model.opt.timestep = timestep
         self.data = mujoco.MjData(self.model)
         # Store IDs in the same matrix arrangement.
@@ -1360,6 +1615,45 @@ class UnitreeGo1(gym.Env):
 
         self.reward_function.init()
 
+    def get_foot_contacts(self):
+        foot_geom_to_index = {
+            geom_id: foot_index
+            for foot_index, foot_name in enumerate(self.foot_names)
+            for geom_id in self.collision_groups[foot_name]
+        }
+
+        vertical_forces = np.zeros(len(self.foot_names))
+        contact_force = np.zeros(6)
+
+        for contact_index in range(self.data.ncon):
+            contact = self.data.contact[contact_index]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+
+            if (
+                    geom1 not in foot_geom_to_index
+                    and geom2 not in foot_geom_to_index
+            ):
+                continue
+
+            mujoco.mj_contactForce(
+                self.model,
+                self.data,
+                contact_index,
+                contact_force,
+            )
+
+            frame = np.asarray(contact.frame).reshape(3, 3)
+            world_force = frame.T @ contact_force[:3]
+
+            # Positive force acts on geom2; opposite force on geom1.
+            if geom1 in foot_geom_to_index:
+                vertical_forces[foot_geom_to_index[geom1]] -= world_force[2]
+
+            if geom2 in foot_geom_to_index:
+                vertical_forces[foot_geom_to_index[geom2]] += world_force[2]
+
+        return vertical_forces > 1.0
 
     def set_drop_height(self):
         if self.task == 2:
@@ -1420,16 +1714,58 @@ class UnitreeGo1(gym.Env):
         height_matrix, valid_matrix = self.height_sampler.update(self.data)
 
         self.heights_obs = height_matrix.flatten().copy()
-
-
+        self.airtime.feet_air_time.fill(0.0)
+        self.airtime.last_contact.fill(False)
 
 
         self.update_orientation_attributes()
-        self.airtime = Airtime()
+
         # if self.viewer:
         #     self.viewer.render(self.data)
 
         return self.get_observation(), {}
+
+    def get_collision_flags(self, groups, force_threshold=0.1):
+        """
+        Return one Boolean per collision group.
+
+        Each group should represent one robot segment and contain all
+        its collision geoms, excluding the foot geoms.
+        """
+        geom_to_group = {
+            geom_id: group_index
+            for group_index, group_name in enumerate(groups)
+            for geom_id in self.collision_groups[group_name]
+        }
+
+        forces = np.zeros((len(groups), 3), dtype=np.float64)
+        contact_force = np.zeros(6, dtype=np.float64)
+
+        for contact_index in range(self.data.ncon):
+            contact = self.data.contact[contact_index]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+
+            if geom1 not in geom_to_group and geom2 not in geom_to_group:
+                continue
+
+            mujoco.mj_contactForce(
+                self.model,
+                self.data,
+                contact_index,
+                contact_force,
+            )
+
+            frame = np.asarray(contact.frame).reshape(3, 3)
+            world_force = frame.T @ contact_force[:3]
+
+            if geom1 in geom_to_group:
+                forces[geom_to_group[geom1]] -= world_force
+
+            if geom2 in geom_to_group:
+                forces[geom_to_group[geom2]] += world_force
+
+        return np.linalg.norm(forces, axis=1) > force_threshold
 
     def get_next_command(self):
 
@@ -1468,16 +1804,28 @@ class UnitreeGo1(gym.Env):
 
         return v_command
 
-    def should_terminate(self, obs):
+    # def should_terminate(self):
+    #
+    #     # trunk_collision = False
+    #     trunk_collision = True if self.check_any_collision(["trunk"]) else False
+    #     thigh_collision = True if self.check_any_collision(["FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh"]) else False
+    #
+    #     fall = self.data.qpos[2] < 0.1
+    #
+    #
+    #     return trunk_collision or thigh_collision or fall
 
-        # trunk_collision = False
-        trunk_collision = True if self.check_any_collision(["trunk"]) else False
-        thigh_collision = True if self.check_any_collision(["FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh"]) else False
+    def should_terminate(self):
+        trunk_collision = bool(
+            self.get_collision_flags(
+                ("trunk",),
+                force_threshold=1.0,
+            )[0]
+        )
 
         fall = self.data.qpos[2] < 0.1
 
-
-        return trunk_collision or thigh_collision or fall
+        return trunk_collision or fall
 
 
 
@@ -1596,17 +1944,55 @@ class UnitreeGo1(gym.Env):
 
                 self.goal_x_velocity, self.goal_y_velocity, self.goal_yaw_velocity = self.get_next_command()
 
-
         torque_limits = self.model.actuator_ctrlrange[:, 1].copy()
-        torques = np.clip(self.controller.action2torques(action), -torque_limits, torque_limits)
-        self.data.ctrl = torques.copy()
         for _ in range(self.nr_intermediate_steps):
+
+            torques = np.clip(self.controller.action2torques(action), -torque_limits, torque_limits)
+            self.data.ctrl = torques.copy()
 
             mujoco.mj_step(self.model, self.data, self.nr_substeps)
             self.data.qvel[6:] = np.clip(self.data.qvel[6:], -self.max_joint_velocities, self.max_joint_velocities)
 
+        # for i in range(self.data.ncon):
+        #     contact = self.data.contact[i]
+        #
+        #     # Only inspect heightfield contacts.
+        #     geom1_type = self.model.geom_type[contact.geom1]
+        #     geom2_type = self.model.geom_type[contact.geom2]
+        #
+        #     if mujoco.mjtGeom.mjGEOM_HFIELD not in (
+        #             geom1_type, geom2_type
+        #     ):
+        #         continue
+        #
+        #     name1 = mujoco.mj_id2name(
+        #         self.model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1
+        #     )
+        #     name2 = mujoco.mj_id2name(
+        #         self.model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2
+        #     )
+        #
+        #     normal = np.asarray(contact.frame).reshape(3, 3)[0]
+        #
+        #     force = np.zeros(6)
+        #     mujoco.mj_contactForce(self.model, self.data, i, force)
+        #
+        #     print(
+        #         f"t={self.data.time:.4f}",
+        #         f"geoms=({name1}, {name2})",
+        #         f"position={np.round(contact.pos, 4)}",
+        #         f"normal={np.round(normal, 3)}",
+        #         f"dist={contact.dist:.6f}",
+        #         f"Fn={force[0]:.2f}",
+        #         f"solref={contact.solref}",
+        #         f"active_margin={contact.includemargin:.6f}",
+        #     )
+
+
         height_matrix, valid_matrix = self.height_sampler.update(self.data)
         self.heights_obs = height_matrix.flatten().copy()
+
+       # print(height_matrix.max(), height_matrix.min(), height_matrix.mean())
 
 
         self.update_orientation_attributes()
@@ -1614,19 +2000,22 @@ class UnitreeGo1(gym.Env):
         self.current_action = action.copy()
         self.current_torques = torques
 
-        contacts = np.array(
-            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        # contacts = np.array(
+        #     [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
 
-        next_observation = self.get_observation()
+        # contacts = np.array(
+        #     [self.check_any_collision(foot_name) for foot_name in self.foot_names])
 
-        terminated = self.should_terminate(next_observation)
+        contacts = self.get_foot_contacts()
+
+        terminated = self.should_terminate()
 
         robot_xy = self.data.qpos[:2].copy()
         tile_origin_xy = self.tile_poses[self.current_level, :].copy()
         distance = np.linalg.norm(robot_xy - tile_origin_xy)
         distance_condition = distance >=5
 
-        truncated = self.episode_step >= self.horizon-1 or distance_condition
+        truncated = self.episode_step >= self.horizon-1
 
         done = terminated | truncated
 
@@ -1638,29 +2027,25 @@ class UnitreeGo1(gym.Env):
 
                 self.final_level = self.current_level >= 8
 
+                if self.terrain_curriculum:
+                    robot_xy = self.data.qpos[:2].copy()
+                    tile_origin_xy =self.tile_poses[self.current_level,:].copy()
+                    distance = np.linalg.norm(robot_xy - tile_origin_xy)
+                    command_xy = np.array([self.goal_x_velocity, self.goal_y_velocity])
 
-                robot_xy = self.data.qpos[:2].copy()
-                tile_origin_xy =self.tile_poses[self.current_level,:].copy()
-                distance = np.linalg.norm(robot_xy - tile_origin_xy)
-                command_xy = np.array([self.goal_x_velocity, self.goal_y_velocity])
-
-                promote = distance > 2.5
-                demote = (
-                                 distance < 0.5 * np.linalg.norm(command_xy) * 10.0
-                         ) and not promote
-
-
-
-                if promote:
-                    self.current_level += 1
-                    self.current_level = np.clip(self.current_level,0,9)
-                if demote:
-                    self.current_level -= 1
-                    self.current_level = np.clip(self.current_level,0,9)
+                    promote = distance > 2.5
+                    demote = (
+                                     distance < 0.5 * np.linalg.norm(command_xy) * 10.0
+                             ) and not promote
 
 
 
-
+                    if promote:
+                        self.current_level += 1
+                        self.current_level = np.clip(self.current_level,0,9)
+                    if demote:
+                        self.current_level -= 1
+                        self.current_level = np.clip(self.current_level,0,9)
 
 
         first_contact, air_time = self.airtime.calculate_airtime_before(contacts)
@@ -1679,6 +2064,8 @@ class UnitreeGo1(gym.Env):
         self.episode_len +=1
         self.episode_step += 1
         self.total_timesteps += 1
+        next_observation = self.get_observation()
+
         return next_observation, reward, terminated, truncated, info
 
     def render(self, mode='human'):
@@ -1794,8 +2181,9 @@ class UnitreeGo1(gym.Env):
         last_actions = self.last_action.copy()
         joint_observations = np.concatenate((qpos, qvel, last_actions), dtype=np.float64)
 
-        foot_contacts = np.array(
-            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        # foot_contacts = np.array(
+        #     [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        foot_contacts = self.get_foot_contacts()
 
         foot_airtime = self.airtime.feet_air_time.copy()
         foot_observations = np.concatenate((foot_contacts, foot_airtime), dtype=np.float64)
@@ -1888,8 +2276,10 @@ class UnitreeGo1(gym.Env):
 
         observation[self.joint_previous_actions_idx] = self.last_action
 
-        observation[self.foot_ground_contact_idx] = np.array(
-            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        # observation[self.foot_ground_contact_idx] = np.array(
+        #     [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+
+        observation[self.foot_ground_contact_idx] = self.get_foot_contacts()
 
         observation[self.foot_airtime_idx] = self.airtime.feet_air_time
 
@@ -1912,15 +2302,7 @@ class UnitreeGo1(gym.Env):
         max_mass =self.default_mass + 1
         observation[self.mass_idx] = 2*(mass - min_mass)/(max_mass - min_mass) -1
 
-        # observation[self.mass_idx] =  (mass / (170.0 / 2)) - 1.0
-        # gains_and_action_scaling_factor = (self.controller.get_gains_and_scale_factor() / [100.0 / 2, 2.0 / 2, 0.8 / 2]) - 1.0
-        # observation[self.kp_idx] = gains_and_action_scaling_factor[0]
-        # observation[self.kd_idx] = gains_and_action_scaling_factor[1]
-        # observation[self.scale_idx] = gains_and_action_scaling_factor[2]
 
-        #
-        # exit()
-        # Normalize and clip
         observation[self.joint_positions_idx] /= 4.6
         observation[self.joint_velocities_idx] /= 35.0
         observation[self.joint_previous_actions_idx] /= 10.0
@@ -1933,10 +2315,6 @@ class UnitreeGo1(gym.Env):
         observation[self.height_idx] = np.clip(
             (observation[self.height_idx] / (2 * self.nominal_height / 2)) - 1.0, -1.0, 1.0)
 
-        # tangential_friction = self.friction_tangential_min + (
-        #             self.friction_tangential_max - self.friction_tangential_min)
-        # damping = self.damping_min + (self.damping_max - self.damping_min)
-        # stiffness = self.stiffness_min + (self.stiffness_max - self.stiffness_min)
 
         observation[self.friction_idx] = 2*(self.friction - self.friction_tangential_min)/ (self.friction_tangential_max -self.friction_tangential_min) -1
         observation[self.stiffness_idx] =2*(self.stiffness -self.stiffness_min)/(self.stiffness_max - self.stiffness_min) -1

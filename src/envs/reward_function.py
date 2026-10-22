@@ -97,11 +97,23 @@ class Reward:
         # pos_reward = curriculum_coeff*self.pose_coeff*np.exp(-np.sum(np.square(qpos - default_pose) * weight))
 
         # Air time reward
-        commands = np.array([self.env.goal_x_velocity,self.env.goal_y_velocity,self.env.goal_yaw_velocity])
-        cmd_norm = np.linalg.norm(commands)
-        air_time_reward = np.sum((air_time - self.max_airtime) * first_contact)
-        air_time_reward *= (cmd_norm > 0.01)
-        air_time_reward =  self.air_time_coeff * air_time_reward
+        commands_xy = np.array([
+            self.env.goal_x_velocity,
+            self.env.goal_y_velocity,
+        ])
+
+        cmd_norm = np.linalg.norm(commands_xy)
+
+        air_time_reward = np.sum(
+            (air_time - self.max_airtime) * first_contact
+        )
+        air_time_reward *= (cmd_norm > 0.1)
+        air_time_reward *= self.air_time_coeff
+        # commands = np.array([self.env.goal_x_velocity,self.env.goal_y_velocity,self.env.goal_yaw_velocity])
+        # cmd_norm = np.linalg.norm(commands)
+        # air_time_reward = np.sum((air_time - self.max_airtime) * first_contact)
+        # air_time_reward *= (cmd_norm > 0.01)
+        # air_time_reward =  self.air_time_coeff * air_time_reward
         # Linear velocity reward
         z_velocity_squared = current_local_linear_velocity[2] ** 2
         linear_velocity_penalty =  self.z_velocity_coeff * z_velocity_squared
@@ -147,14 +159,29 @@ class Reward:
 
 
 
-        velocity_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env.data.qvel[6:])))
-        q_velocity_penalty =   self.joint_velocity_coeff * velocity_norm
+        # velocity_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env.data.qvel[6:])))
+        # q_velocity_penalty =   self.joint_velocity_coeff * velocity_norm
+        #
+        # # Joint acceleration reward
+        #
+        # acceleration_diff = (self._prev_joint_vel - np.array(self.env.data.qvel[6:]))/ self.env.dt
+        # acceleration_norm = np.sum(np.square(acceleration_diff))
+        # q_acceleration_penalty =   self.joint_acceleration_coeff * acceleration_norm
+        joint_velocities = self.env.data.qvel[6:].copy()
 
-        # Joint acceleration reward
+        # Joint velocity penalty.
+        velocity_norm = np.sum(np.square(joint_velocities))
+        q_velocity_penalty = self.joint_velocity_coeff * velocity_norm
 
-        acceleration_norm = np.sum(np.square(self._prev_joint_vel - np.array(self.env.data.qvel[6:]) / self.env.dt))
-        q_acceleration_penalty =   self.joint_acceleration_coeff * acceleration_norm
+        # Joint acceleration penalty: divide the ENTIRE difference by dt.
+        joint_acceleration = (
+                                     joint_velocities - self._prev_joint_vel
+                             ) / self.env.dt
 
+        acceleration_norm = np.sum(np.square(joint_acceleration))
+        q_acceleration_penalty = (
+                self.joint_acceleration_coeff * acceleration_norm
+        )
 
         # Joint torque reward
         torque_norm = np.sum(np.square(np.array(self.env.data.qfrc_actuator[6:])))
@@ -166,13 +193,26 @@ class Reward:
         action_rate_penalty =   self.action_rate_coeff * action_rate_norm
 
         # Collision reward
-        collisions = self.env.check_any_collision_for_all([
-            "FR_calf", "FL_calf", "RR_calf", "RL_calf"
-        ])
-        trunk_collision = 1 if self.env.check_any_collision(["trunk"]) else 0
-        thigh_collision = 1 if self.env.check_any_collision(["FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh"]) else 0
-        nr_collisions = sum(collisions.values()) + trunk_collision + thigh_collision
-        collision_penalty =   self.collision_coeff * nr_collisions
+        # collisions = self.env.check_any_collision_for_all([
+        #     "FR_calf", "FL_calf", "RR_calf", "RL_calf"
+        # ])
+        # trunk_collision = 1 if self.env.check_any_collision(["trunk"]) else 0
+        # thigh_collision = 1 if self.env.check_any_collision(["FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh"]) else 0
+        # nr_collisions = sum(collisions.values()) + trunk_collision + thigh_collision
+        # collision_penalty =   self.collision_coeff * nr_collisions
+
+        penalized_groups = (
+            "FR_calf", "FL_calf", "RR_calf", "RL_calf",
+            "FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh",
+        )
+
+        collision_flags = self.env.get_collision_flags(
+            penalized_groups,
+            force_threshold=0.1,
+        )
+
+        nr_collisions = np.count_nonzero(collision_flags)
+        collision_penalty = self.collision_coeff * nr_collisions
 
         # Walking height
         trunk_z = self.env.data.qpos[2]
@@ -228,7 +268,6 @@ class Reward:
         #                 f" action_rate_penalty: {action_rate_penalty / self.action_rate_coeff} \n",
         #       f" collision_penalty: {collision_penalty / self.collision_coeff} \n",
         #       f" base_height_penalty: {base_height_penalty / self.base_height_coeff} \n")
-
 
 
         reward = tracking_reward + reward_penalty

@@ -13,13 +13,14 @@ from mushroom_rl.utils.viewer import ImageViewer
 # gym.logger.set_level(40)
 
 
-def make_env(seed, env_id, env_args, domain_randomization, episode_length_in_seconds):
+def make_env(seed, env_id, env_args, domain_randomization, episode_length_in_seconds, terrain_curriculum):
     def thunk():
         env =UnitreeGo1(seed,
                         env_id=env_id,
                    render=False,
                    domain_randomization=domain_randomization,
                    episode_length_in_seconds=episode_length_in_seconds,
+                    terrain_curriculum=terrain_curriculum,
                    **env_args)
         return env
     return thunk
@@ -44,7 +45,8 @@ class GymnasiumGO1(Environment):
                  wrappers=None,
                  wrappers_args=None,
                  multi_envs=False,
-                 tasks = ("flat", "stairs_down", "stairs_up"),
+                 terrain_curriculum=False,
+                 tasks = ("flat", "upstairs", "downstairs"),
                  **env_args):
         """
         Constructor.
@@ -80,6 +82,7 @@ class GymnasiumGO1(Environment):
                               env_id,
                               {**deepcopy(env_args), "task": tasks[env_id % len(tasks)]},
                               domain_randomization,
+                              terrain_curriculum,
                               episode_length_in_seconds) for env_id in range(n_envs)],
                     autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
                 )
@@ -90,6 +93,7 @@ class GymnasiumGO1(Environment):
                               env_id,
                               env_args,
                               domain_randomization,
+                              terrain_curriculum,
                               episode_length_in_seconds) for env_id in range(n_envs)],
                     autoreset_mode=gym.vector.AutoresetMode.SAME_STEP,
                 )
