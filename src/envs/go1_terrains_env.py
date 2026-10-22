@@ -1256,10 +1256,11 @@ class UnitreeGo1(gym.Env):
         self.x_limit =  env_args["vx_limit"]# 1.2, 3.5
         self.y_limit = env_args["vy_limit"]
         self.wz_limit =  env_args["wz_limit"] #1.5, 5.5
+        bins = 11 # 51
         self.vel_curriculum = RewardThresholdCurriculum(42,
-                                                        x=(-5, 5, 51),
-                                                        y=(-0.6 , 0.6 ,2),
-                                                        z=(-5, 5,51))
+                                                        x=(-self.x_limit, self.x_limit, bins),
+                                                        y=(-self.y_limit , self.y_limit ,2),
+                                                        z=(-self.wz_limit, self.wz_limit,bins))
 
 
         # low, high = np.array([-1, -1, -1]), np.array([1, 1, 1])
