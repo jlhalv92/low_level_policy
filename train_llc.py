@@ -160,11 +160,15 @@ def experiment(alg, n_epochs,
     # env_args = dict(vx_limit=1.5, vy_limit=0.8, wz_limit=1.5)
     env_args["current_level"] = 0
 
-    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, multi_envs=True, **env_args)
+    mdp = GymnasiumGO1(gamma=gamma,  n_envs=n_envs, domain_randomization=True, multi_envs=True, terrain_curriculum=True, **env_args)
 
-    env_args["task"] = "flat"
-    env_args["current_level"] = 8
-    mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
+    terrains = ["flat", "upstairs", "downstairs"]
+    list_mdp_eval = []
+    for terrain in terrains:
+        env_args["current_level"] = 8
+        env_args["task"] = terrain
+        mdp_eval = GymnasiumGO1(gamma=gamma, n_envs=1, domain_randomization=True, **env_args)
+        list_mdp_eval.append(mdp_eval)
 
     obs_shape = (mdp_eval.info.observation_space.shape[0],)
     action_shape = (mdp_eval.info.action_space.shape[0],)
@@ -219,7 +223,7 @@ def experiment(alg, n_epochs,
     J_ACC = 0
     R_ACC = 0
     for task_id in range(3):
-        core_eval.mdp.env.task=task_id
+        core_eval.mdp = list_mdp_eval[task_id]
         dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
 
         J = np.mean(compute_J(dataset, mdp.info.gamma))
@@ -237,9 +241,9 @@ def experiment(alg, n_epochs,
 
         J_ACC = 0
         R_ACC = 0
-
-        for task_id in range(3):
-            core_eval.mdp.env.task = task_id
+        n_terrains = len(list_mdp_eval)
+        for task_id in range(n_terrains):
+            core_eval.mdp = list_mdp_eval[task_id]
             dataset = core_eval.evaluate(n_episodes=n_episodes_test, render=False)
 
             J = np.mean(compute_J(dataset, mdp.info.gamma))
@@ -247,8 +251,8 @@ def experiment(alg, n_epochs,
             J_ACC += J
             R_ACC += R
 
-        J_ACC /= 3
-        R_ACC /= 3
+        J_ACC /= n_terrains
+        R_ACC /= n_terrains
 
         E = agent.policy.entropy()
         logger.epoch_info(0, MEAN_J=J_ACC, MEAN_R=R_ACC, entropy=E)

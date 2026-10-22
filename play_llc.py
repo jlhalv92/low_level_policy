@@ -184,9 +184,9 @@ if __name__ == '__main__':
 
     student_path = "nominal_policy/multi_terrain/epoch_last"
     low_level_control = Agent.load(student_path)
-    task = task_dict ={"stairs_up":2, "stairs_down":1, "flat":0}
+    task = task_dict ={"downstairs":2, "upstairs":1, "flat":0}
     experiment(
                name_exp="RAPID_LOCOMOTION_",
-               agent=low_level_control, joystick=False, n_episodes=10, render=True, vel=[1.5,0.8,1.0], task="stairs_down", level=6)
+               agent=low_level_control, joystick=False, n_episodes=10, render=False, vel=[1.5,0.8,1.0], task="downstairs", level=5)
 
 
