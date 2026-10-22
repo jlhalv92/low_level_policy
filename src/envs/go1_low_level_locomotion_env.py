@@ -68,19 +68,33 @@ def keyboard_control(env, vx, vy, wz):
 
 
 class Airtime:
-    def __init__(self):
-        self.last_contact = np.zeros(4)
-        self.feet_air_time = np.zeros(4)
+    def __init__(self, dt, n_feet=4):
+        self.dt = float(dt)
+        self.last_contact = np.zeros(n_feet, dtype=bool)
+        self.feet_air_time = np.zeros(n_feet, dtype=np.float64)
 
     def calculate_airtime_before(self, contact):
+        contact = np.asarray(contact, dtype=bool)
+
         contact_filt = np.logical_or(contact, self.last_contact)
-        first_contact = (self.feet_air_time > 0.0) * contact_filt
-        self.feet_air_time += 0.02
-        return first_contact, self.feet_air_time
+
+        # Compute before incrementing, as in legged_gym.
+        first_contact = (
+            (self.feet_air_time > 0.0) & contact_filt
+        )
+
+        self.feet_air_time += self.dt
+
+        return first_contact, self.feet_air_time.copy()
 
     def calculate_airtime_after(self, contact):
-        self.feet_air_time *= np.logical_not(contact)
-        self.last_contact = contact
+        contact = np.asarray(contact, dtype=bool)
+
+        # Use the SAME filter for detecting and resetting contacts.
+        contact_filt = np.logical_or(contact, self.last_contact)
+
+        self.feet_air_time[contact_filt] = 0.0
+        self.last_contact = contact.copy()
 
 class PDController:
     def __init__(self, env, control_frequency_hz=50, p_gain=20, d_gain=0.5, scaling_factor=0.25):
@@ -178,7 +192,7 @@ class UnitreeGo1(gym.Env):
 
 
 
-        self.airtime = Airtime()
+
         self.seed = seed
         np.seed = self.seed
 
@@ -222,7 +236,7 @@ class UnitreeGo1(gym.Env):
         self.nr_substeps = int(round(1 / self.control_frequency_hz / timestep))
         self.nr_intermediate_steps = 1
         self.dt = timestep * self.nr_substeps * self.nr_intermediate_steps
-
+        self.airtime = Airtime(self.dt)
         self.horizon = int(round(episode_length_in_seconds * self.control_frequency_hz))
         self.reward_function = Reward(self)
         self.vxy_tracking = 0
@@ -421,7 +435,87 @@ class UnitreeGo1(gym.Env):
 
         self.reward_function.init()
 
+    def get_foot_contacts(self):
+        foot_geom_to_index = {
+            geom_id: foot_index
+            for foot_index, foot_name in enumerate(self.foot_names)
+            for geom_id in self.collision_groups[foot_name]
+        }
 
+        vertical_forces = np.zeros(len(self.foot_names))
+        contact_force = np.zeros(6)
+
+        for contact_index in range(self.data.ncon):
+            contact = self.data.contact[contact_index]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+
+            if (
+                    geom1 not in foot_geom_to_index
+                    and geom2 not in foot_geom_to_index
+            ):
+                continue
+
+            mujoco.mj_contactForce(
+                self.model,
+                self.data,
+                contact_index,
+                contact_force,
+            )
+
+            frame = np.asarray(contact.frame).reshape(3, 3)
+            world_force = frame.T @ contact_force[:3]
+
+            # Positive force acts on geom2; opposite force on geom1.
+            if geom1 in foot_geom_to_index:
+                vertical_forces[foot_geom_to_index[geom1]] -= world_force[2]
+
+            if geom2 in foot_geom_to_index:
+                vertical_forces[foot_geom_to_index[geom2]] += world_force[2]
+
+        return vertical_forces > 1.0
+
+    def get_collision_flags(self, groups, force_threshold=0.1):
+        """
+        Return one Boolean per collision group.
+
+        Each group should represent one robot segment and contain all
+        its collision geoms, excluding the foot geoms.
+        """
+        geom_to_group = {
+            geom_id: group_index
+            for group_index, group_name in enumerate(groups)
+            for geom_id in self.collision_groups[group_name]
+        }
+
+        forces = np.zeros((len(groups), 3), dtype=np.float64)
+        contact_force = np.zeros(6, dtype=np.float64)
+
+        for contact_index in range(self.data.ncon):
+            contact = self.data.contact[contact_index]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+
+            if geom1 not in geom_to_group and geom2 not in geom_to_group:
+                continue
+
+            mujoco.mj_contactForce(
+                self.model,
+                self.data,
+                contact_index,
+                contact_force,
+            )
+
+            frame = np.asarray(contact.frame).reshape(3, 3)
+            world_force = frame.T @ contact_force[:3]
+
+            if geom1 in geom_to_group:
+                forces[geom_to_group[geom1]] -= world_force
+
+            if geom2 in geom_to_group:
+                forces[geom_to_group[geom2]] += world_force
+
+        return np.linalg.norm(forces, axis=1) > force_threshold
 
 
     def initial_state(self):
@@ -470,7 +564,8 @@ class UnitreeGo1(gym.Env):
         self.data.qpos[:] = qpos
         self.data.qvel[:] = qvel
         mujoco.mj_forward(self.model, self.data)
-
+        self.airtime.feet_air_time.fill(0.0)
+        self.airtime.last_contact.fill(False)
         self.update_orientation_attributes()
         self.airtime = Airtime()
         # if self.viewer:
@@ -517,7 +612,7 @@ class UnitreeGo1(gym.Env):
 
         return v_command
 
-    def should_terminate(self, obs):
+    def should_terminate(self):
 
         # trunk_collision = False
         trunk_collision = True if self.check_any_collision(["trunk"]) else False
@@ -657,12 +752,12 @@ class UnitreeGo1(gym.Env):
         self.current_action = action.copy()
         self.current_torques = torques
 
-        contacts = np.array(
-            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        # contacts = np.array(
+        #     [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        contacts = self.get_foot_contacts()
 
-        next_observation = self.get_observation()
 
-        terminated = self.should_terminate(next_observation)
+        terminated = self.should_terminate()
 
         truncated = self.episode_step >= self.horizon-1
 
@@ -675,6 +770,7 @@ class UnitreeGo1(gym.Env):
         self.airtime.calculate_airtime_after(contacts)
         info = {**r_info}
 
+        next_observation = self.get_observation()
         self.reward_function.step(action)
         self.last_action = action.copy()
 
@@ -798,8 +894,9 @@ class UnitreeGo1(gym.Env):
         last_actions = self.last_action.copy()
         joint_observations = np.concatenate((qpos, qvel, last_actions), dtype=np.float64)
 
-        foot_contacts = np.array(
-            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        # foot_contacts = np.array(
+        #     [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        foot_contacts = self.get_foot_contacts()
 
         foot_airtime = self.airtime.feet_air_time.copy()
         foot_observations = np.concatenate((foot_contacts, foot_airtime), dtype=np.float64)
@@ -940,9 +1037,10 @@ class UnitreeGo1(gym.Env):
 
         observation[self.joint_previous_actions_idx] = self.last_action
 
-        observation[self.foot_ground_contact_idx] = np.array(
-            [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
-
+        foot_contacts = self.get_foot_contacts()
+        # observation[self.foot_ground_contact_idx] = np.array(
+        #     [self.check_collision("floor", foot_name) for foot_name in self.foot_names])
+        observation[self.foot_ground_contact_idx] = foot_contacts
         observation[self.foot_airtime_idx] = self.airtime.feet_air_time
 
         observation[self.trunk_linear_vel_idx] = self.orientation_quat_inv.apply(self.data.qvel[:3])
